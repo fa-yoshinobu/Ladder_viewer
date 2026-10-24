@@ -1,4 +1,5 @@
 import Papa from 'papaparse';
+import { isComparisonHeader, parseComparison } from './comparison';
 import type { DeviceComments } from './comments';
 import { decodeCsv, parseProgram, type Program } from './model';
 
@@ -23,7 +24,7 @@ export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total
           if (device && comment) result.deviceComments[device] = comment;
         }
         result.comments.push(file.name);
-      } else result.programs.push(parseProgram(text, file.name));
+      } else result.programs.push(headers.some(isComparisonHeader) ? parseComparison(text, file.name) : parseProgram(text, file.name));
     } catch (error) {
       result.errors.push({ name: file.name, message: error instanceof Error ? error.message : String(error) });
     }

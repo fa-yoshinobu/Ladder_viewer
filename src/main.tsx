@@ -1,10 +1,11 @@
 import { render } from 'preact';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { Instruction, Program } from './model';
+import { differenceLabels, type Instruction, type Program } from './model';
 import type { BatchResult, CsvInput } from './batch';
 import { LADDER_WIDTH, ROW, networkSize } from './layout';
 import './style.css';
-import { Ladder } from './Ladder';
+import { NetworkDrawing } from './NetworkDrawing';
+import { ComparisonView, type CompareSide } from './ComparisonView';
 import { AddressText } from './AddressText';
 import { deviceComment, type DeviceComments } from './comments';
 
@@ -19,6 +20,8 @@ function App() {
   const [sample, setSample] = useState('02_MBUS.csv');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<Instruction | null>(null);
+  const [selectedSide,setSelectedSide]=useState<CompareSide>('source');
+  const comparisonWidth=useRef<HTMLDivElement>(null);
   const [active, setActive] = useState('');
   const [zoom, setZoom] = useState(1);
   const [viewport, setViewport] = useState({ top: 0, height: 800 });
@@ -30,7 +33,7 @@ function App() {
   const token = useRef(0);
   const started = useRef(0);
   function showProgram(next: Program) {
-    setProgram(next); setSelected(null); setActive(next.networks[0]?.id ?? '');
+    setProgram(next); setSelected(null); setSelectedSide('source'); setActive(next.networks[0]?.id ?? '');
     setViewport({ top: 0, height: scroll.current?.clientHeight ?? 800 });
     scroll.current?.scrollTo(0, 0); navigation.current?.scrollTo(0, 0);
   }
@@ -47,6 +50,7 @@ function App() {
         return;
       }
       setPrograms(result.programs); setDeviceComments(result.deviceComments); setError(failures.join('\n'));
+      if(result.programs[0].comparison)setZoom(.5);
       showProgram(result.programs[0]);
     };
     worker.onerror = () => { setBusy(false); setProgress(''); setError('解析処理でエラーが発生しました。再読み込みしてください。'); };
@@ -81,22 +85,24 @@ function App() {
   const rowHeight = showComments && commentCount ? 72 : ROW;
   const layouts = useMemo(() => {
     let top = 8;
-    return (program?.networks ?? []).map(n => { const dimensions = networkSize(n,rowHeight); const item = { n, top, height: dimensions.height * zoom + (n.title ? n.title.split('\n').length * 18 * zoom : 0) + n.warnings.length * 25, width: dimensions.width * zoom }; top += item.height; return item; });
+    return (program?.comparison ? [] : program?.networks ?? []).map(n => { const dimensions = networkSize(n,rowHeight); const item = { n, top, height: dimensions.height * zoom + (n.title ? n.title.split('\n').length * 18 * zoom : 0) + n.warnings.length * 25, width: dimensions.width * zoom }; top += item.height; return item; });
   }, [program, zoom, rowHeight]);
+  const comparison=program?.comparison;
+  const selectedProgram=selectedSide==='target'&&comparison?comparison.target:program;
   const total = layouts.at(-1);
   const visible = layouts.filter(l => l.top + l.height > viewport.top - 400 && l.top < viewport.top + viewport.height + 400);
   function jump(id: string) { const l = layouts.find(l => l.n.id === id); if (l) { setViewport({top:l.top,height:scroll.current?.clientHeight ?? 800}); scroll.current?.scrollTo({ top: l.top }); setActive(id); } }
   return <div class="app" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer?.files.length) void load(Array.from(e.dataTransfer.files)); }}>
     <header><div class="brand"><span class="mark">LD</span><div><strong>Ladder viewer</strong><small>CSVから回路を読む / PROTOTYPE</small></div></div><div class="toolbar"><input ref={fileInput} type="file" accept=".csv" multiple aria-label="CSVファイル" hidden onChange={e => { if(e.currentTarget.files?.length) void load(Array.from(e.currentTarget.files)); e.currentTarget.value = ''; }}/><input ref={folderInput} type="file" multiple {...{webkitdirectory:true}} aria-label="CSVフォルダー" hidden onChange={e => { if(e.currentTarget.files?.length) void load(Array.from(e.currentTarget.files)); e.currentTarget.value = ''; }}/><select aria-label="サンプルCSV" value={sample} onChange={e=>setSample(e.currentTarget.value)} disabled={busy}><option>02_MBUS.csv</option><option>重量測定部.csv</option></select><button onClick={() => void load()} disabled={busy}>サンプルを開く</button><button onClick={() => fileInput.current?.click()} disabled={busy}>＋ CSVを開く</button><button class="primary" onClick={() => folderInput.current?.click()} disabled={busy}>フォルダーを開く</button></div></header>
-    <div class="subbar"><div class="program-selection">{programs.length > 1 && <><label for="program-select">プログラム</label><select id="program-select" aria-label="プログラム" value={program?.name ?? ''} disabled={busy} onChange={e=>{const next=programs.find(p=>p.name===e.currentTarget.value);if(next)showProgram(next);}}>{programs.map(p=><option key={p.name} value={p.name}>{p.name}</option>)}</select><span class="program-count">{programs.length}本</span></>}<span>{program ? <><b>{program.name}</b><span class="muted">　{program.cpu}</span></> : 'ローカルCSVビューア'}</span></div><div>{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<button onClick={()=>setZoom(Math.max(.5,Math.min(1.5,Math.floor(((scroll.current?.clientWidth??1100)-24)/LADDER_WIDTH*100)/100)))}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(.5, +(z - .1).toFixed(1)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
+    <div class="subbar"><div class="program-selection">{programs.length > 1 && <><label for="program-select">プログラム</label><select id="program-select" aria-label="プログラム" value={program?.name ?? ''} disabled={busy} onChange={e=>{const next=programs.find(p=>p.name===e.currentTarget.value);if(next)showProgram(next);}}>{programs.map(p=><option key={p.name} value={p.name}>{p.name}{p.comparison ? ` · ${p.comparison.sourceName}` : ''}</option>)}</select><span class="program-count">{programs.length}本</span></>}<span>{program ? <><b>{program.name}</b><span class="muted">　{comparison ? (comparison.differentRows ? `${comparison.differentRows}行相違` : '比較元・比較先 一致') : program.cpu}</span></> : 'ローカルCSVビューア'}</span></div><div>{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<button onClick={()=>setZoom(Math.max(comparison ? .25 : .5,Math.min(1.5,Math.floor(((comparison ? ((comparisonWidth.current?.clientWidth??1100)-170)/2 : scroll.current?.clientWidth??1100)-24)/LADDER_WIDTH*100)/100)))}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(comparison ? .25 : .5, +(z - .1).toFixed(2)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
     {error && <div class="error" role="alert">{error}</div>}
-    <div class="workspace"><aside class="navigation"><div class="panel-title">回路一覧 <span>{program?.networks.length ?? 0}</span></div><div class="nav-list" ref={navigation}>{program?.networks.map((n, index) => <button class={`nav-item ${active === n.id ? 'active' : ''}`} onClick={() => jump(n.id)} key={n.id}><span class="number">{String(index + 1).padStart(3, '0')}</span><div><strong>{n.title || `STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ') || '条件ブロック'}{n.warnings.length ? ' ⚠' : ''}</small></div></button>)}</div></aside>
+    <div class={`workspace ${comparison?'comparison-workspace':''}`}><div ref={comparisonWidth} class="comparison-host" hidden={!comparison}>{comparison && program && <ComparisonView key={program.name} program={program} zoom={zoom} rowHeight={rowHeight} selected={selected?.id??''} choose={(i,side)=>{setSelected(i);setSelectedSide(side);}} comments={deviceComments} showComments={showComments}/>}</div>{!comparison && <><aside class="navigation"><div class="panel-title">回路一覧 <span>{program?.networks.length ?? 0}</span></div><div class="nav-list" ref={navigation}>{program?.networks.map((n, index) => <button class={`nav-item ${active === n.id ? 'active' : ''}`} onClick={() => jump(n.id)} key={n.id}><span class="number">{String(index + 1).padStart(3, '0')}</span><div><strong>{n.title || `STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ') || '条件ブロック'}{n.warnings.length ? ' ⚠' : ''}</small></div></button>)}</div></aside>
     <main ref={scroll} class="diagram" onScroll={e => setViewport({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })} aria-label="ラダー表示">
       {busy && <div class="loading" role="status">{progress || 'CSVを解析しています…'}</div>}
-      {!program && !busy ? <div class="empty"><span class="empty-mark">─┤ ├─</span><h1>CSVを、読めるラダーへ。</h1><p>CSVをドロップするか、「CSVを開く」「フォルダーを開く」で選択してください。</p><button class="primary" onClick={() => void load()}>{sample} を表示</button><small>PC内で処理します。ファイルは外部へ送信しません。</small></div> : <div style={{ height: total ? total.top + total.height + 8 : 0, minWidth: Math.max(0, ...layouts.map(l => l.width + 24)), position: 'relative' }}>{visible.map(l => <section key={l.n.id} class="network" style={{ position: 'absolute', top: l.top, left: 12, width: l.width }}>{l.n.title && <div class="network-statements" style={{width:l.width-8*zoom,fontSize:14*zoom}}>{l.n.title.split('\n').map((text,index)=><div key={index} class="network-title" title={text} style={{height:18*zoom,lineHeight:`${18*zoom-2}px`}}>{text}</div>)}</div>}{l.n.warnings.map(w => <div class="warning">⚠ {w}</div>)}<div style={{ width: l.width, height: networkSize(l.n,rowHeight).height * zoom }}><Ladder network={l.n} selected={selected?.id ?? ''} choose={setSelected} zoom={zoom} rowHeight={rowHeight} comments={deviceComments} showComments={showComments}/></div></section>)}</div>}
-    </main>
-    <aside class="details"><div class="panel-title">命令の詳細</div>{selected ? <div class="detail-content"><span class="eyebrow">STEP {selected.step || '—'}</span><h2>{selected.op}</h2><dl><dt>オペランド</dt><dd>{selected.operands.length ? selected.operands.map((o, index) => <div class="operand"><span>{index + 1}</span><div><code><AddressText text={o}/></code>{deviceComment(o,deviceComments) && <div class="operand-comment">{deviceComment(o,deviceComments)}</div>}</div></div>) : 'なし'}</dd><dt>元ファイル</dt><dd>{program?.name}<br/>CSV {selected.sourceRow}行</dd><dt>ノート</dt><dd>{selected.note || 'CSVに記載なし'}</dd></dl></div> : <div class="detail-placeholder">接点・命令を選択すると、全オペランドと元CSV行を表示します。</div>}</aside></div>
-    <footer><span class="status-dot"/>{busy ? '解析中' : program ? `${programs.length}プログラム · ${program.instructions.length.toLocaleString()} 命令 · ${program.networks.length} 回路 · 読込 ${elapsed} ms${commentCount ? ` · コメント ${commentCount.toLocaleString()}件` : ''}` : 'CSVを選択してください'}<span class="footer-right">{program ? `描画 ${visible.length} / ${program.networks.length} 回路　│　` : ''}LOCAL / OFFLINE READY</span></footer>
+      {!program && !busy ? <div class="empty"><span class="empty-mark">─┤ ├─</span><h1>CSVを、読めるラダーへ。</h1><p>CSVをドロップするか、「CSVを開く」「フォルダーを開く」で選択してください。</p><button class="primary" onClick={() => void load()}>{sample} を表示</button><small>PC内で処理します。ファイルは外部へ送信しません。</small></div> : <div style={{ height: total ? total.top + total.height + 8 : 0, minWidth: Math.max(0, ...layouts.map(l => l.width + 24)), position: 'relative' }}>{visible.map(l => <section key={l.n.id} class="network" style={{ position: 'absolute', top: l.top, left: 12, width: l.width }}><NetworkDrawing network={l.n} selected={selected?.id ?? ''} choose={setSelected} zoom={zoom} rowHeight={rowHeight} comments={deviceComments} showComments={showComments}/></section>)}</div>}
+    </main></>}
+    <aside class="details"><div class="panel-title">命令の詳細</div>{selected ? <div class="detail-content"><span class="eyebrow">{comparison ? `${selectedSide==='source'?'比較元':'比較先'} · ` : ''}STEP {selected.step || '—'}</span><h2>{selected.op}</h2><dl>{selected.difference && <><dt class={`difference-label diff-${selected.difference.kind}`}>{differenceLabels[selected.difference.kind]}</dt><dd>{selectedSide==='source'?'比較先':'比較元'}: {selected.difference.otherText || 'なし'}<br/>STEP {selected.difference.otherStep || '—'}</dd></>}<dt>オペランド</dt><dd>{selected.operands.length ? selected.operands.map((o, index) => <div class={`operand ${selected.difference?.operandChanges.includes(index)?'changed-operand':''}`}><span>{index + 1}</span><div><code><AddressText text={o}/></code>{deviceComment(o,deviceComments) && <div class="operand-comment">{deviceComment(o,deviceComments)}</div>}</div></div>) : 'なし'}</dd><dt>元ファイル</dt><dd>{selectedProgram?.name}<br/>{comparison && <>{selectedSide==='source'?comparison.sourceProject:comparison.targetProject}<br/></>}CSV {selected.sourceRow}行</dd><dt>ノート</dt><dd>{selected.note || 'CSVに記載なし'}</dd></dl></div> : <div class="detail-placeholder">接点・命令を選択すると、全オペランドと元CSV行を表示します。</div>}</aside></div>
+    <footer><span class="status-dot"/>{busy ? '解析中' : program ? `${programs.length}プログラム · ${comparison ? `元 ${program.instructions.length.toLocaleString()} / 先 ${comparison.target.instructions.length.toLocaleString()}` : program.instructions.length.toLocaleString()} 命令 · ${program.networks.length} 回路 · 読込 ${elapsed} ms${commentCount ? ` · コメント ${commentCount.toLocaleString()}件` : ''}` : 'CSVを選択してください'}<span class="footer-right">{program && !comparison ? `描画 ${visible.length} / ${program.networks.length} 回路　│　` : ''}LOCAL / OFFLINE READY</span></footer>
   </div>;
 }
 render(<App/>, document.getElementById('app')!);

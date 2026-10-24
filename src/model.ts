@@ -1,10 +1,13 @@
 import Papa from 'papaparse';
+export type DifferenceKind = 'changed' | 'added' | 'removed' | 'step';
+export const differenceLabels = { changed:'変更', added:'追加', removed:'削除', step:'ステップのみ' };
+export interface ComparisonChange { sourceRow:number; sourceText:string; targetText:string; sourceStep:string; targetStep:string; kind:DifferenceKind; }
 
-export interface Instruction { id: string; sourceRow: number; step: string; op: string; operands: string[]; note: string; statement: string; pins?: Instruction[]; }
+export interface Instruction { id: string; sourceRow: number; step: string; op: string; operands: string[]; note: string; statement: string; pins?: Instruction[]; difference?: { kind:DifferenceKind; opChanged:boolean; operandChanges:number[]; otherText:string; otherStep:string; }; }
 export type Logic = { kind: 'contact'; instruction: Instruction } | { kind: 'and' | 'or'; children: Logic[] };
 export interface Action { instruction: Instruction; condition: Logic | null; }
 export interface Network { id: string; title: string; step: string; instructions: Instruction[]; actions: Action[]; warnings: string[]; pointer?: Instruction; }
-export interface Program { name: string; cpu: string; instructions: Instruction[]; networks: Network[]; warnings: string[]; }
+export interface Program { name: string; cpu: string; instructions: Instruction[]; networks: Network[]; warnings: string[]; comparison?: { target: Program; sourceProject: string; targetProject: string; sourceName: string; targetName: string; differentRows: number; rowCount: number; changes: ComparisonChange[] }; }
 export const instructionKey = (i: Instruction) => JSON.stringify([i.op, i.operands]);
 
 export function decodeCsv(bytes: ArrayBuffer): string {
@@ -39,7 +42,10 @@ export function parseProgram(text: string, name: string): Program {
     }
   });
   if (!instructions.length) throw new Error('命令がありません。');
-  const program: Program = { name, cpu: rows.find(r => r[0]?.includes('機種情報'))?.[1] ?? '', instructions, networks: [], warnings: [] };
+  return buildProgram(instructions, name, rows.find(r => r[0]?.includes('機種情報'))?.[1] ?? '');
+}
+export function buildProgram(instructions: Instruction[], name: string, cpu = ''): Program {
+  const program: Program = { name, cpu, instructions, networks: [], warnings: [] };
   let current: Logic | null = null;
   let logicStack: Logic[] = [];
   let branchStack: (Logic | null)[] = [];
@@ -55,9 +61,9 @@ export function parseProgram(text: string, name: string): Program {
   const joinsPrevious = (index: number) => {
     let depth = 1;
     for (let cursor=index+1;cursor<instructions.length;cursor++) { const next=instructions[cursor];
-      if (/^LD(?:I|P|F|PI|FI|D?[=<>]+)?$/.test(next.op)) depth++;
+      if (/^LD(?:I|P|F|PI|FI|[DE]?[=<>]+)?$/.test(next.op)) depth++;
       else if (next.op === 'ANB' || next.op === 'ORB') { if (--depth === 0) return true; }
-      else if (!/^(AND|ANI|OR)/.test(next.op)) return false;
+      else if (!/^(AND|ANI|OR|INV$|MEP$|MEF$)/.test(next.op)) return false;
     }
     return false;
   };
@@ -70,12 +76,12 @@ export function parseProgram(text: string, name: string): Program {
       const n = ensure(i); n.instructions.push(i); n.pointer = i;
       continue;
     }
-    const load = /^LD(?:I|P|F|PI|FI|D?[=<>]+)?$/.test(i.op);
-    const and = /^AN(?:D(?:PI|FI|P|F|D?[=<>]+)?|I)$/.test(i.op);
-    const or = /^OR(?:PI|FI|I|P|F|D?[=<>]+)?$/.test(i.op);
+    const load = /^LD(?:I|P|F|PI|FI|[DE]?[=<>]+)?$/.test(i.op);
+    const and = /^AN(?:D(?:PI|FI|P|F|[DE]?[=<>]+)?|I)$/.test(i.op);
+    const or = /^OR(?:PI|FI|I|P|F|[DE]?[=<>]+)?$/.test(i.op);
     const control = /^(FOR|NEXT|FEND|END|RET|NOPLF)$/.test(i.op);
     const hasActions = (network as Network | null)?.actions.length;
-    if ((control && (hasActions || !(network as Network | null)?.pointer)) || (load && hasActions && !branchStack.length && !joinsPrevious(index)) || (i.statement && !branchStack.length && hasActions)) flush();
+    if ((control && (hasActions || !(network as Network | null)?.pointer)) || (load && hasActions && !branchStack.length && !joinsPrevious(index))) flush();
     const n = ensure(i); n.instructions.push(i);
     if (load) {
       if (current) logicStack.push(current);
