@@ -29,6 +29,7 @@ internal sealed class ViewerWindow : Form
     public ViewerWindow()
     {
         Text = "Ladder Viewer";
+        Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         MinimumSize = new Size(960, 640);
         Size = new Size(1500, 950);
         StartPosition = FormStartPosition.CenterScreen;
@@ -107,7 +108,7 @@ internal sealed class ViewerWindow : Form
             var action = type.GetString();
             if (action == "show-about")
             {
-                using var dialog = new AboutWindow();
+                using var dialog = new AboutWindow(root.TryGetProperty("dark", out var dark) && dark.ValueKind == JsonValueKind.True);
                 dialog.ShowDialog(this);
                 return;
             }

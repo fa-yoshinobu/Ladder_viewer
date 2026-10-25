@@ -63,4 +63,6 @@ dotnet run --project tests/desktop/Check.csproj
 | `desktop/` | WinForms・WebView2によるWindowsホスト |
 | `tests/` | 架空データによる検証 |
 
+アプリアイコンは `src/icon.svg`（画面・ファビコン）と `desktop/app.ico`（EXE・ウィンドウ）です。図柄を変える場合は両方を更新してください。
+
 GitHubのコード反映には、アプリのソース・テスト・文書を含めます。入力CSV、参照HTML・画像、`node_modules/`、`dist/`、`windows/`、`bin/obj/`は除外します。純正画像を表示素材として流用しません。
