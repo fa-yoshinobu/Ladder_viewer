@@ -17,7 +17,7 @@
 | 出力 | 用途 |
 | --- | --- |
 | `windows/LadderViewer.exe` | 起動用EXE |
-| `windows/LadderViewer-win-x64.zip` | EXE・起動方法・第三者ライセンスをまとめた配布ZIP |
+| `windows/LadderViewer-win-x64.zip` | EXEだけを格納した配布ZIP |
 
 配布先に必要な実行環境は [READMEの起動欄](../README.md#起動) を参照してください。
 
@@ -30,9 +30,20 @@ npm ci
 npm run windows:build
 ```
 
-`npm run windows:build` は内部画面をビルドしてからWindows版を発行し、`windows/`へEXEと起動方法・第三者ライセンスを出力します。配布ZIPも作る場合は、上記のバッチを使います。
+`npm run windows:build` は内部画面をビルドしてからWindows版を発行し、`windows/`へEXEを出力します。第三者ライセンス全文はEXEに埋め込み、「バージョン情報」から表示します。配布ZIPも作る場合は、上記のバッチを使います。
 
 `npm run build` は内部画面だけを作成します。`dotnet publish` を直接使う場合も、先に内部画面をビルドしてください。
+
+## GitHub Releases
+
+[Release Windows](../.github/workflows/release.yml) は `v0.1.0` 形式のタグをpushすると実行されます。タグを付ける前に、リリースする変更をGitHubへ反映してください。
+
+```powershell
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+テスト、内部画面のビルド、Windows版の発行が成功すると、GitHub Releaseを作成して `LadderViewer.exe` とEXEだけを格納した `LadderViewer-win-x64.zip` を添付します。EXEのバージョンはタグの番号に合わせます。既存のReleaseや添付ファイルは上書きしません。
 
 ## テスト
 

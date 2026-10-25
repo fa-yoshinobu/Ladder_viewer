@@ -36,7 +36,7 @@ call npm run windows:build
 if errorlevel 1 goto failed
 
 echo 配布ZIPを作成しています...
-powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath @('windows\LadderViewer.exe','windows\THIRD-PARTY-NOTICES.txt','windows\起動方法.txt') -DestinationPath 'windows\LadderViewer-win-x64.zip' -Force"
+powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath 'windows\LadderViewer.exe' -DestinationPath 'windows\LadderViewer-win-x64.zip' -Force"
 if errorlevel 1 goto failed
 
 echo.

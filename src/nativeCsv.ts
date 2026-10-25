@@ -10,7 +10,7 @@ export interface NativeCsvSelection {
 }
 
 export interface NativeCsvBridge {
-  postMessage(message: { type: 'open-csv' | 'open-folder'; token: number } | { type: 'instruction-menu'; text: string }): void;
+  postMessage(message: { type: 'open-csv' | 'open-folder'; token: number } | { type: 'instruction-menu'; text: string } | { type: 'show-about' }): void;
   addEventListener(type: 'message', listener: (event: MessageEvent<NativeCsvSelection>) => void): void;
   removeEventListener(type: 'message', listener: (event: MessageEvent<NativeCsvSelection>) => void): void;
 }

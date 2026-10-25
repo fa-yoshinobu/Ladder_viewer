@@ -1,3 +1,4 @@
+import { isControlMarker } from './controlFlow';
 import type {Network} from './model';
 import {gridLayout,type GridWire} from './layout';
 
@@ -11,6 +12,7 @@ function connectionNets(network:Network){
  const grid=gridLayout(network),points:Point[]=[],indices=new Map<string,number>(),terminals:Terminal[]=[];
  const point=(x:number,y:number)=>{const key=`${x}:${y}`;let index=indices.get(key);if(index===undefined){index=points.length;points.push({x,y});indices.set(key,index);}return index;};
  for(const symbol of grid.symbols){
+  if(isControlMarker(symbol.instruction.op))continue;
   const id=symbol.instruction.comparisonRow??symbol.instruction.id;
   terminals.push({point:point(symbol.col,symbol.row),key:`${id}:in`,instruction:symbol.instruction.id,input:true});
   // Output return terminals always join the right rail and do not affect the rung condition.

@@ -2,9 +2,11 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
 import {differenceLabels,type Instruction,type Program,type Network} from './model';
 import type {DeviceComments} from './comments';
 import {pairNetworks} from './comparison';
-import {LADDER_WIDTH,SCROLLBAR_HEIGHT,gridLayout,networkSize,type LadderViewMode} from './layout';
-import {NetworkDrawing,drawingHeight} from './NetworkDrawing';
+import {CELL,COLUMNS,LEFT_GUTTER,LADDER_WIDTH,SCROLLBAR_HEIGHT,displayGrid,gridLayout,networkSize,type LadderViewMode} from './layout';
+import {NetworkDrawing,drawingHeight,instructionDrawingOffset} from './NetworkDrawing';
 import {MasterControlScope} from './MasterControlScope';
+import {ControlFlowScope} from './ControlFlowScope';
+import type {ControlRange} from './controlFlow';
 import type {MasterControlRange} from './masterControl';
 export type CompareSide='source'|'target';
 
@@ -15,15 +17,17 @@ export function comparisonBlockSize(group:{source:Network[];target:Network[]},ro
  return {sharedScroll,sourceHeight:sourceHeight+bar,targetHeight:targetHeight+bar,height:Math.max(sourceHeight,targetHeight,rowHeight*zoom)+bar};
 }
 
-export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,showComments,viewMode='wrap'}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;showComments:boolean;viewMode?:LadderViewMode}) {
+export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,showComments,viewMode='wrap',navigationTarget}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;showComments:boolean;viewMode?:LadderViewMode;navigationTarget?:{instructionId:string;side:CompareSide;request:number}}) {
  const comparison=program.comparison!;
  const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null);
+ const handledNavigation=useRef<number|undefined>(undefined);
+ const pendingHorizontal=useRef<{program:Program;network:Network;instructionId:string;side:CompareSide}|null>(null);
  const [viewport,setViewport]=useState({top:0,height:800});
  const [active,setActive]=useState(0),[currentChange,setCurrentChange]=useState(-1);
  const blocks=useMemo(()=>{
   let top=8,previousEnd=-1;
   const groups=pairNetworks(program.networks,comparison.target.networks);
-  const carry:Partial<Record<CompareSide,{network:Network;ranges:MasterControlRange[]}>>={};
+  const carry:Partial<Record<CompareSide,{network:Network;ranges:MasterControlRange[];controls:ControlRange[]}>>={};
   return groups.map((group,index)=>{
    const size=comparisonBlockSize(group,rowHeight,zoom,viewMode),height=size.height;
    const end=index===groups.length-1?Infinity:[...group.source,...group.target].reduce((end,n)=>n.instructions.reduce((end,i)=>Math.max(end,i.comparisonRow??i.sourceRow),end),previousEnd);
@@ -31,16 +35,16 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
    previousEnd=end;
    const scopes=(side:CompareSide)=>{
     const networks=group[side],carried=carry[side];
-    if(!networks.length)return carried?.ranges.length?[{...carried,top:0,height,prefix:0,continuationOnly:true}]:[];
+    if(!networks.length)return carried&&(carried.ranges.length||carried.controls.length)?[{...carried,top:0,height,prefix:0,continuationOnly:true}]:[];
     let scopeTop=0;
     const overlays=networks.map((network,networkIndex)=>{
      const contentHeight=drawingHeight(network,rowHeight,zoom,viewMode,!size.sharedScroll);
-     const overlay={network,ranges:network.masterControlRanges??[],top:scopeTop,height:networkIndex===networks.length-1?height-scopeTop:contentHeight,prefix:(network.title?network.title.split('\n').length*18*zoom:0)+network.warnings.length*25,continuationOnly:false};
+     const overlay={network,ranges:network.masterControlRanges??[],controls:network.controlRanges??[],top:scopeTop,height:networkIndex===networks.length-1?height-scopeTop:contentHeight,prefix:(network.title?network.title.split('\n').length*18*zoom:0)+network.warnings.length*25,continuationOnly:false};
      scopeTop+=contentHeight;return overlay;
     });
     const last=networks[networks.length-1];
-    carry[side]={network:last,ranges:(last.masterControlRanges??[]).filter(range=>!range.end||!last.instructions.some(instruction=>instruction.id===range.end?.id))};
-    return overlays.filter(overlay=>overlay.ranges.length);
+    carry[side]={network:last,ranges:(last.masterControlRanges??[]).filter(range=>!range.end||!last.instructions.some(instruction=>instruction.id===range.end?.id)),controls:(last.controlRanges??[]).filter(range=>!range.end||!last.instructions.some(instruction=>instruction.id===range.end?.id))};
+    return overlays.filter(overlay=>overlay.ranges.length||overlay.controls.length);
    };
    const block={...group,...size,top,height,changes,scopes:{source:scopes('source'),target:scopes('target')}};top+=height;return block;
   });
@@ -62,6 +66,37 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
   previousGeometry.current={viewMode,blocks};
  },[blocks,viewMode]);
 
+ useLayoutEffect(()=>{
+  if(!navigationTarget||handledNavigation.current===navigationTarget.request)return;
+  if(navigate(navigationTarget.instructionId,navigationTarget.side))handledNavigation.current=navigationTarget.request;
+ },[navigationTarget?.request,blocks]);
+ useLayoutEffect(()=>{
+  const pending=pendingHorizontal.current;
+  if(!pending)return;
+  if(pending.program!==program){pendingHorizontal.current=null;return;}
+  const element=pending.side==='source'?sourceScroll.current:targetScroll.current;
+  const networkElement=Array.from(element?.querySelectorAll<HTMLElement>('[data-network-id]')??[])
+   .find(node=>node.dataset.networkId===pending.network.id);
+  if(!networkElement)return;
+  const scroller=networkElement.classList.contains('fixed-short-network')?null:networkElement.querySelector<HTMLElement>('.network-scroll')??networkElement.closest<HTMLElement>('.network-scroll');
+  const grid=displayGrid(pending.network,viewMode);
+  let symbol=grid.symbols.find(s=>s.instruction.id===pending.instructionId||s.instruction.pins?.some(pin=>pin.id===pending.instructionId));
+  if(!symbol&&pending.network.pointer?.id!==pending.instructionId){
+   const instruction=pending.network.instructions.find(i=>i.id===pending.instructionId);
+   if(instruction)symbol=[...grid.symbols].sort((a,b)=>Math.abs(a.instruction.sourceRow-instruction.sourceRow)-Math.abs(b.instruction.sourceRow-instruction.sourceRow))[0];
+  }
+  const column=symbol?(viewMode==='scroll'&&grid.pages>1?symbol.col:symbol.col%COLUMNS):0;
+  const left=(symbol?LEFT_GUTTER+column*CELL:0)*zoom;
+  const symbolWidth=symbol?symbol.span*CELL*zoom:0;
+  if(scroller&&(left<scroller.scrollLeft||left+symbolWidth>scroller.scrollLeft+scroller.clientWidth))scroller.scrollLeft=Math.max(0,left-12);
+  if(element){
+   const outer=element.getBoundingClientRect(),origin=(scroller??networkElement).getBoundingClientRect();
+   const visibleLeft=origin.left+left-(scroller?.scrollLeft??0);
+   if(visibleLeft<outer.left||visibleLeft+symbolWidth>outer.left+element.clientWidth)element.scrollLeft=Math.max(0,element.scrollLeft+visibleLeft-outer.left-12);
+  }
+  pendingHorizontal.current=null;
+ },[visible,program,viewMode,zoom]);
+
  useEffect(()=>{
   const observer=new ResizeObserver(()=>{
    const element=sourceScroll.current;
@@ -81,6 +116,24 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
   const element=sourceScroll.current;
   if(element)setViewport({top:element.scrollTop,height:element.clientHeight});
   setActive(index);
+ }
+ function navigate(instructionId:string,side:CompareSide):boolean {
+  const blockIndex=blocks.findIndex(block=>block[side].some(network=>network.pointer?.id===instructionId||network.instructions.some(instruction=>instruction.id===instructionId)));
+  const source=sourceScroll.current,target=targetScroll.current;
+  if(blockIndex<0||!source||!target)return false;
+  const block=blocks[blockIndex],networks=block[side];
+  const networkIndex=networks.findIndex(network=>network.pointer?.id===instructionId||network.instructions.some(instruction=>instruction.id===instructionId));
+  const network=networks[networkIndex];
+  const instruction=network.pointer?.id===instructionId?network.pointer:network.instructions.find(instruction=>instruction.id===instructionId);
+  if(!instruction)return false;
+  const before=networks.slice(0,networkIndex).reduce((height,previous)=>height+drawingHeight(previous,rowHeight,zoom,viewMode,!block.sharedScroll),0);
+  const top=block.top+before+instructionDrawingOffset(network,instructionId,rowHeight,zoom,viewMode);
+  pendingHorizontal.current={program,network,instructionId,side};
+  source.scrollTo({top});target.scrollTo({top});
+  const element=side==='source'?source:target;
+  setViewport({top:element.scrollTop,height:element.clientHeight});setActive(blockIndex);
+  selectInstruction(instruction,side);
+  return true;
  }
  function goDifference(index:number){
   setCurrentChange(index);
@@ -103,9 +156,9 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
     <div class="diagram compare-scroll" role="region" tabIndex={0} ref={side==='source'?sourceScroll:targetScroll} aria-label={`${side==='source'?'比較元':'比較先'}ラダー表示`} onScroll={e=>scroll(side,e.currentTarget)}>
      <div style={{height:total?total.top+total.height+8:0,minWidth:width+24,position:'relative'}}>{visible.map(block=><div class={`comparison-block ${block.changes.length?'has-differences':''}`} key={block.top} style={{position:'absolute',top:block.top,left:12,width,minHeight:block.height}}>
       {block[side].length ? block.sharedScroll ? <div class="network-scroll comparison-group-scroll" style={{width,height:side==='source'?block.sourceHeight:block.targetHeight}} role="region" aria-label="長い回路の横スクロール" tabIndex={0}>
-       <div style={{width:Math.max(LADDER_WIDTH,...block[side].map(n=>networkSize(n,rowHeight,viewMode).width))*zoom}}>{block[side].map(network=><div class={`network ${gridLayout(network).pages===1?'fixed-short-network':''}`} key={network.id} style={{width:networkSize(network,rowHeight,viewMode).width*zoom}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} scrollContainer={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} comments={comments} showComments={showComments}/></div>)}</div>
-      </div> : block[side].map(network=><div class="network" key={network.id} style={{width}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} comments={comments} showComments={showComments}/></div>) : <div class="missing-circuit">この範囲に回路なし</div>}
-      {block.scopes[side].map(scope=><div key={scope.network.id} style={{position:'absolute',top:scope.top,left:0,width,height:scope.height,pointerEvents:'none'}}><MasterControlScope network={scope.network} ranges={scope.ranges} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/></div>)}
+       <div style={{width:Math.max(LADDER_WIDTH,...block[side].map(n=>networkSize(n,rowHeight,viewMode).width))*zoom}}>{block[side].map(network=><div class={`network ${gridLayout(network).pages===1?'fixed-short-network':''}`} key={network.id} data-network-id={network.id} style={{width:networkSize(network,rowHeight,viewMode).width*zoom}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} scrollContainer={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={comments} showComments={showComments}/></div>)}</div>
+      </div> : block[side].map(network=><div class="network" key={network.id} data-network-id={network.id} style={{width}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={comments} showComments={showComments}/></div>) : <div class="missing-circuit">この範囲に回路なし</div>}
+      {block.scopes[side].map(scope=><div key={scope.network.id} style={{position:'absolute',top:scope.top,left:0,width,height:scope.height,pointerEvents:'none'}}>{!!scope.ranges.length&&<MasterControlScope network={scope.network} ranges={scope.ranges} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}{!!scope.controls.length&&<ControlFlowScope network={scope.network} ranges={scope.controls} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}</div>)}
      </div>)}</div>
     </div>
    </section>)}</div>

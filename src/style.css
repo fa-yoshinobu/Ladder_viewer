@@ -45,3 +45,9 @@
 .master-control-scope path{stroke:#66859b;stroke-width:1.5;fill:none;shape-rendering:geometricPrecision;pointer-events:stroke}
 .master-control-scope text{fill:#46687f;font-family:Consolas,monospace}
 .master-control-scope .master-control-open path{stroke-dasharray:4 3}
+.control-flow-scope{position:absolute;inset:0;overflow:visible;pointer-events:none}.control-flow-range{fill:none;stroke:#6a879b;stroke-width:1.2}.control-flow-loop{stroke:#987547}.control-flow-open{stroke-dasharray:4 3}.control-flow-return{stroke-width:1.5}.flow-marker{fill:#f5f7fa;stroke:#7891a5}.flow-marker.flow-loop{stroke:#987547;fill:#faf7f2}.flow-note{font:10px "Yu Gothic UI","Segoe UI",sans-serif;fill:#536c7d;pointer-events:none}
+
+.flow-target{pointer-events:auto;cursor:pointer;fill:#176a94;text-decoration:underline}.flow-target:focus{outline:2px solid #176a94}
+.search-bar{display:flex;align-items:center;gap:8px;padding:7px 18px;min-height:44px;flex-shrink:0;background:#fff;border-bottom:1px solid #dce4ea;font-size:12px}.search-query{width:300px;min-width:160px;padding:6px 9px;border:1px solid #cad9e1;border-radius:4px;font:inherit}.search-mode{padding:5px;border:1px solid #cad9e1;border-radius:4px;background:white;font:inherit}.search-bar button{padding:5px 10px;font-size:12px}.search-count{min-width:62px;color:#536b7b;white-space:nowrap}.search-result{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#536b7b}
+
+.step-link{border:0;background:transparent;border-radius:0;padding:0;color:#176a94;text-decoration:underline;font:inherit}.step-link:hover{background:transparent}

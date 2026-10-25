@@ -4,6 +4,7 @@ import { AddressText } from './AddressText';
 import { nativeCsvBridge } from './nativeCsv';
 import { instructionCopyText } from './instructionCopy';
 import { isComparisonCondition, isInlineLogic } from './instructions';
+import { isControlMarker } from './controlFlow';
 import { CommentText } from './CommentText';
 import { deviceComment, type DeviceComments } from './comments';
 import { strokeCoordinates, type StrokeCoordinates } from './drawing';
@@ -21,13 +22,13 @@ function instructionMenu(event: MouseEvent, instruction: Instruction, comments: 
   choose(instruction);
   nativeCsvBridge()?.postMessage({ type: 'instruction-menu', text: instructionCopyText(instruction, comments) });
 }
-function Symbol({ s, selected, choose, c, rowHeight, comments, showComments }: { s: GridSymbol; selected: string; choose: (i: Instruction) => void; c: StrokeCoordinates; rowHeight: number; comments: DeviceComments; showComments: boolean }) {
+function Symbol({ s, selected, choose, navigate, c, rowHeight, comments, showComments }: { s: GridSymbol; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; c: StrokeCoordinates; rowHeight: number; comments: DeviceComments; showComments: boolean }) {
   const i = s.instruction;
   const x = s.col * CELL, y = s.row * rowHeight + BASELINE, w = s.span * CELL, cx = x + CELL / 2;
   const X = c.x, Y = c.y;
   const inputClass=s.inputDifference?`wire wire-${s.inputDifference}`:'wire';
   const outputClass=s.outputDifference?`wire wire-${s.outputDifference}`:'wire';
-  const coil = !s.contact && isCoil(i);
+  const coil = !s.contact && isCoil(i), marker = isControlMarker(i.op);
   const comparison = s.contact && isComparisonCondition(i.op);
   const inverse = /^(LDI|ANI|ORI|LDPI|ANDPI|ORPI|LDFI|ANDFI|ORFI)$/.test(i.op);
   const pulse = /PI?$/.test(i.op) ? -1 : /FI?$/.test(i.op) ? 1 : 0;
@@ -37,12 +38,19 @@ function Symbol({ s, selected, choose, c, rowHeight, comments, showComments }: {
   const radius = Math.round(7 * c.scale) / c.scale;
   const labels = i.operands.map(operand => ({ operand, text: deviceComment(operand, comments) })).filter(item => item.text);
   const description = labels.length > 1 ? labels.map(item => `${item.operand}: ${item.text}`).join(' / ') : labels[0]?.text ?? '';
-  return <g class={`symbol ${i.difference?'diff-'+i.difference.kind:''} ${selected === i.id ? 'chosen' : ''}`} role="button" tabIndex={0}
+  const flow=i.controlFlow;
+  const flowArrow=flow?.kind==='jump'?'→ ':flow?.kind==='return'?'↩ ':flow?.kind==='exit'?'↪ ':flow?.kind==='loop'&&/^END/.test(i.op)?'↶ ':'';
+  const scopeTarget=flow?.kind==='boundary'||(flow?.kind==='loop'&&!/^END/.test(i.op))||(flow?.kind==='branch'&&!/^(THEN|CASETHEN|WHILEDO|FORDO)$/.test(i.op));
+  return <g data-instruction-id={i.id} class={`symbol ${i.difference?'diff-'+i.difference.kind:''} ${selected === i.id ? 'chosen' : ''}`} role="button" tabIndex={0}
     aria-label={`${i.op} ${i.operands.join(' ')}`} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose)}
     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i); } }}>
     <title>{`${i.op} ${i.operands.join(' ')} / CSV ${i.sourceRow}行\n${i.note}${i.difference ? '\n'+differenceLabels[i.difference.kind]+' / 相手側: '+(i.difference.otherText||'なし') : ''}`}</title>
     <rect class="hit" x={x + 1} y={y - 24} width={w - 2} height={i.pins ? i.pins.length * 22 + 54 : rowHeight - 8} rx={2}/>
-    {i.op === 'NOP' ? null : i.pins ? <>
+    {i.op === 'NOP' ? null : marker ? <>
+      <rect class={`command-outline flow-marker ${i.controlFlow?.kind==='loop'?'flow-loop':''}`} x={X(x+6)} y={Y(y-12)} width={X(x+w-6)-X(x+6)} height={Y(y+12)-Y(y-12)}/>
+      <text class="command-text" x={x+14} y={y+4}><tspan class={i.difference?.opChanged?'diff-value':''}>{i.op}</tspan>{i.operands.map((operand,index)=><>{' '}<Operand instruction={i} index={index}/></>)}</text>
+      {flow&&<text class="flow-note" x={x+14} y={y+26}>{flowArrow}{flow.label}{flow.targetStep!==undefined&&<>{scopeTarget?' ～ ':' → '}{flow.targetId&&navigate?<tspan class="flow-target" role="button" tabIndex={0} aria-label={`STEP ${flow.targetStep||'—'}へ移動`} onClick={event=>{event.stopPropagation();navigate(flow.targetId!);}} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();navigate(flow.targetId!);}}}>STEP {flow.targetStep||'—'}</tspan>:<>STEP {flow.targetStep||'—'}</>}</>}</text>}
+    </> : i.pins ? <>
       {line(c, x, y, x + 10, y,inputClass)}{line(c, x + w - 10, y, x + w, y,outputClass)}
       <rect class="fb-outline" x={X(x + 10)} y={Y(y - 22)} width={X(x + w - 10) - X(x + 10)} height={Y(y + i.pins.length * 22 + 30) - Y(y - 22)}/>
       <text class="fb-title" x={x + 20} y={y - 6}>{i.op.slice(7)}</text>
@@ -76,11 +84,11 @@ function Symbol({ s, selected, choose, c, rowHeight, comments, showComments }: {
         : <rect class="command-outline" x={X(x + 6)} y={Y(y - 11)} width={X(x + w - 6) - X(x + 6)} height={Y(y + 11) - Y(y - 11)}/>}
       <text class="command-text" x={x + 14} y={y + 4}><tspan class={i.difference?.opChanged?'diff-value':''}>{command}</tspan>{i.operands.map((operand,index) => <>{' '}<Operand instruction={i} index={index}/></>)}</text>
     </>}
-    {showComments && !i.pins && <CommentText text={description} x={centered ? cx : x + 14} y={y + 20} width={centered ? CELL - 4 : w - 28} centered={centered}/>}
+    {showComments && !i.pins && !marker && <CommentText text={description} x={centered ? cx : x + 14} y={y + 20} width={centered ? CELL - 4 : w - 28} centered={centered}/>}
   </g>;
 }
 
-export function Ladder({ network, selected, choose, zoom, rowHeight, comments, showComments, viewMode='wrap' }: { network: Network; selected: string; choose: (i: Instruction) => void; zoom: number; rowHeight: number; comments: DeviceComments; showComments: boolean; viewMode?:LadderViewMode }) {
+export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, comments, showComments, viewMode='wrap' }: { network: Network; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; zoom: number; rowHeight: number; comments: DeviceComments; showComments: boolean; viewMode?:LadderViewMode }) {
   const root = useRef<SVGSVGElement>(null);
   const [raster, setRaster] = useState({ x: 0, y: 0, ratio: 1 });
   function updateRaster() {
@@ -100,6 +108,7 @@ export function Ladder({ network, selected, choose, zoom, rowHeight, comments, s
   }, [network, viewMode]);
   const g = displayGrid(network, viewMode), dimensions = networkSize(network, rowHeight, viewMode);
   const scrolling = viewMode === 'scroll' && g.pages > 1;
+  const markerOnly = !g.wires.length && g.symbols.length > 0 && g.symbols.every(s => isControlMarker(s.instruction.op));
   const master = network.masterControl, masterY = (network.rowAlignment?.[0] ?? 0) * rowHeight;
   const pointerRow = network.masterControl ? 1 : 0;
   const pointerY = (network.rowAlignment?.[pointerRow] ?? pointerRow) * rowHeight;
@@ -116,12 +125,12 @@ export function Ladder({ network, selected, choose, zoom, rowHeight, comments, s
       {line(rootStroke, LEFT_GUTTER - 6, masterY + BASELINE - 9, LEFT_GUTTER + 6, masterY + BASELINE - 9)}
       {line(rootStroke, LEFT_GUTTER - 6, masterY + BASELINE + 9, LEFT_GUTTER + 6, masterY + BASELINE + 9)}
     </g>}
-    {network.pointer && <g class={`symbol ${network.pointer.difference?'diff-'+network.pointer.difference.kind:''} ${selected === network.pointer.id ? 'chosen' : ''}`} transform={`translate(0 ${pointerY})`} role="button" tabIndex={0} aria-label={network.pointer.op} onContextMenu={event => instructionMenu(event, network.pointer!, comments, choose)} onClick={() => choose(network.pointer!)} onKeyDown={e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(network.pointer!); } }}>
+    {network.pointer && <g data-instruction-id={network.pointer.id} class={`symbol ${network.pointer.difference?'diff-'+network.pointer.difference.kind:''} ${selected === network.pointer.id ? 'chosen' : ''}`} transform={`translate(0 ${pointerY})`} role="button" tabIndex={0} aria-label={network.pointer.op} onContextMenu={event => instructionMenu(event, network.pointer!, comments, choose)} onClick={() => choose(network.pointer!)} onKeyDown={e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(network.pointer!); } }}>
       <rect class="hit" x={2} y={4} width={LEFT_GUTTER - 27} height={rowHeight - 8}/>
       <text class="pointer-label" x={6} y={BASELINE + 4}>{network.pointer.op}</text>
       {showComments && <CommentText text={deviceComment(network.pointer.op, comments)} x={6} y={BASELINE + 20} width={LEFT_GUTTER - 28}/>}
     </g>}
-    {line(rootRail, dimensions.width - 8, 0, dimensions.width - 8, dimensions.height, 'rail right-rail')}
+    {!markerOnly && line(rootRail, dimensions.width - 8, 0, dimensions.width - 8, dimensions.height, 'rail right-rail')}
     {drawingPages(g, rowHeight, viewMode).map(({page,left,top,width,outputs}) => {
       const clip = `clip-${network.id}-${page}`;
       const c = strokeCoordinates(zoom, raster.ratio, raster.x + (LEFT_GUTTER - left) * zoom, raster.y + top * zoom);
@@ -129,14 +138,14 @@ export function Ladder({ network, selected, choose, zoom, rowHeight, comments, s
       const endStroke = strokeCoordinates(zoom, raster.ratio, raster.x + LEFT_GUTTER * zoom, raster.y + top * zoom);
       return <g transform={`translate(${LEFT_GUTTER} ${top})`} key={page}>
         <defs><clipPath id={clip}><rect x={0} y={0} width={width} height={g.rows * rowHeight}/></clipPath></defs>
-        {page === 0 && (master ? <>
+        {page === 0 && !markerOnly && (master ? <>
           {line(rail,0,0,0,masterY+BASELINE-9,'rail left-rail')}
           {line(rail,0,masterY+BASELINE+9,0,g.rows*rowHeight,'rail left-rail')}
         </> : line(rail,0,0,0,g.rows*rowHeight,'rail left-rail'))}
         {outputs.map(s => line(endStroke, scrolling ? (s.col + s.span) * CELL : width, s.row * rowHeight + BASELINE, width + 8, s.row * rowHeight + BASELINE, 'wire'))}
         <g clip-path={`url(#${clip})`}><g transform={`translate(${-left} 0)`}>
           {g.wires.map(w => line(c, w.x1 * CELL, w.y1 * rowHeight + BASELINE, w.x2 * CELL, w.y2 * rowHeight + BASELINE,w.difference?`wire wire-${w.difference}`:'wire'))}
-          {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} choose={choose} c={c} rowHeight={rowHeight} comments={comments} showComments={showComments}/>)}
+          {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} choose={choose} navigate={navigate} c={c} rowHeight={rowHeight} comments={comments} showComments={showComments}/>)}
         </g></g>
         {g.symbols.filter(s => s.col * CELL >= left && s.col * CELL < left + width)
           .filter((s, index, all) => all.findIndex(other => other.row === s.row) === index)

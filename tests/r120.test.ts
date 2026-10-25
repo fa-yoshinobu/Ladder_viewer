@@ -103,12 +103,15 @@ test('MC adds a header row to the next rung and MCR closes that boundary',()=>{
 test('unconditional control instructions do not inherit the preceding rung condition',()=>{
  const controls:Command[]=[['JMP','#P521'],['NOP'],['DI'],['EI'],['IMASK','K9']];
  for(const command of controls){
-  const p=program([['LD','X181'],['OUT','Y181'],command,['OUT','Y182']]);
+  const commands:Command[]=[['LD','X181'],['OUT','Y181'],command,['OUT','Y182']];
+  if(command[0]==='JMP')commands.unshift(['#P521']);
+  const p=program(commands);
   const actions=p.networks.flatMap(network=>network.actions);
   assert.deepEqual(actions.map(action=>action.instruction.op),['OUT',command[0],'OUT']);
   assert.deepEqual(expression(actions[0].condition),['LD','X181']);
   assert.equal(actions[1].condition,null,command[0]);
   assert.equal(actions[2].condition,null,command[0]);
+  if(command[0]==='JMP')assert.equal(actions[1].instruction.controlFlow?.targetId,p.instructions.find(instruction=>instruction.op==='#P521')?.id);
   assert.deepEqual(p.networks.flatMap(network=>network.warnings),[]);
  }
 });

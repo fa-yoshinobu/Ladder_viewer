@@ -1,5 +1,6 @@
 import type { Instruction, Logic, Network } from './model';
 import { isComparisonCondition } from './instructions';
+import { isControlMarker, isMemoryControl } from './controlFlow';
 export const CELL = 74;
 export const ROW = 56;
 export const COLUMNS = 12;
@@ -7,6 +8,10 @@ export const isCoil = (i:Instruction) => /^(OUT|OUTH)$/.test(i.op) && i.operands
 export const GRID_WIDTH = COLUMNS * CELL;
 export const LEFT_GUTTER = 82;
 export const LADDER_WIDTH = LEFT_GUTTER + GRID_WIDTH + 16;
+export function fitLadderZoom(viewportWidth:number,comparison:boolean):number {
+ const availableWidth=comparison?(viewportWidth-170)/2:viewportWidth;
+ return Math.max(comparison ? .25 : .5,Math.min(1.5,Math.floor((availableWidth-24)/LADDER_WIDTH*100)/100));
+}
 export const BASELINE = 28;
 export const PAGE_GAP = 22;
 export type LadderViewMode = 'wrap' | 'scroll';
@@ -77,17 +82,19 @@ export function gridLayout(n: Network): GridLayout {
   const startRow=action.condition===previousCondition?nextRow:Math.max(nextRow,occupiedRows);
   const end=action.condition?place(action.condition,0,startRow):{col:0,row:startRow,bottom:startRow};
   const i=action.instruction;
-  const coil=isCoil(i);
-  const span=i.pins?5:coil?1:Math.max(1,1+i.operands.length);
-  const target=Math.ceil((end.col+span)/COLUMNS)*COLUMNS-span;
-  if(i.op!=='NOP')route(end,target,startRow);
+  const coil=isCoil(i),marker=isControlMarker(i.op);
+  const span=marker?Math.max(4,1+i.operands.length):i.pins?5:coil?1:Math.max(1,1+i.operands.length);
+  const target=marker&&!action.condition?0:Math.ceil((end.col+span)/COLUMNS)*COLUMNS-span;
+  if(i.op!=='NOP'&&!isMemoryControl(i.op)&&(!marker||action.condition))route(end,target,startRow);
   symbols.push({instruction:i,col:target,row:startRow,span,contact:false});
   maxCol=Math.max(maxCol,target+span);
   nextRow=startRow+(i.pins ? Math.ceil((i.pins.length*22+66)/ROW) : 1);
   occupiedRows=Math.max(occupiedRows,end.bottom+1,nextRow);
   previousCondition=action.condition;
  }
- if(!n.actions.length)for(const i of n.instructions.filter(i=>i!==n.pointer&&i.op!=='PHASERST')) {symbols.push({instruction:i,col:0,row:nextRow++,span:1+i.operands.length,contact:false});}
+ if(!n.actions.length&&n.evaluation) {
+  const end=place(n.evaluation,0,nextRow);nextRow=end.bottom+1;occupiedRows=Math.max(occupiedRows,nextRow);
+ } else if(!n.actions.length)for(const i of n.instructions.filter(i=>i!==n.pointer&&i.op!=='PHASERST')) {symbols.push({instruction:i,col:0,row:nextRow++,span:1+i.operands.length,contact:false});}
  const rows=Math.max(1,nextRow,occupiedRows);const pages=Math.ceil(maxCol/COLUMNS);
  const result={symbols,wires:mergeWires(wires),rows,pages,width:LADDER_WIDTH,height:pages*rows*ROW+(pages>1 ? pages*PAGE_GAP : 0)};cache.set(n,result);return alignedGrid(n,result);
 }
@@ -125,7 +132,7 @@ function compactHorizontalGaps(g:GridLayout):GridLayout {
 export function displayGrid(network:Network,viewMode:LadderViewMode='wrap'):GridLayout {
  const g=gridLayout(network);
  if(viewMode!=='scroll'||g.pages===1)return g;
- const right=compactColumns(g),key=(col:number,row:number)=>`${col}:${row}`;
+ const right=Math.max(compactColumns(g),...g.symbols.filter(s=>isControlMarker(s.instruction.op)).map(s=>s.col+s.span)),key=(col:number,row:number)=>`${col}:${row}`;
  const terminals=new Set<string>(),horizontalEnds=new Map<string,number>(),verticals=new Map<number,GridWire[]>();
  for(const s of g.symbols)if(s.contact){terminals.add(key(s.col,s.row));terminals.add(key(s.col+s.span,s.row));}
  g.wires.forEach((w,index)=>{
@@ -134,7 +141,7 @@ export function displayGrid(network:Network,viewMode:LadderViewMode='wrap'):Grid
  });
  const wires=g.wires.map(w=>({...w}));
  const symbols=g.symbols.map(s=>{
-  if(s.contact)return s;
+  if(s.contact||isControlMarker(s.instruction.op))return s;
   const col=right-s.span;
   if(col!==s.col){
    const junction=terminals.has(key(s.col,s.row))||(verticals.get(s.col)??[]).some(w=>Math.min(w.y1,w.y2)<=s.row&&s.row<=Math.max(w.y1,w.y2));
@@ -156,7 +163,7 @@ export function drawingPages(g:GridLayout,rowHeight=ROW,viewMode:LadderViewMode=
  const scrolling=viewMode==='scroll'&&g.pages>1;
  return Array.from({length:scrolling?1:g.pages},(_,page)=>({
   page,left:page*GRID_WIDTH,top:page*(g.rows*rowHeight+PAGE_GAP),width:scrolling?compactColumns(g)*CELL:GRID_WIDTH,
-  outputs:g.symbols.filter(s=>!s.contact&&s.instruction.op!=='NOP'&&(scrolling||s.col+s.span===(page+1)*COLUMNS))
+  outputs:g.symbols.filter(s=>!s.contact&&s.instruction.op!=='NOP'&&!isControlMarker(s.instruction.op)&&(scrolling||s.col+s.span===(page+1)*COLUMNS))
  }));
 }
 

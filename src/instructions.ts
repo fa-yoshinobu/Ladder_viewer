@@ -7,4 +7,4 @@ export function logicOperation(op:string):'load'|'and'|'or'|undefined {
  return op.startsWith('LD')?'load':op.startsWith('OR')?'or':'and';
 }
 export const isInlineLogic = (op:string):boolean => /^(?:INV|MEP|MEF|EGP|EGF)$/.test(op);
-export const isPointerDefinition = (op:string):boolean => /^(?:#?P\d+|I\d+)$/.test(op);
+export const isPointerDefinition = (op:string):boolean => /^(?:#?P\d+|I\d+|GLP\d+)$/.test(op);

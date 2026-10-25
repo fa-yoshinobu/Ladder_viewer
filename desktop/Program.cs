@@ -105,6 +105,12 @@ internal sealed class ViewerWindow : Form
                 return;
             }
             var action = type.GetString();
+            if (action == "show-about")
+            {
+                using var dialog = new AboutWindow();
+                dialog.ShowDialog(this);
+                return;
+            }
             if (action is not ("open-csv" or "open-folder") || !root.TryGetProperty("token", out var value)
                 || value.ValueKind != JsonValueKind.Number || !value.TryGetInt64(out token) || token < 0) return;
             openFolder = action == "open-folder";
