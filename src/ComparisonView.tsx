@@ -4,7 +4,7 @@ import {differenceLabels,type ComparisonChange,type Instruction,type Program,typ
 import type {DeviceComments} from './comments';
 import {pairNetworks} from './comparison';
 import {CELL,COLUMNS,LEFT_GUTTER,LADDER_WIDTH,SCROLLBAR_HEIGHT,displayGrid,gridLayout,networkSize,type LadderViewMode} from './layout';
-import {NetworkDrawing,drawingHeight,instructionDrawingOffset} from './NetworkDrawing';
+import {NetworkDrawing,drawingHeight,instructionDrawingOffset,networkPrefix} from './NetworkDrawing';
 import {MasterControlScope} from './MasterControlScope';
 import {ControlFlowScope} from './ControlFlowScope';
 import type {ControlRange} from './controlFlow';
@@ -61,7 +61,7 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
     let scopeTop=0;
     const overlays=networks.map((network,networkIndex)=>{
      const contentHeight=drawingHeight(network,rowHeight,zoom,viewMode,!size.sharedScroll);
-     const overlay={network,ranges:network.masterControlRanges??[],controls:network.controlRanges??[],top:scopeTop,height:networkIndex===networks.length-1?height-scopeTop:contentHeight,prefix:(network.title?network.title.split('\n').length*18*zoom:0)+network.warnings.length*25,continuationOnly:false};
+     const overlay={network,ranges:network.masterControlRanges??[],controls:network.controlRanges??[],top:scopeTop,height:networkIndex===networks.length-1?height-scopeTop:contentHeight,prefix:networkPrefix(network,zoom),continuationOnly:false};
      scopeTop+=contentHeight;return overlay;
     });
     const last=networks[networks.length-1];

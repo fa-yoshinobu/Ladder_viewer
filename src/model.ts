@@ -27,13 +27,15 @@ export function parseProgram(text: string, name: string): Program {
   if (header < 0) throw new Error('この試作版は「ステップ番号・命令・I/O(デバイス)」列のあるGX命令リストに対応しています。');
   const cols = rows[header];
   const get = (r: string[], key: string) => r[cols.indexOf(key)]?.trim() ?? '';
+  // GX marks statements and notes kept only in the project (not written to the PLC) with a leading '*'; GX shows them without it.
+  const displayText = (r: string[], key: string) => get(r, key).replace(/^\*/, '');
   const instructions: Instruction[] = [];
   let statement = '';
   rows.slice(header + 1).forEach((r, index) => {
-    statement = [statement, get(r, '行間ステートメント'), get(r, 'PIステートメント')].filter(Boolean).join('\n');
+    statement = [statement, displayText(r, '行間ステートメント'), displayText(r, 'PIステートメント')].filter(Boolean).join('\n');
     const op = get(r, '命令');
     const operand = get(r, 'I/O(デバイス)');
-    const note = get(r, 'ノート');
+    const note = displayText(r, 'ノート');
     if (op) {
       instructions.push({ id: `row-${header + index + 2}`, sourceRow: header + index + 2, step: get(r, 'ステップ番号'), op, operands: operand ? [operand] : [], note, statement });
       statement = '';

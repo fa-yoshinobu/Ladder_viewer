@@ -4,6 +4,12 @@ import { decodeCsv, parseProgram, instructionKey, type Logic } from '../src/mode
 import { networkSize } from '../src/layout.ts';
 function csv(lines: string[][]) { return ['"test"', '"機種情報:"\t"QCPU"', '"ステップ番号"\t"行間ステートメント"\t"命令"\t"I/O(デバイス)"\t"空欄"\t"PIステートメント"\t"ノート"', ...lines.map(r => r.map(s => `"${s.replaceAll('"', '""')}"`).join('\t'))].join('\r\n'); }
 function expression(e: Logic | null): string { if (!e) return 'TRUE'; return e.kind === 'contact' ? e.instruction.operands.join(' ') : '(' + e.children.map(expression).join(e.kind === 'and' ? ' & ' : ' | ') + ')'; }
+test('GX project-only markers are removed from statements and notes', () => {
+ const p = parseProgram(csv([['0','*周辺','','','','',''],['1','','LD','X0','','',''],['2','','OUT','Y0','','',''],['','','','','','','*メモ'],['3','[Title]見出し','','','','',''],['4','','LD','X1','','',''],['5','','OUT','Y1','','',''],['','','','','','','*二重*']]), 'gx.csv');
+ assert.equal(p.networks[0].title,'周辺'); assert.equal(p.instructions[1].note,'メモ');
+ assert.equal(p.networks[1].title,'[Title]見出し'); assert.equal(p.instructions[3].note,'二重*');
+});
+
 test('continuation operands, note and source mapping are retained', () => {
  const p = parseProgram(csv([['0','','LD','X9'],['1','','MOV','K1'],['','','','D21','','','メモ']]), 'x.csv');
  assert.deepEqual(p.instructions[1].operands, ['K1','D21']); assert.equal(p.instructions[1].note,'メモ'); assert.equal(p.instructions[1].sourceRow,5);
