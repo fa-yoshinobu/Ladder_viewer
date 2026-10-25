@@ -1,5 +1,6 @@
+import {Fragment} from 'preact';
 import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
-import {differenceLabels,type Instruction,type Program,type Network} from './model';
+import {differenceLabels,type ComparisonChange,type Instruction,type Program,type Network} from './model';
 import type {DeviceComments} from './comments';
 import {pairNetworks} from './comparison';
 import {CELL,COLUMNS,LEFT_GUTTER,LADDER_WIDTH,SCROLLBAR_HEIGHT,displayGrid,gridLayout,networkSize,type LadderViewMode} from './layout';
@@ -17,13 +18,34 @@ export function comparisonBlockSize(group:{source:Network[];target:Network[]},ro
  return {sharedScroll,sourceHeight:sourceHeight+bar,targetHeight:targetHeight+bar,height:Math.max(sourceHeight,targetHeight,rowHeight*zoom)+bar};
 }
 
+// Next/previous circuit block with differences, relative to the block at the top of the view.
+// anchor is the block last jumped to when the end of the list stopped it short of the top; it stands in for the top block.
+export function adjacentDifferenceBlock(blocks:{top:number;changes:unknown[]}[],scrollTop:number,direction:1|-1,anchor=-1):number {
+ const differences=blocks.flatMap((block,index)=>block.changes.length?[index]:[]);
+ if(!differences.length)return -1;
+ if(direction>0){
+  let current=anchor;
+  blocks.forEach((block,index)=>{if(block.top<=scrollTop+1)current=Math.max(current,index);});
+  return differences.find(index=>index>current)??differences[0];
+ }
+ const before=differences.filter(index=>anchor>=0?index<anchor:blocks[index].top<scrollTop-1);
+ return before.at(-1)??differences[differences.length-1];
+}
+
+export function differenceSummary(changes:ComparisonChange[]):string {
+ const counts=new Map<ComparisonChange['kind'],number>();
+ for(const change of changes)counts.set(change.kind,(counts.get(change.kind)??0)+1);
+ return [...counts].map(([kind,count])=>differenceLabels[kind]+count).join('・');
+}
+
 export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,showComments,viewMode='wrap',navigationTarget}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;showComments:boolean;viewMode?:LadderViewMode;navigationTarget?:{instructionId:string;side:CompareSide;request:number}}) {
  const comparison=program.comparison!;
  const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null);
  const handledNavigation=useRef<number|undefined>(undefined);
  const pendingHorizontal=useRef<{program:Program;network:Network;instructionId:string;side:CompareSide}|null>(null);
  const [viewport,setViewport]=useState({top:0,height:800});
- const [active,setActive]=useState(0),[currentChange,setCurrentChange]=useState(-1);
+ const [active,setActive]=useState(0),[currentBlock,setCurrentBlock]=useState(-1);
+ const lastJump=useRef(-1);
  const blocks=useMemo(()=>{
   let top=8,previousEnd=-1;
   const groups=pairNetworks(program.networks,comparison.target.networks);
@@ -51,7 +73,8 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
  },[program,zoom,rowHeight,viewMode]);
  const total=blocks.at(-1),width=LADDER_WIDTH*zoom;
  const visible=blocks.filter(block=>block.top+block.height>viewport.top-400&&block.top<viewport.top+viewport.height+400);
- const change=comparison.changes[currentChange];
+ const differenceBlocks=useMemo(()=>blocks.flatMap((block,index)=>block.changes.length?[index]:[]),[blocks]);
+ const previewChanges=blocks[currentBlock]?.changes??[];
  const previousGeometry=useRef({viewMode,blocks});
  useLayoutEffect(()=>{
   const previous=previousGeometry.current;
@@ -135,22 +158,33 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
   selectInstruction(instruction,side);
   return true;
  }
- function goDifference(index:number){
-  setCurrentChange(index);
-  const change=comparison.changes[index],blockIndex=blocks.findIndex(block=>block.changes.includes(change));
-  if(blockIndex>=0)jump(blockIndex);
+ function goDifferenceBlock(index:number){
+  jump(index);setCurrentBlock(index);
+  lastJump.current=index;
+  const change=blocks[index].changes[0];
   const target=comparison.target.instructions.find(i=>i.comparisonRow===change.alignmentRow),source=program.instructions.find(i=>i.comparisonRow===change.alignmentRow);
   if(target)choose(target,'target');else if(source)choose(source,'source');else choose(null,'target');
  }
- function selectInstruction(i:Instruction,side:CompareSide){choose(i,side);setCurrentChange(comparison.changes.findIndex(change=>change.alignmentRow===i.comparisonRow));}
+ function moveDifference(direction:1|-1){
+  const element=sourceScroll.current,last=blocks[lastJump.current];
+  if(!element)return;
+  // The last jump only stands in for the top block while the view is still pinned to the end below it.
+  const atEnd=element.scrollTop+element.clientHeight>=element.scrollHeight-2;
+  const index=adjacentDifferenceBlock(blocks,element.scrollTop,direction,atEnd&&last&&last.top>element.scrollTop+1?lastJump.current:-1);
+  if(index>=0)goDifferenceBlock(index);
+ }
+ function selectInstruction(i:Instruction,side:CompareSide){choose(i,side);setCurrentBlock(blocks.findIndex(block=>block.changes.some(change=>change.alignmentRow===i.comparisonRow)));}
  return <div class="comparison-view">
   <aside class="navigation comparison-nav"><div class="panel-title">回路一覧 <span>{blocks.length}</span></div><div class="nav-list">{blocks.map((block,index)=>{
    const n=block.source[0]??block.target[0];
    return <button key={index} class={`nav-item ${active===index?'active':''} ${block.changes.length?'has-differences':''}`} onClick={()=>jump(index)}><span class="number">{String(index+1).padStart(3,'0')}</span><div><strong>{n.title||n.pointer?.op||`STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ')}</small>{!!block.changes.length&&<small class="diff-nav-count">相違 {block.changes.length}行</small>}</div></button>;
   })}</div></aside>
   <div class="compare-area">
-   <div class="diff-toolbar"><div class="diff-legend"><span class="diff-changed">変更</span><span class="diff-added">追加（先のみ）</span><span class="diff-removed">削除（元のみ）</span><span class="connection-legend">配線<i class="wire-swatch wire-removed"/>元の接続<i class="wire-swatch wire-added"/>先の接続</span>{comparison.shiftedSteps>0&&<span class="shifted-steps">ステップ移動 {comparison.shiftedSteps}行（差分対象外）</span>}</div><div class="diff-navigation"><button disabled={!comparison.changes.length} onClick={()=>goDifference((currentChange<=0?comparison.changes.length:currentChange)-1)}>前の差分</button><select aria-label="差分行" disabled={!comparison.changes.length} value={currentChange} onChange={e=>goDifference(Number(e.currentTarget.value))}><option value={-1} disabled>{comparison.changes.length?`差分 ${comparison.changes.length}行`:'差分なし'}</option>{comparison.changes.map((change,index)=><option value={index} key={change.alignmentRow}>{index+1}/{comparison.changes.length} · CSV 元{change.sourceCsvRow??'—'}/先{change.targetCsvRow??'—'}行 · {differenceLabels[change.kind]}</option>)}</select><button disabled={!comparison.changes.length} onClick={()=>goDifference((currentChange+1)%comparison.changes.length)}>次の差分</button></div></div>
-   {change&&<div class={`diff-preview diff-${change.kind}`}><div><b>比較元 · STEP {change.sourceStep||'—'}</b><code>{change.sourceText||'（なし）'}</code></div><div><b>比較先 · STEP {change.targetStep||'—'}</b><code>{change.targetText||'（なし）'}</code></div></div>}
+   <div class="diff-toolbar"><div class="diff-legend"><span class="diff-changed">変更</span><span class="diff-added">追加（先のみ）</span><span class="diff-removed">削除（元のみ）</span><span class="connection-legend">配線<i class="wire-swatch wire-removed"/>元の接続<i class="wire-swatch wire-added"/>先の接続</span>{comparison.shiftedSteps>0&&<span class="shifted-steps">ステップ移動 {comparison.shiftedSteps}行（差分対象外）</span>}</div><div class="diff-navigation"><button disabled={!differenceBlocks.length} onClick={()=>moveDifference(-1)}>前の差分</button><select aria-label="差分のある回路" disabled={!differenceBlocks.length} value={currentBlock} onChange={e=>goDifferenceBlock(Number(e.currentTarget.value))}><option value={-1} disabled>{differenceBlocks.length?`差分のある回路 ${differenceBlocks.length}`:'差分なし'}</option>{differenceBlocks.map((blockIndex,order)=>{
+    const block=blocks[blockIndex],n=block.source[0]??block.target[0];
+    return <option value={blockIndex} key={blockIndex}>{order+1}/{differenceBlocks.length} · {String(blockIndex+1).padStart(3,'0')} {(n.title||n.pointer?.op||`STEP ${n.step}`).split('\n')[0]} · {differenceSummary(block.changes)}</option>;
+   })}</select><button disabled={!differenceBlocks.length} onClick={()=>moveDifference(1)}>次の差分</button></div></div>
+   {!!previewChanges.length&&<div class="diff-preview">{previewChanges.map(change=><Fragment key={change.alignmentRow}><div class={`diff-${change.kind}`}><b>比較元 · STEP {change.sourceStep||'—'}</b><code>{change.sourceText||'（なし）'}</code></div><div class={`diff-${change.kind}`}><b>比較先 · STEP {change.targetStep||'—'}</b><code>{change.targetText||'（なし）'}</code></div></Fragment>)}</div>}
    <div class="compare-columns">{(['source','target'] as const).map(side=><section class="compare-column" key={side}>
     <div class="compare-heading"><strong>{side==='source'?'比較元':'比較先'}</strong><span>{side==='source'?comparison.sourceProject:comparison.targetProject}</span><b>{side==='source'?comparison.sourceName:comparison.targetName}</b></div>
     <div class="diagram compare-scroll" role="region" tabIndex={0} ref={side==='source'?sourceScroll:targetScroll} aria-label={`${side==='source'?'比較元':'比較先'}ラダー表示`} onScroll={e=>scroll(side,e.currentTarget)}>
