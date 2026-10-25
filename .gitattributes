@@ -1,0 +1,4 @@
+# Store text as LF; check out with the platform line endings. Batch files stay CRLF for cmd.exe.
+* text=auto
+*.cmd text eol=crlf
+*.ico binary
