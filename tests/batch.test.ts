@@ -5,11 +5,11 @@ const encode = (text: string) => new TextEncoder().encode(text).buffer;
 const csv = '"program"\n"機種情報:"\t"RCPU R120"\n"ステップ番号"\t"命令"\t"I/O(デバイス)"\n"0"\t"LD"\t"SM400"\n"1"\t"OUT"\t"M0"\n';
 test('batch keeps all programs sorted and excludes comment CSV by its columns',()=>{
  const result = parseCsvBatch([
-  {name:'10_UT.csv',bytes:encode(csv)},
+  {name:'10_SAMPLE.csv',bytes:encode(csv)},
   {name:'renamed.csv',bytes:encode('"project"\n"デバイス名"\t"Japanese/日本語"\n"M0"\t"運転"')},
-  {name:'02_MNET.csv',bytes:encode(csv)}
+  {name:'02_SAMPLE.csv',bytes:encode(csv)}
  ]);
- assert.deepEqual(result.programs.map(p=>p.name),['02_MNET.csv','10_UT.csv']);
+ assert.deepEqual(result.programs.map(p=>p.name),['02_SAMPLE.csv','10_SAMPLE.csv']);
  assert.deepEqual(result.comments,['renamed.csv']);assert.equal(result.deviceComments.M0,'運転');assert.deepEqual(result.errors,[]);
  assert.ok(result.programs.every(p=>p.instructions.length===2));
 });

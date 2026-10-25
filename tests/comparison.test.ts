@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {parseComparison,pairNetworks} from '../src/comparison.ts';
 import {parseCsvBatch} from '../src/batch.ts';
 import {instructionKey} from '../src/model.ts';
+import {gridLayout} from '../src/layout.ts';
 const fixture=(rows:string[][])=>[
  ['照合元プロジェクト：before'],['照合元データ名：MAIN'],['照合先プロジェクト：after'],['照合先データ名：MAIN'],
  ['行','ステップ','照合元','ステップ','照合先','照合結果'],...rows
@@ -28,7 +29,7 @@ test('one-sided rows stay on their own side and later matching circuits realign'
   ['3','','','2','LD X1','追加'],['4','','','3','OUT Y2','追加'],
   ['5','2','LD X2','4','LD X2','不一致'],['6','3','OUT Y3','5','OUT Y3','不一致']
  ]),'change.csv');
- assert.equal(p.instructions.length,4);assert.equal(p.comparison!.target.instructions.length,6);assert.equal(p.comparison!.differentRows,5);
+ assert.equal(p.instructions.length,4);assert.equal(p.comparison!.target.instructions.length,6);assert.equal(p.comparison!.differentRows,3);assert.equal(p.comparison!.shiftedSteps,2);
  const pairs=pairNetworks(p.networks,p.comparison!.target.networks);
  assert.deepEqual(pairs.map(pair=>[pair.source.length,pair.target.length]),[[1,1],[0,1],[1,1]]);
  assert.equal(pairs[2].source[0].instructions[0].sourceRow,pairs[2].target[0].instructions[0].sourceRow);
@@ -63,14 +64,14 @@ test('differences classify changed operands, added/deleted rows and step-only sh
   ['5','','','2','LD X3','追加'],['6','','','3','SET M0','追加'],
   ['7','4','LD X4','6','LD X4','不一致'],['8','5','OUT Y4','7','OUT Y4','不一致']
  ]),'diff');
- assert.deepEqual(p.comparison!.changes.map(c=>c.kind),['changed','removed','removed','added','added','step','step']);
+ assert.deepEqual(p.comparison!.changes.map(c=>c.kind),['changed','changed','changed']);
  assert.equal(p.instructions[0].difference,undefined);
  assert.deepEqual(p.instructions[1].difference,{kind:'changed',opChanged:false,operandChanges:[0],otherText:'OUT Y1',otherStep:'1'});
  assert.equal(p.comparison!.target.instructions[1].difference?.otherText,'OUT Y0');
- assert.equal(p.instructions[2].difference?.kind,'removed');
- assert.equal(p.comparison!.target.instructions[2].difference?.kind,'added');
- assert.deepEqual(p.instructions.at(-1)!.difference?.operandChanges,[]);
- assert.equal(p.instructions.at(-1)!.difference?.kind,'step');
+ assert.equal(p.instructions[2].difference?.kind,'changed');
+ assert.equal(p.comparison!.target.instructions[2].difference?.kind,'changed');
+ assert.equal(p.instructions.at(-1)!.difference,undefined);
+ assert.equal(p.comparison!.shiftedSteps,2);
 });
 
 test('opcode, quoted operand and control/statement differences retain both originals',()=>{
@@ -86,4 +87,67 @@ test('opcode, quoted operand and control/statement differences retain both origi
  assert.equal(p.comparison!.changes[0].sourceText,';元の説明');
  assert.equal(p.comparison!.changes.at(-1)!.targetText,';末尾・先');
  assert.equal(p.instructions[3].difference?.otherText,'MRD');
+});
+const independent=(source:string[],target:string[])=>fixture(Array.from({length:Math.max(source.length,target.length)},(_,i)=>[String(i+1),source[i]?String(i):'',source[i]??'',target[i]?String(i):'',target[i]??'','不一致']));
+
+test('an inserted circuit does not turn subsequent matching commands into changes',()=>{
+ const p=parseComparison(independent(['LD X0','OUT Y0','LD X1','OUT Y1'],['LD X0','OUT Y0','LD X9','OUT Y9','LD X1','OUT Y1']),'insert');
+ const c=p.comparison!;
+ assert.deepEqual(c.changes.map(change=>change.kind),['added','added']);
+ assert.equal(c.shiftedSteps,2);
+ assert.ok(p.instructions.every(i=>!i.difference));
+ assert.ok(c.target.instructions.slice(4).every(i=>!i.difference));
+ assert.notEqual(p.instructions[2].sourceRow,c.target.instructions[4].sourceRow);
+ assert.equal(p.instructions[2].comparisonRow,c.target.instructions[4].comparisonRow);
+ assert.deepEqual(pairNetworks(p.networks,c.target.networks).map(pair=>[pair.source.length,pair.target.length]),[[1,1],[0,1],[1,1]]);
+});
+
+test('deletion preserves both source locations and does not cascade differences',()=>{
+ const p=parseComparison(independent(['LD X0','OUT Y0','LD X9','OUT Y9','LD X1','OUT Y1'],['LD X0','OUT Y0','LD X1','OUT Y1']),'delete');
+ assert.deepEqual(p.comparison!.changes.map(change=>change.kind),['removed','removed']);
+ assert.equal(p.comparison!.shiftedSteps,2);
+ assert.equal(p.instructions[4].comparisonRow,p.comparison!.target.instructions[2].comparisonRow);
+ assert.ok(p.comparison!.target.instructions.every(i=>!i.difference));
+});
+
+test('an inserted branch reserves a blank drawing row before the next matching output',()=>{
+ const a=['LD X0','MPS','AND X1','OUT Y1','MPP','AND X2','OUT Y2'];
+ const b=['LD X0','MPS','AND X1','OUT Y1','MRD','AND X9','OUT Y9','MPP','AND X2','OUT Y2'];
+ const p=parseComparison(independent(a,b),'branch-insert');
+ assert.deepEqual(p.networks.flatMap(n=>n.warnings),[]);
+ assert.deepEqual(p.comparison!.target.networks.flatMap(n=>n.warnings),[]);
+ const left=gridLayout(p.networks[0]),right=gridLayout(p.comparison!.target.networks[0]);
+ const row=(grid:ReturnType<typeof gridLayout>,operand:string)=>grid.symbols.find(s=>s.instruction.op==='OUT'&&s.instruction.operands[0]===operand)!.row;
+ assert.equal(row(left,'Y1'),row(right,'Y1'));
+ assert.equal(row(left,'Y2'),row(right,'Y2'));
+ assert.ok(row(left,'Y2')>row(left,'Y1')+1);
+ assert.ok(!left.symbols.some(s=>s.row===row(right,'Y9')));
+});
+
+test('repeated rungs, quoted strings and shifted steps keep their command identity',()=>{
+ const a=['LD X0','$MOV "A B" D0','LD X0','$MOV "A B" D0','LD X0','OUT M0'];
+ const b=['LD X0','$MOV "A B" D0','LD X9','OUT M9','LD X0','$MOV "A B" D0','LD X0','OUT M0'];
+ const p=parseComparison(independent(a,b),'repeat');
+ assert.deepEqual(p.comparison!.changes.map(c=>c.kind),['added','added']);
+ assert.ok(p.instructions.every(i=>!i.difference));
+ assert.deepEqual(p.instructions.map(instructionKey),p.comparison!.target.instructions.filter(i=>!i.difference).map(instructionKey));
+});
+test('added and removed instructions keep their block status without inline token changes',()=>{
+ const common=['LD X0','OUT Y0'];
+ const extra=[...common,'LD X9','OUT T1 K2'];
+ for(const [source,target,side,kind] of [
+  [common,extra,'target','added'],[extra,common,'source','removed']
+ ] as const){
+  const p=parseComparison(independent([...source],[...target]),kind);
+  const instructions=side==='source'?p.instructions:p.comparison!.target.instructions;
+  const oneSided=instructions.filter(i=>i.difference?.kind===kind);
+  assert.equal(oneSided.length,2);
+  assert.deepEqual(p.comparison!.changes.map(c=>c.kind),[kind,kind]);
+  for(const i of oneSided){assert.equal(i.difference!.opChanged,false);assert.deepEqual(i.difference!.operandChanges,[]);}
+ }
+ const changed=parseComparison(independent(['LD X0','OUT T1 K2'],['LD X0','OUT T1 K3']),'changed');
+ for(const program of [changed,changed.comparison!.target]){
+  const difference=program.instructions[1].difference!;
+  assert.equal(difference.kind,'changed');assert.equal(difference.opChanged,false);assert.deepEqual(difference.operandChanges,[1]);
+ }
 });

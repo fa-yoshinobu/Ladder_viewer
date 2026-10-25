@@ -3,3 +3,11 @@ node_modules/
 .env
 .env.*
 !.env.example
+desktop/bin/
+desktop/obj/
+windows/
+/public/
+/dist/
+*.csv
+/tests/desktop/bin/
+/tests/desktop/obj/
