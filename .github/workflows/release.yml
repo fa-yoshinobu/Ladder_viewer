@@ -1,0 +1,99 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Validate release tag
+        id: version
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          if ($tag -cnotmatch '^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+            throw 'Use a version tag such as v0.1.0.'
+          }
+          "version=$($tag.Substring(1))" >> $env:GITHUB_OUTPUT
+
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test ladder viewer
+        run: npm test
+
+      - name: Test Windows CSV loading
+        run: dotnet run --project tests/desktop/Check.csproj -c Release
+
+      - name: Build viewer assets
+        run: npm run build
+
+      - name: Publish Windows EXE
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: dotnet publish desktop/LadderViewer.csproj -c Release -r win-x64 --self-contained false "-p:Version=$env:RELEASE_VERSION" -o windows
+
+      - name: Package EXE only
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $exe = 'windows/LadderViewer.exe'
+          $version = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $exe).Path).ProductVersion.Split('+')[0]
+          if ($version -cne $env:RELEASE_VERSION) { throw 'EXE version does not match the release tag.' }
+          $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path -LiteralPath 'desktop/bin/Release/net10.0-windows/win-x64/LadderViewer.dll').Path)
+          foreach ($license in @(
+            @{ Name = 'LadderViewer.LICENSE'; Path = 'LICENSE' }
+            @{ Name = 'LadderViewer.THIRD-PARTY-NOTICES.txt'; Path = 'desktop/THIRD-PARTY-NOTICES.txt' }
+          )) {
+            $stream = $assembly.GetManifestResourceStream($license.Name)
+            if ($null -eq $stream) { throw "Embedded license is missing: $($license.Name)" }
+            $reader = [IO.StreamReader]::new($stream)
+            try {
+              $expected = [IO.File]::ReadAllText((Resolve-Path -LiteralPath $license.Path).Path)
+              if ($reader.ReadToEnd() -cne $expected) { throw "Embedded license differs from its source: $($license.Name)" }
+            } finally { $reader.Dispose() }
+          }
+          Compress-Archive -LiteralPath $exe -DestinationPath 'windows/LadderViewer-win-x64.zip' -Force
+          $archive = [IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath 'windows/LadderViewer-win-x64.zip').Path)
+          try {
+            $entries = @($archive.Entries)
+            if ($entries.Count -ne 1 -or $entries[0].FullName -cne 'LadderViewer.exe') {
+              throw 'The distribution ZIP must contain only LadderViewer.exe.'
+            }
+          } finally { $archive.Dispose() }
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create $env:RELEASE_TAG windows/LadderViewer.exe windows/LadderViewer-win-x64.zip --verify-tag --title "Ladder Viewer $env:RELEASE_TAG" --generate-notes

@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <AssemblyName>LadderViewer</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Product>Ladder Viewer</Product>
+    <Version>0.4.1</Version>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <PublishReferencesDocumentationFiles>false</PublishReferencesDocumentationFiles>
+
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
+    <EmbeddedResource Include="../LICENSE" LogicalName="LadderViewer.LICENSE" />
+    <EmbeddedResource Include="THIRD-PARTY-NOTICES.txt" LogicalName="LadderViewer.THIRD-PARTY-NOTICES.txt" />
+    <EmbeddedResource Include="app.ico" LogicalName="LadderViewer.app.ico" />
+    <EmbeddedResource Include="$(IntermediateOutputPath)web.zip" LogicalName="LadderViewer.web.zip" />
+  </ItemGroup>
+  <Target Name="RemoveUnusedWpfReference" BeforeTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <Reference Remove="@(Reference)" Condition="'%(Reference.Filename)' == 'Microsoft.Web.WebView2.Wpf'" />
+    </ItemGroup>
+  </Target>
+  <Target Name="ZipWebAssets" BeforeTargets="PrepareResources">
+    <Error Condition="!Exists('$(MSBuildProjectDirectory)/../dist/index.html')" Text="Run npm run build before publishing the Windows app." />
+    <ItemGroup>
+      <InputCsv Include="$(MSBuildProjectDirectory)/../dist/**/*.csv" />
+    </ItemGroup>
+    <Error Condition="'@(InputCsv)' != ''" Text="Input CSV files must not be embedded. Remove CSV files from dist before publishing." />
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/../dist" DestinationFile="$(IntermediateOutputPath)web.zip" Overwrite="true" />
+  </Target>
+</Project>

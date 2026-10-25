@@ -1,0 +1,204 @@
+import {Fragment} from 'preact';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
+import {differenceLabels,type ComparisonChange,type Instruction,type Program,type Network} from './model';
+import type {DeviceComments} from './comments';
+import {pairNetworks} from './comparison';
+import {CELL,COLUMNS,LEFT_GUTTER,LADDER_WIDTH,SCROLLBAR_HEIGHT,displayGrid,gridLayout,networkSize,type LadderViewMode} from './layout';
+import {NetworkDrawing,drawingHeight,instructionDrawingOffset,networkPrefix} from './NetworkDrawing';
+import {MasterControlScope} from './MasterControlScope';
+import {ControlFlowScope} from './ControlFlowScope';
+import type {ControlRange} from './controlFlow';
+import type {MasterControlRange} from './masterControl';
+export type CompareSide='source'|'target';
+
+export function comparisonBlockSize(group:{source:Network[];target:Network[]},rowHeight:number,zoom:number,viewMode:LadderViewMode) {
+ const sharedScroll=viewMode==='scroll'&&(group.source.length>1||group.target.length>1)&&[...group.source,...group.target].some(n=>gridLayout(n).pages>1);
+ const height=(networks:Network[])=>networks.reduce((sum,n)=>sum+drawingHeight(n,rowHeight,zoom,viewMode,!sharedScroll),0);
+ const sourceHeight=height(group.source),targetHeight=height(group.target),bar=sharedScroll?SCROLLBAR_HEIGHT:0;
+ return {sharedScroll,sourceHeight:sourceHeight+bar,targetHeight:targetHeight+bar,height:Math.max(sourceHeight,targetHeight,rowHeight*zoom)+bar};
+}
+
+// Next/previous circuit block with differences, relative to the block at the top of the view.
+// anchor is the block last jumped to when the end of the list stopped it short of the top; it stands in for the top block.
+export function adjacentDifferenceBlock(blocks:{top:number;changes:unknown[]}[],scrollTop:number,direction:1|-1,anchor=-1):number {
+ const differences=blocks.flatMap((block,index)=>block.changes.length?[index]:[]);
+ if(!differences.length)return -1;
+ if(direction>0){
+  let current=anchor;
+  blocks.forEach((block,index)=>{if(block.top<=scrollTop+1)current=Math.max(current,index);});
+  return differences.find(index=>index>current)??-1;
+ }
+ const before=differences.filter(index=>anchor>=0?index<anchor:blocks[index].top<scrollTop-1);
+ return before.at(-1)??-1;
+}
+
+export function differenceSummary(changes:ComparisonChange[]):string {
+ const counts=new Map<ComparisonChange['kind'],number>();
+ for(const change of changes)counts.set(change.kind,(counts.get(change.kind)??0)+1);
+ return [...counts].map(([kind,count])=>differenceLabels[kind]+count).join('・');
+}
+
+export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,showComments,viewMode='wrap',navigationTarget}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;showComments:boolean;viewMode?:LadderViewMode;navigationTarget?:{instructionId:string;side:CompareSide;request:number}}) {
+ const comparison=program.comparison!;
+ const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null);
+ const handledNavigation=useRef<number|undefined>(undefined);
+ const pendingHorizontal=useRef<{program:Program;network:Network;instructionId:string;side:CompareSide}|null>(null);
+ const [viewport,setViewport]=useState({top:0,height:800});
+ const [active,setActive]=useState(0),[currentBlock,setCurrentBlock]=useState(-1);
+ const lastJump=useRef(-1);
+ const blocks=useMemo(()=>{
+  let top=8,previousEnd=-1;
+  const groups=pairNetworks(program.networks,comparison.target.networks);
+  const carry:Partial<Record<CompareSide,{network:Network;ranges:MasterControlRange[];controls:ControlRange[]}>>={};
+  return groups.map((group,index)=>{
+   const size=comparisonBlockSize(group,rowHeight,zoom,viewMode),height=size.height;
+   const end=index===groups.length-1?Infinity:[...group.source,...group.target].reduce((end,n)=>n.instructions.reduce((end,i)=>Math.max(end,i.comparisonRow??i.sourceRow),end),previousEnd);
+   const changes=comparison.changes.filter(change=>change.alignmentRow>previousEnd&&change.alignmentRow<=end);
+   previousEnd=end;
+   const scopes=(side:CompareSide)=>{
+    const networks=group[side],carried=carry[side];
+    if(!networks.length)return carried&&(carried.ranges.length||carried.controls.length)?[{...carried,top:0,height,prefix:0,continuationOnly:true}]:[];
+    let scopeTop=0;
+    const overlays=networks.map((network,networkIndex)=>{
+     const contentHeight=drawingHeight(network,rowHeight,zoom,viewMode,!size.sharedScroll);
+     const overlay={network,ranges:network.masterControlRanges??[],controls:network.controlRanges??[],top:scopeTop,height:networkIndex===networks.length-1?height-scopeTop:contentHeight,prefix:networkPrefix(network,zoom),continuationOnly:false};
+     scopeTop+=contentHeight;return overlay;
+    });
+    const last=networks[networks.length-1];
+    carry[side]={network:last,ranges:(last.masterControlRanges??[]).filter(range=>!range.end||!last.instructions.some(instruction=>instruction.id===range.end?.id)),controls:(last.controlRanges??[]).filter(range=>!range.end||!last.instructions.some(instruction=>instruction.id===range.end?.id))};
+    return overlays.filter(overlay=>overlay.ranges.length||overlay.controls.length);
+   };
+   const block={...group,...size,top,height,changes,scopes:{source:scopes('source'),target:scopes('target')}};top+=height;return block;
+  });
+ },[program,zoom,rowHeight,viewMode]);
+ const total=blocks.at(-1),width=LADDER_WIDTH*zoom;
+ const visible=blocks.filter(block=>block.top+block.height>viewport.top-400&&block.top<viewport.top+viewport.height+400);
+ const differenceBlocks=useMemo(()=>blocks.flatMap((block,index)=>block.changes.length?[index]:[]),[blocks]);
+ const previewChanges=blocks[currentBlock]?.changes??[];
+ const previousGeometry=useRef({viewMode,blocks});
+ useLayoutEffect(()=>{
+  const previous=previousGeometry.current;
+  if(previous.viewMode!==viewMode&&blocks.length){
+   const index=Math.max(0,previous.blocks.findIndex(block=>block.top+block.height>viewport.top));
+   const top=blocks[Math.min(index,blocks.length-1)].top;
+   sourceScroll.current?.scrollTo({top});targetScroll.current?.scrollTo({top});
+   setActive(index);
+  }
+  const element=sourceScroll.current;
+  if(element)setViewport({top:element.scrollTop,height:element.clientHeight});
+  previousGeometry.current={viewMode,blocks};
+ },[blocks,viewMode]);
+
+ useLayoutEffect(()=>{
+  if(!navigationTarget||handledNavigation.current===navigationTarget.request)return;
+  if(navigate(navigationTarget.instructionId,navigationTarget.side))handledNavigation.current=navigationTarget.request;
+ },[navigationTarget?.request,blocks]);
+ useLayoutEffect(()=>{
+  const pending=pendingHorizontal.current;
+  if(!pending)return;
+  if(pending.program!==program){pendingHorizontal.current=null;return;}
+  const element=pending.side==='source'?sourceScroll.current:targetScroll.current;
+  const networkElement=Array.from(element?.querySelectorAll<HTMLElement>('[data-network-id]')??[])
+   .find(node=>node.dataset.networkId===pending.network.id);
+  if(!networkElement)return;
+  const scroller=networkElement.classList.contains('fixed-short-network')?null:networkElement.querySelector<HTMLElement>('.network-scroll')??networkElement.closest<HTMLElement>('.network-scroll');
+  const grid=displayGrid(pending.network,viewMode);
+  let symbol=grid.symbols.find(s=>s.instruction.id===pending.instructionId||s.instruction.pins?.some(pin=>pin.id===pending.instructionId));
+  if(!symbol&&pending.network.pointer?.id!==pending.instructionId){
+   const instruction=pending.network.instructions.find(i=>i.id===pending.instructionId);
+   if(instruction)symbol=[...grid.symbols].sort((a,b)=>Math.abs(a.instruction.sourceRow-instruction.sourceRow)-Math.abs(b.instruction.sourceRow-instruction.sourceRow))[0];
+  }
+  const column=symbol?(viewMode==='scroll'&&grid.pages>1?symbol.col:symbol.col%COLUMNS):0;
+  const left=(symbol?LEFT_GUTTER+column*CELL:0)*zoom;
+  const symbolWidth=symbol?symbol.span*CELL*zoom:0;
+  if(scroller&&(left<scroller.scrollLeft||left+symbolWidth>scroller.scrollLeft+scroller.clientWidth))scroller.scrollLeft=Math.max(0,left-12);
+  if(element){
+   const outer=element.getBoundingClientRect(),origin=(scroller??networkElement).getBoundingClientRect();
+   const visibleLeft=origin.left+left-(scroller?.scrollLeft??0);
+   if(visibleLeft<outer.left||visibleLeft+symbolWidth>outer.left+element.clientWidth)element.scrollLeft=Math.max(0,element.scrollLeft+visibleLeft-outer.left-12);
+  }
+  pendingHorizontal.current=null;
+ },[visible,program,viewMode,zoom]);
+
+ useEffect(()=>{
+  const observer=new ResizeObserver(()=>{
+   const element=sourceScroll.current;
+   if(element)setViewport({top:element.scrollTop,height:element.clientHeight});
+  });
+  if(sourceScroll.current)observer.observe(sourceScroll.current);
+  return()=>observer.disconnect();
+ },[]);
+ function scroll(side:CompareSide,element:HTMLDivElement){
+  const other=side==='source'?targetScroll.current:sourceScroll.current;
+  if(other&&Math.abs(other.scrollTop-element.scrollTop)>1)other.scrollTop=element.scrollTop;
+  setViewport({top:element.scrollTop,height:element.clientHeight});
+ }
+ function jump(index:number){
+  const top=blocks[index].top;
+  sourceScroll.current?.scrollTo({top});targetScroll.current?.scrollTo({top});
+  const element=sourceScroll.current;
+  if(element)setViewport({top:element.scrollTop,height:element.clientHeight});
+  setActive(index);
+ }
+ function navigate(instructionId:string,side:CompareSide):boolean {
+  const blockIndex=blocks.findIndex(block=>block[side].some(network=>network.pointer?.id===instructionId||network.instructions.some(instruction=>instruction.id===instructionId)));
+  const source=sourceScroll.current,target=targetScroll.current;
+  if(blockIndex<0||!source||!target)return false;
+  const block=blocks[blockIndex],networks=block[side];
+  const networkIndex=networks.findIndex(network=>network.pointer?.id===instructionId||network.instructions.some(instruction=>instruction.id===instructionId));
+  const network=networks[networkIndex];
+  const instruction=network.pointer?.id===instructionId?network.pointer:network.instructions.find(instruction=>instruction.id===instructionId);
+  if(!instruction)return false;
+  const before=networks.slice(0,networkIndex).reduce((height,previous)=>height+drawingHeight(previous,rowHeight,zoom,viewMode,!block.sharedScroll),0);
+  const top=block.top+before+instructionDrawingOffset(network,instructionId,rowHeight,zoom,viewMode);
+  pendingHorizontal.current={program,network,instructionId,side};
+  source.scrollTo({top});target.scrollTo({top});
+  const element=side==='source'?source:target;
+  setViewport({top:element.scrollTop,height:element.clientHeight});setActive(blockIndex);
+  selectInstruction(instruction,side);
+  return true;
+ }
+ function goDifferenceBlock(index:number){
+  jump(index);setCurrentBlock(index);
+  lastJump.current=index;
+  const change=blocks[index].changes[0];
+  const target=comparison.target.instructions.find(i=>i.comparisonRow===change.alignmentRow),source=program.instructions.find(i=>i.comparisonRow===change.alignmentRow);
+  if(target)choose(target,'target');else if(source)choose(source,'source');else choose(null,'target');
+ }
+ function differenceDestination(direction:1|-1){
+  const element=sourceScroll.current,last=blocks[lastJump.current];
+  if(!element)return -1;
+  // The last jump only stands in for the top block while the view is still pinned to the end below it.
+  const atEnd=element.scrollTop+element.clientHeight>=element.scrollHeight-2;
+  return adjacentDifferenceBlock(blocks,element.scrollTop,direction,atEnd&&last&&last.top>element.scrollTop+1?lastJump.current:-1);
+ }
+ function moveDifference(direction:1|-1){
+  const index=differenceDestination(direction);
+  if(index>=0)goDifferenceBlock(index);
+ }
+ function selectInstruction(i:Instruction,side:CompareSide){choose(i,side);setCurrentBlock(blocks.findIndex(block=>block.changes.some(change=>change.alignmentRow===i.comparisonRow)));}
+ return <div class="comparison-view">
+  <aside class="navigation comparison-nav"><div class="panel-title">回路一覧 <span>{blocks.length}</span></div><div class="nav-list">{blocks.map((block,index)=>{
+   const n=block.source[0]??block.target[0];
+   return <button key={index} class={`nav-item ${active===index?'active':''} ${block.changes.length?'has-differences':''}`} onClick={()=>jump(index)}><span class="number">{String(index+1).padStart(3,'0')}</span><div><strong>{n.title||n.pointer?.op||`STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ')}</small>{!!block.changes.length&&<small class="diff-nav-count">相違 {block.changes.length}行</small>}</div></button>;
+  })}</div></aside>
+  <div class="compare-area">
+   <div class="diff-toolbar"><div class="diff-legend"><span class="diff-changed">変更</span><span class="diff-added">追加（先のみ）</span><span class="diff-removed">削除（元のみ）</span><span class="connection-legend">配線<i class="wire-swatch wire-removed"/>元の接続<i class="wire-swatch wire-added"/>先の接続</span>{comparison.shiftedSteps>0&&<span class="shifted-steps">ステップ移動 {comparison.shiftedSteps}行（差分対象外）</span>}</div><div class="diff-navigation"><button disabled={differenceDestination(-1)<0} onClick={()=>moveDifference(-1)}>前の差分</button><select aria-label="差分のある回路" disabled={!differenceBlocks.length} value={currentBlock} onChange={e=>goDifferenceBlock(Number(e.currentTarget.value))}><option value={-1} disabled>{differenceBlocks.length?`差分のある回路 ${differenceBlocks.length}`:'差分なし'}</option>{differenceBlocks.map((blockIndex,order)=>{
+    const block=blocks[blockIndex],n=block.source[0]??block.target[0];
+    return <option value={blockIndex} key={blockIndex}>{order+1}/{differenceBlocks.length} · {String(blockIndex+1).padStart(3,'0')} {(n.title||n.pointer?.op||`STEP ${n.step}`).split('\n')[0]} · {differenceSummary(block.changes)}</option>;
+   })}</select><button disabled={differenceDestination(1)<0} onClick={()=>moveDifference(1)}>次の差分</button></div></div>
+   {!!previewChanges.length&&<div class="diff-preview">{previewChanges.map(change=><Fragment key={change.alignmentRow}><div class={`diff-${change.kind}`}><b>比較元 · STEP {change.sourceStep||'—'}</b><code>{change.sourceText||'（なし）'}</code></div><div class={`diff-${change.kind}`}><b>比較先 · STEP {change.targetStep||'—'}</b><code>{change.targetText||'（なし）'}</code></div></Fragment>)}</div>}
+   <div class="compare-columns">{(['source','target'] as const).map(side=><section class="compare-column" key={side}>
+    <div class="compare-heading"><strong>{side==='source'?'比較元':'比較先'}</strong><span>{side==='source'?comparison.sourceProject:comparison.targetProject}</span><b>{side==='source'?comparison.sourceName:comparison.targetName}</b></div>
+    <div class="diagram compare-scroll" role="region" tabIndex={0} ref={side==='source'?sourceScroll:targetScroll} aria-label={`${side==='source'?'比較元':'比較先'}ラダー表示`} onScroll={e=>scroll(side,e.currentTarget)}>
+     <div style={{height:total?total.top+total.height+8:0,minWidth:width+24,position:'relative'}}>{visible.map(block=><div class={`comparison-block ${block.changes.length?'has-differences':''}`} key={block.top} style={{position:'absolute',top:block.top,left:12,width,minHeight:block.height}}>
+      {block[side].length ? block.sharedScroll ? <div class="network-scroll comparison-group-scroll" style={{width,height:side==='source'?block.sourceHeight:block.targetHeight}} role="region" aria-label="長い回路の横スクロール" tabIndex={0}>
+       <div style={{width:Math.max(LADDER_WIDTH,...block[side].map(n=>networkSize(n,rowHeight,viewMode).width))*zoom}}>{block[side].map(network=><div class={`network ${gridLayout(network).pages===1?'fixed-short-network':''}`} key={network.id} data-network-id={network.id} style={{width:networkSize(network,rowHeight,viewMode).width*zoom}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} scrollContainer={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={comments} showComments={showComments}/></div>)}</div>
+      </div> : block[side].map(network=><div class="network" key={network.id} data-network-id={network.id} style={{width}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={comments} showComments={showComments}/></div>) : <div class="missing-circuit">この範囲に回路なし</div>}
+      {block.scopes[side].map(scope=><div key={scope.network.id} style={{position:'absolute',top:scope.top,left:0,width,height:scope.height,pointerEvents:'none'}}>{!!scope.ranges.length&&<MasterControlScope network={scope.network} ranges={scope.ranges} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}{!!scope.controls.length&&<ControlFlowScope network={scope.network} ranges={scope.controls} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}</div>)}
+     </div>)}</div>
+    </div>
+   </section>)}</div>
+  </div>
+ </div>;
+}
