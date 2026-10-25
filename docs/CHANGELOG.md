@@ -2,7 +2,7 @@
 
 [README](../README.md) · [ビルド・テスト](BUILD.md) · [TODO](TODO.md)
 
-## 未リリース
+## 0.2.0（2026-10-25）
 
 - 実行環境を .NET 8 から .NET 10（LTS）へ移行した。.NET 8 のサポートは2026年11月10日に終了する。起動には .NET 10 Desktop Runtime（x64）が必要。
 
