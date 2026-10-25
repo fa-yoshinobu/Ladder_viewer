@@ -43,7 +43,7 @@ jobs:
       - name: Set up .NET
         uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Install dependencies
         run: npm ci
@@ -69,7 +69,7 @@ jobs:
           $exe = 'windows/LadderViewer.exe'
           $version = [Diagnostics.FileVersionInfo]::GetVersionInfo((Resolve-Path -LiteralPath $exe).Path).ProductVersion.Split('+')[0]
           if ($version -cne $env:RELEASE_VERSION) { throw 'EXE version does not match the release tag.' }
-          $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path -LiteralPath 'desktop/bin/Release/net8.0-windows/win-x64/LadderViewer.dll').Path)
+          $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path -LiteralPath 'desktop/bin/Release/net10.0-windows/win-x64/LadderViewer.dll').Path)
           foreach ($license in @(
             @{ Name = 'LadderViewer.LICENSE'; Path = 'LICENSE' }
             @{ Name = 'LadderViewer.THIRD-PARTY-NOTICES.txt'; Path = 'desktop/THIRD-PARTY-NOTICES.txt' }

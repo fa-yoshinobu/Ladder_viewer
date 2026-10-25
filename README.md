@@ -11,7 +11,7 @@ MELSECの命令リストCSVをラダー図として表示するWindows専用ア�
 | 実行環境 | 要件 |
 | --- | --- |
 | OS | Windows 10/11、x64 |
-| .NET | .NET 8 Desktop Runtime、x64 |
+| .NET | .NET 10 Desktop Runtime、x64 |
 | 画面表示 | Microsoft Edge WebView2 Runtime |
 
 配布は `windows/LadderViewer.exe` 単体、またはEXEだけを格納したZIPを使用できます。バージョン・使用ライブラリ・ライセンス全文は、画面右上の「バージョン情報」で確認できます。内蔵サンプルや実PLCデータはありません。
