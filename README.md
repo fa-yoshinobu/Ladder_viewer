@@ -2,13 +2,11 @@
 
 MELSECの命令リストCSVをラダー図として表示するWindows専用アプリです。照合結果CSVは比較元・比較先を左右に表示します。CSVはPC内で処理し、外部へ送信しません。
 
-[変更履歴](docs/CHANGELOG.md) · [残課題・TODO](docs/TODO.md)
+[ビルド・テスト](docs/BUILD.md) · [変更履歴](docs/CHANGELOG.md) · [残課題・TODO](docs/TODO.md)
 
 ## 起動
 
-このリポジトリにはソースコードを収録しています。生成EXE・ZIP・windows/はGitHubのコードに含めません。clone後、下記の開発環境を用意して `build-viewer.cmd` を実行すると、windows/にEXEと配布ZIPが作られます。
-
-作成した `windows/LadderViewer.exe` をダブルクリックするか、`start-viewer.cmd` を実行してください。専用ウィンドウを閉じると終了します。起動時にNode.js・npm・ローカルサーバーは不要です。
+`windows/LadderViewer.exe` をダブルクリックするか、`start-viewer.cmd` を実行してください。専用ウィンドウを閉じると終了します。
 
 | 実行環境 | 要件 |
 | --- | --- |
@@ -48,26 +46,3 @@ MELSECの命令リストCSVをラダー図として表示するWindows専用ア�
 回路の繰返しや入替えでは命令の対応を誤る可能性があります。配線差分もその対応結果に依存し、動作上の同値性は保証しません。未知命令は元の文字列を残しますが、命令固有の構造解釈や全回路の純正表示との一致は未確認です。PLCの動作シミュレーターではありません。
 
 検索と、通常CSVを2件選んで直接比較する機能は未実装です。最新の画面未確認項目と既知の課題は [TODO](docs/TODO.md) を参照してください。
-
-## 開発・ビルド・テスト
-
-- Node.js：20系は20.19以降、または22.12以降。npmも必要です。
-- .NET 8以降のSDK。WindowsアプリのビルドはWindows上で行います。
-- 初回の依存物取得にはネット接続が必要です。
-
-アプリを閉じて `build-viewer.cmd` を実行してください。依存物がなければ準備し、内部画面・Windows版EXE・配布ZIPを順に作成します。このバッチはテストを実行しません。
-
-個別に実行する場合：
-
-```powershell
-npm ci
-npm test
-dotnet run --project tests/desktop/Check.csproj
-npm run windows:build
-```
-
-`npm run build` は内部画面だけを作成します。dist/を削除してから `dotnet publish` を直接使う場合も、先に内部画面をビルドしてください。
-
-src/はTypeScript・Preact・SVG、desktop/はWinForms・WebView2、tests/は架空データによる検証です。入力CSV、参照HTML・画像、node_modules/、dist/、windows/、bin/obj/はGitHubのコード反映に含めません。純正画像を表示素材として流用しません。
-
-検証結果は [CHANGELOG](docs/CHANGELOG.md)、未実行チェックと画面確認の残件は [TODO](docs/TODO.md) に記録しています。
