@@ -6,12 +6,23 @@ import { buildProgram, type Instruction, type Network, type Program, type Compar
 
 export const isComparisonHeader = (row: string[]) => row[0] === '行' && row.includes('照合元') && row.includes('照合先') && (row.includes('照合結果') || row.includes('比較結果'));
 
+// Statement and note lines in comparison results. GX Works3 prefixes both with ';'. GX Works2 (比較結果) shows statements as
+// plain text and indents notes, wrapping embedded notes in <>. A leading '*' marks project-only text, which GX shows without it.
+export function comparisonComment(raw: string, legacy: boolean): { kind: 'statement' | 'note'; text: string } | null {
+  const text = raw.trim();
+  if (text.startsWith(';')) return { kind: 'statement', text: text.slice(1).replace(/^\*/, '') };
+  if (!legacy || !text) return null;
+  if (/^\s/.test(raw)) return { kind: 'note', text: text.replace(/^\*/, '').replace(/^<(.*)>$/, '$1') };
+  if (/^[*[]/.test(text) || /[^\x00-\x7f]/.test(text.split(/\s/)[0])) return { kind: 'statement', text: text.replace(/^\*/, '') };
+  return null;
+}
+
 export function parseComparison(text: string, name: string): Program {
   const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { delimiter: '\t', skipEmptyLines: true });
   if (parsed.errors.length) throw new Error(`CSV形式エラー: ${parsed.errors[0].message}`);
   const header = parsed.data.findIndex(isComparisonHeader);
   if (header < 0) throw new Error('照合元・照合先の列がありません。');
-  const columns = parsed.data[header], sourceColumn = columns.indexOf('照合元'), targetColumn = columns.indexOf('照合先');
+  const columns = parsed.data[header], sourceColumn = columns.indexOf('照合元'), targetColumn = columns.indexOf('照合先'), legacy = columns.includes('比較結果');
   if (columns[sourceColumn - 1] !== 'ステップ' || columns[targetColumn - 1] !== 'ステップ') throw new Error('照合元・照合先に対応するステップ列がありません。');
   const metadataRows = parsed.data.slice(0, header).map(row=>row[0] ?? '');
   const metadata = (key: string) => metadataRows.find(value=>value.startsWith(key + '：') || value.startsWith(key + ':'))?.slice(key.length + 1).trim() ?? '';
@@ -24,7 +35,7 @@ export function parseComparison(text: string, name: string): Program {
   if (!rows.length) throw new Error('照合データがありません。');
   if (rows.some(row=>row.length !== columns.length || !/^\d+$/.test(row[0]))) throw new Error('照合行の列数または行番号が不正です。');
   const tokens=(text:string)=>text.match(/"(?:[^"]|"")*"|\S+/g)??[];
-  const records=(column:number)=>rows.flatMap((row,index)=>row[column].trim()?[{text:row[column].trim(),step:row[column-1].trim(),csvRow:header+index+2}]:[]);
+  const records=(column:number)=>rows.flatMap((row,index)=>row[column].trim()?[{text:row[column].trim(),raw:row[column],step:row[column-1].trim(),csvRow:header+index+2}]:[]);
   const sourceRecords=records(sourceColumn),targetRecords=records(targetColumn);
   type RecordLine=typeof sourceRecords[number];
   const aligned:{source?:RecordLine;target?:RecordLine}[]=[];
@@ -58,7 +69,13 @@ export function parseComparison(text: string, name: string): Program {
     aligned.forEach((pair,index)=>{
       const record=pair[which];if(!record)return;
       const value=record.text;
-      if(value.startsWith(';')){statement=[statement,value.slice(1)].filter(Boolean).join('\n');return;}
+      const comment=comparisonComment(record.raw,legacy);
+      if(comment){
+       const previous=instructions.at(-1);
+       if(comment.kind==='note'&&previous)previous.note=[previous.note,comment.text].filter(Boolean).join('\n');
+       else statement=[statement,comment.text].filter(Boolean).join('\n');
+       return;
+      }
       const [op='',...operands]=tokens(value);
       const other=pair[which==='source'?'target':'source'];
       const otherTokens=tokens(other?.text??'');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseComparison,pairNetworks} from '../src/comparison.ts';
+import {comparisonComment,parseComparison,pairNetworks} from '../src/comparison.ts';
 import {parseCsvBatch} from '../src/batch.ts';
 import {instructionKey} from '../src/model.ts';
 import {gridLayout} from '../src/layout.ts';
@@ -150,4 +150,25 @@ test('added and removed instructions keep their block status without inline toke
   const difference=program.instructions[1].difference!;
   assert.equal(difference.kind,'changed');assert.equal(difference.opChanged,false);assert.deepEqual(difference.operandChanges,[1]);
  }
+});
+
+test('GX Works2 comparison lines: plain statements and indented notes are not read as instructions',()=>{
+ const legacy=(rows:string[][])=>[['照合元：before'],['    -> MAIN'],['照合先：after'],['    -> MAIN'],['行','ステップ','照合元','ステップ','照合先','比較結果'],...rows]
+  .map(row=>row.map(value=>'"'+value+'"').join('\t')).join('\n');
+ const p=parseComparison(legacy([
+  ['1','0','初期化','0','初期化','一致'],['2','7','LD X0','7','LD X0','一致'],['3','8','OUT Y0','8','OUT Y0','一致'],['4','9','  *周辺メモ','9','  *周辺メモ','一致'],
+  ['5','10','*[Title]見出し','10','*[Title]見出し','一致'],['6','11','LD X1','11','LD X1','一致'],['7','12','OUT Y1','12','OUT Y1','一致'],['8','13','   <埋込メモ>','13','   <埋込メモ>','一致'],['9','14','END','14','END','一致']
+ ]),'legacy.csv');
+ assert.deepEqual(p.instructions.map(i=>i.op),['LD','OUT','LD','OUT','END']);
+ assert.deepEqual(p.networks.map(n=>n.title),['初期化','[Title]見出し','']);
+ assert.equal(p.instructions[1].note,'周辺メモ');assert.equal(p.instructions[3].note,'埋込メモ');
+ assert.equal(p.comparison!.target.instructions[3].note,'埋込メモ');
+});
+
+test('comparison comment lines: GX Works3 statements keep their text and project-only markers are removed',()=>{
+ assert.deepEqual(comparisonComment(';初期設定',false),{kind:'statement',text:'初期設定'});
+ assert.deepEqual(comparisonComment(';*',false),{kind:'statement',text:''});
+ assert.equal(comparisonComment('LD X0',false),null);
+ assert.equal(comparisonComment('初期設定',false),null,'plain text is a statement only in the GX Works2 layout');
+ assert.equal(comparisonComment('MOV K1 D0',true),null);
 });
