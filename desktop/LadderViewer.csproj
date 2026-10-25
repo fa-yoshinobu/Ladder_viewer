@@ -7,6 +7,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <AssemblyName>LadderViewer</AssemblyName>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>Ladder Viewer</Product>
     <Version>0.1.0</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -21,6 +22,7 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <EmbeddedResource Include="../LICENSE" LogicalName="LadderViewer.LICENSE" />
     <EmbeddedResource Include="THIRD-PARTY-NOTICES.txt" LogicalName="LadderViewer.THIRD-PARTY-NOTICES.txt" />
+    <EmbeddedResource Include="app.ico" LogicalName="LadderViewer.app.ico" />
     <EmbeddedResource Include="$(IntermediateOutputPath)web.zip" LogicalName="LadderViewer.web.zip" />
   </ItemGroup>
   <Target Name="RemoveUnusedWpfReference" BeforeTargets="ResolveAssemblyReferences">

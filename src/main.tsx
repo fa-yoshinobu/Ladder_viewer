@@ -14,11 +14,45 @@ import { deviceComment, type DeviceComments } from './comments';
 import { nativeCsvBridge, decodeNativeCsvFiles, type NativeCsvSelection } from './nativeCsv';
 
 const worker = new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' });
+const iconUrl = new URL('./icon.svg', import.meta.url).href;
+type Theme = 'light' | 'dark';
+function initialTheme(): Theme {
+  try { const saved = localStorage.getItem('theme'); if (saved === 'light' || saved === 'dark') return saved; } catch {}
+  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+document.documentElement.dataset.theme = initialTheme();
+const ladderPalettes = [
+  { value: 'standard', label: '標準' },
+  { value: 'contrast', label: '高コントラスト' },
+  { value: 'soft', label: '目にやさしい' },
+  { value: 'cud', label: '色覚配慮（CUD）' },
+  { value: 'blue', label: 'ブルー' }
+] as const;
+type LadderPalette = typeof ladderPalettes[number]['value'];
+// The ladder palette is remembered separately for light and dark mode.
+function savedLadderPalette(theme: Theme): LadderPalette {
+  try { const saved = localStorage.getItem(`ladderPalette-${theme}`); const match = ladderPalettes.find(p => p.value === saved); if (match) return match.value; } catch {}
+  return 'standard';
+}
+document.documentElement.dataset.ladder = savedLadderPalette(document.documentElement.dataset.theme as Theme);
 function App() {
   const [program, setProgram] = useState<Program | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [deviceComments, setDeviceComments] = useState<DeviceComments>({});
   const [showComments, setShowComments] = useState(true);
+  const [theme, setTheme] = useState<Theme>(() => document.documentElement.dataset.theme as Theme);
+  const [ladderPalette, setLadderPalette] = useState<LadderPalette>(() => document.documentElement.dataset.ladder as LadderPalette);
+  function toggleTheme() {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    const palette = savedLadderPalette(next);
+    document.documentElement.dataset.theme = next; document.documentElement.dataset.ladder = palette;
+    setTheme(next); setLadderPalette(palette);
+    try { localStorage.setItem('theme', next); } catch {}
+  }
+  function changeLadderPalette(next: LadderPalette) {
+    document.documentElement.dataset.ladder = next; setLadderPalette(next);
+    try { localStorage.setItem(`ladderPalette-${theme}`, next); } catch {}
+  }
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -195,13 +229,26 @@ function App() {
     observer=new ResizeObserver(fit);
     observer.observe(element);
     return()=>observer?.disconnect();
+  },[program,showComparison,comparisonDisplay]);
+  // Refit whenever the ladder area changes width (window resize). offsetWidth ignores scrollbars that appear after a fit.
+  useLayoutEffect(()=>{
+    const element=showComparison?comparisonWidth.current:scroll.current;
+    if(!program||!element)return;
+    let width=element.offsetWidth;
+    const observer=new ResizeObserver(()=>{
+      if(element.offsetWidth===width)return;
+      width=element.offsetWidth;
+      fitToWidth();
+    });
+    observer.observe(element);
+    return()=>observer.disconnect();
   },[program,showComparison]);
   function changeComparisonDisplay(next:ComparisonDisplay) {
     setComparisonNavigation(undefined);pendingInstruction.current=null;
     if(!program||!comparison||next===comparisonDisplay)return;
     const side=next==='target'?comparison.target:program;
     setComparisonDisplay(next);setSelected(null);setSelectedSide(next==='target'?'target':'source');
-    setActive(side.networks[0]?.id??'');setZoom(next==='both'?.5:1);viewAnchor.current=null;
+    setActive(side.networks[0]?.id??'');setZoom(next==='both'?.5:1);viewAnchor.current=null;pendingFit.current=true;
     const element=scroll.current;
     element?.scrollTo(0,0);
     setViewport({top:element?.scrollTop??0,height:element?.clientHeight??viewport.height});
@@ -252,9 +299,8 @@ function App() {
     const hit=searchResults[next];navigateInstruction(hit.instruction.id,hit.side);
   }
   return <div class="app" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer?.files.length) void load(Array.from(e.dataTransfer.files)); }}>
-    <header><div class="brand"><span class="mark">LD</span><div><strong>Ladder viewer</strong></div></div><div class="toolbar"><button onClick={() => nativeCsv?.postMessage({ type: 'show-about' })}>バージョン情報</button><button onClick={() => openSelection('open-csv')} disabled={busy}>＋ CSVを開く</button><button class="primary" onClick={() => openSelection('open-folder')} disabled={busy}>フォルダーを開く</button></div></header>
-    <div class="subbar"><div class="program-selection">{programs.length > 1 && <><label for="program-select">プログラム</label><select id="program-select" aria-label="プログラム" value={program?.name ?? ''} disabled={busy} onChange={e=>{const next=programs.find(p=>p.name===e.currentTarget.value);if(next)showProgram(next);}}>{programs.map(p=><option key={p.name} value={p.name}>{p.name}{p.comparison ? ` · ${p.comparison.sourceName}` : ''}</option>)}</select><span class="program-count">{programs.length}本</span></>}<span>{program ? <><b>{program.name}</b><span class="muted">　{comparison ? (comparison.differentRows ? `${comparison.differentRows}行相違` : '比較元・比較先 一致') : program.cpu}</span></> : ''}</span></div><div>{comparison && <label class="view-mode">表示<select aria-label="比較の表示" value={comparisonDisplay} disabled={busy} onChange={e=>changeComparisonDisplay(e.currentTarget.value as ComparisonDisplay)}><option value="both">左右比較</option><option value="source">比較元のみ</option><option value="target">比較先のみ</option></select></label>}{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={e => changeViewMode(e.currentTarget.value as LadderViewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label><button onClick={fitToWidth}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(showComparison ? .25 : .5, +(z - .1).toFixed(2)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
-    {program&&<SearchBar comparison={!!comparison} query={searchQuery} mode={searchMode} results={searchResults} current={searchCurrent} onQuery={setSearchQuery} onMode={setSearchMode} onMove={moveSearch} onClear={()=>setSearchQuery('')}/>} 
+    <header><div class="brand"><img class="brand-icon" src={iconUrl} alt=""/><div><strong>Ladder Viewer</strong></div></div><div class="program-selection">{programs.length > 1 && <><label for="program-select">プログラム</label><select id="program-select" aria-label="プログラム" value={program?.name ?? ''} disabled={busy} onChange={e=>{const next=programs.find(p=>p.name===e.currentTarget.value);if(next)showProgram(next);}}>{programs.map(p=><option key={p.name} value={p.name}>{p.name}{p.comparison ? ` · ${p.comparison.sourceName}` : ''}</option>)}</select><span class="program-count">{programs.length}本</span></>}<span>{program ? <><b>{program.name}</b><span class="muted">　{comparison ? (comparison.differentRows ? `${comparison.differentRows}行相違` : '比較元・比較先 一致') : program.cpu}</span></> : ''}</span></div><div class="toolbar"><button class="theme-toggle" aria-pressed={theme === 'dark'} onClick={toggleTheme}>{theme === 'dark' ? <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="currentColor" stroke-width="2"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/></svg>}{theme === 'dark' ? 'ライトモード' : 'ダークモード'}</button><button onClick={() => nativeCsv?.postMessage({ type: 'show-about', dark: theme === 'dark' })}>バージョン情報</button><button onClick={() => openSelection('open-csv')} disabled={busy}>＋ CSVを開く</button><button class="primary" onClick={() => openSelection('open-folder')} disabled={busy}>フォルダーを開く</button></div></header>
+    <div class="subbar">{program&&<SearchBar comparison={!!comparison} query={searchQuery} mode={searchMode} results={searchResults} current={searchCurrent} onQuery={setSearchQuery} onMode={setSearchMode} onMove={moveSearch} onClear={()=>setSearchQuery('')}/>}<div>{comparison && <label class="view-mode">表示<select aria-label="比較の表示" value={comparisonDisplay} disabled={busy} onChange={e=>changeComparisonDisplay(e.currentTarget.value as ComparisonDisplay)}><option value="both">左右比較</option><option value="source">比較元のみ</option><option value="target">比較先のみ</option></select></label>}{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<label class="ladder-palette">ラダー配色<select aria-label={`ラダー配色（${theme === 'dark' ? 'ダーク' : 'ライト'}モード）`} title={`${theme === 'dark' ? 'ダーク' : 'ライト'}モード用の配色`} value={ladderPalette} onChange={e => changeLadderPalette(e.currentTarget.value as LadderPalette)}>{ladderPalettes.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label><label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={e => changeViewMode(e.currentTarget.value as LadderViewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label><button onClick={fitToWidth}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(showComparison ? .25 : .5, +(z - .1).toFixed(2)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
     {error && <div class="error" role="alert">{error}</div>}
     <div class={`workspace ${showComparison?'comparison-workspace':''}`}><div ref={comparisonWidth} class="comparison-host" hidden={!showComparison}>{showComparison && program && <ComparisonView key={program.name} program={program} navigationTarget={comparisonNavigation} viewMode={viewMode} zoom={zoom} rowHeight={rowHeight} selected={selected?.id??''} choose={(i,side)=>{setSelected(i);setSelectedSide(side);}} comments={deviceComments} showComments={showComments}/>}</div>{!showComparison && <><aside class="navigation"><div class="panel-title">回路一覧 <span>{displayedProgram?.networks.length ?? 0}</span></div><div class="nav-list" ref={navigation}>{displayedProgram?.networks.map((n, index) => <button class={`nav-item ${active === n.id ? 'active' : ''}`} onClick={() => jump(n.id)} key={n.id} data-network-id={n.id}><span class="number">{String(index + 1).padStart(3, '0')}</span><div><strong>{n.title || `STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ') || ''}{n.warnings.length ? ' ⚠' : ''}</small></div></button>)}</div></aside>
     <main ref={scroll} class="diagram" onScroll={e => setViewport({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })} aria-label="ラダー表示">
