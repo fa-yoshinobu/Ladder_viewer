@@ -20,7 +20,7 @@ if errorlevel 1 (
 )
 where dotnet.exe >nul 2>&1
 if errorlevel 1 (
-  echo .NET SDK が見つかりません。.NET 8 以降の SDK をインストールしてください。
+  echo .NET SDK が見つかりません。.NET 10 以降の SDK をインストールしてください。
   goto failed
 )
 
