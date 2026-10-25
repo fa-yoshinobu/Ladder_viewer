@@ -5,5 +5,5 @@ export type ComparisonDisplay = 'both' | 'source' | 'target';
 export function comparisonDisplayProgram(program:Program,display:ComparisonDisplay):Program {
  if(display==='both'||!program.comparison)return program;
  const side=display==='target'?program.comparison.target:program;
- return {...side,networks:side.networks.map(({rowAlignment,...network})=>network)};
+ return {...side,networks:side.networks.map(({rowAlignment,comparisonNotePadding,...network})=>network)};
 }

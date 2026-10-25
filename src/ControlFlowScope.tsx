@@ -1,15 +1,17 @@
 import type { Instruction, Network } from './model';
 import type { ControlRange } from './controlFlow';
-import { BASELINE, COLUMNS, PAGE_GAP, displayGrid, type LadderViewMode } from './layout';
+import { drawingMetrics, COLUMNS, PAGE_GAP, displayGrid, type LadderViewMode } from './layout';
 
 export function ControlFlowScope({network,zoom,rowHeight,viewMode,width,height,prefix,ranges,continuationOnly=false}:{network:Network;zoom:number;rowHeight:number;viewMode:LadderViewMode;width:number;height:number;prefix:number;ranges?:ControlRange[];continuationOnly?:boolean}) {
+ const metrics=drawingMetrics(network,rowHeight);
+ rowHeight=metrics.rowHeight;
  const grid=continuationOnly?undefined:displayGrid(network,viewMode),scrolling=viewMode==='scroll'&&!!grid&&grid.pages>1;
  const position=(instruction:Instruction|undefined)=>{
   if(!grid)return undefined;
   const symbol=instruction&&grid.symbols.find(symbol=>symbol.instruction.id===instruction.id);
   if(!symbol)return undefined;
   const page=scrolling?0:Math.floor(symbol.col/COLUMNS);
-  return prefix+(page*(grid.rows*rowHeight+PAGE_GAP)+symbol.row*rowHeight+BASELINE+12)*zoom;
+  return prefix+(page*(grid.rows*rowHeight+PAGE_GAP)+symbol.row*rowHeight+metrics.baseline+12)*zoom;
  };
  const clamp=(value:number)=>Math.max(0,Math.min(height,value));
  return <svg class="control-flow-scope" width={width} height={height} style={{pointerEvents:'none'}} aria-label="制御構造の範囲">

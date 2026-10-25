@@ -8,7 +8,7 @@ import { isControlMarker } from './controlFlow';
 import { CommentText } from './CommentText';
 import { deviceComment, type DeviceComments } from './comments';
 import { strokeCoordinates, type StrokeCoordinates } from './drawing';
-import { CELL, BASELINE, LEFT_GUTTER, displayGrid, networkSize, drawingPages, isCoil, type GridSymbol, type LadderViewMode } from './layout';
+import { CELL, BASELINE, LEFT_GUTTER, displayGrid, networkSize, drawingPages, isCoil, drawingMetrics, noteLayout, NOTE_LINE_HEIGHT, type GridSymbol, type LadderViewMode } from './layout';
 
 const line = (c: StrokeCoordinates, x1: number, y1: number, x2: number, y2: number, className = 'wire') =>
   <line x1={c.x(x1)} y1={c.y(y1)} x2={c.x(x2)} y2={c.y(y2)} class={className}/>;
@@ -22,9 +22,9 @@ function instructionMenu(event: MouseEvent, instruction: Instruction, comments: 
   choose(instruction);
   nativeCsvBridge()?.postMessage({ type: 'instruction-menu', text: instructionCopyText(instruction, comments) });
 }
-function Symbol({ s, selected, choose, navigate, c, rowHeight, comments, showComments }: { s: GridSymbol; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; c: StrokeCoordinates; rowHeight: number; comments: DeviceComments; showComments: boolean }) {
+function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comments, showComments }: { s: GridSymbol; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; c: StrokeCoordinates; rowHeight: number; baseline: number; comments: DeviceComments; showComments: boolean }) {
   const i = s.instruction;
-  const x = s.col * CELL, y = s.row * rowHeight + BASELINE, w = s.span * CELL, cx = x + CELL / 2;
+  const x = s.col * CELL, y = s.row * rowHeight + baseline, w = s.span * CELL, cx = x + CELL / 2;
   const X = c.x, Y = c.y;
   const inputClass=s.inputDifference?`wire wire-${s.inputDifference}`:'wire';
   const outputClass=s.outputDifference?`wire wire-${s.outputDifference}`:'wire';
@@ -45,7 +45,7 @@ function Symbol({ s, selected, choose, navigate, c, rowHeight, comments, showCom
     aria-label={`${i.op} ${i.operands.join(' ')}`} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose)}
     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i); } }}>
     <title>{`${i.op} ${i.operands.join(' ')} / CSV ${i.sourceRow}行\n${i.note}${i.difference ? '\n'+differenceLabels[i.difference.kind]+' / 相手側: '+(i.difference.otherText||'なし') : ''}`}</title>
-    <rect class="hit" x={x + 1} y={y - 24} width={w - 2} height={i.pins ? i.pins.length * 22 + 54 : rowHeight - 8} rx={2}/>
+    <rect class="hit" x={x + 1} y={s.row * rowHeight + 4} width={w - 2} height={i.pins ? i.pins.length * 22 + 54 + baseline - BASELINE : rowHeight - 8} rx={2}/>
     {i.op === 'NOP' ? null : marker ? <>
       <rect class={`command-outline flow-marker ${i.controlFlow?.kind==='loop'?'flow-loop':''}`} x={X(x+6)} y={Y(y-12)} width={X(x+w-6)-X(x+6)} height={Y(y+12)-Y(y-12)}/>
       <text class="command-text" x={x+14} y={y+4}><tspan class={i.difference?.opChanged?'diff-value':''}>{i.op}</tspan>{i.operands.map((operand,index)=><>{' '}<Operand instruction={i} index={index}/></>)}</text>
@@ -106,7 +106,9 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
     scroller.addEventListener('scroll', updateRaster, { passive: true });
     return () => scroller.removeEventListener('scroll', updateRaster);
   }, [network, viewMode]);
-  const g = displayGrid(network, viewMode), dimensions = networkSize(network, rowHeight, viewMode);
+  const g = displayGrid(network, viewMode), dimensions = networkSize(network, rowHeight, viewMode), metrics = drawingMetrics(network, rowHeight), notes = noteLayout(network, viewMode);
+  rowHeight = metrics.rowHeight;
+  const baseline = metrics.baseline;
   const scrolling = viewMode === 'scroll' && g.pages > 1;
   const markerOnly = !g.wires.length && g.symbols.length > 0 && g.symbols.every(s => isControlMarker(s.instruction.op));
   const master = network.masterControl, masterY = (network.rowAlignment?.[0] ?? 0) * rowHeight;
@@ -119,16 +121,16 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
     {master && <g class={`symbol ${master.difference ? 'diff-' + master.difference.kind : ''} ${selected === master.id ? 'chosen' : ''}`} role="button" tabIndex={0} aria-label={`MC ${master.operands.join(' ')}`} onClick={() => choose(master)} onContextMenu={event => instructionMenu(event, master, comments, choose)} onKeyDown={event => { if(event.key === 'Enter' || event.key === ' ') {event.preventDefault();choose(master);} }}>
       <title>{`MC ${master.operands.join(' ')}`}</title>
       <rect class="hit" x={2} y={masterY + 4} width={LEFT_GUTTER + CELL * 2 - 4} height={rowHeight - 8}/>
-      <text class="step-label" x={LEFT_GUTTER - 10} y={masterY + BASELINE + 4}><Operand instruction={master} index={0}/></text>
-      <text class="pointer-label" x={LEFT_GUTTER + 10} y={masterY + BASELINE + 4}>{master.operands.slice(1).map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={master} index={index + 1}/></>)}</text>
-      {showComments && <CommentText text={deviceComment(master.operands[1], comments)} x={LEFT_GUTTER + 10} y={masterY + BASELINE + 20} width={CELL * 2 - 20}/>}
-      {line(rootStroke, LEFT_GUTTER - 6, masterY + BASELINE - 9, LEFT_GUTTER + 6, masterY + BASELINE - 9)}
-      {line(rootStroke, LEFT_GUTTER - 6, masterY + BASELINE + 9, LEFT_GUTTER + 6, masterY + BASELINE + 9)}
+      <text class="step-label" x={LEFT_GUTTER - 10} y={masterY + baseline + 4}><Operand instruction={master} index={0}/></text>
+      <text class="pointer-label" x={LEFT_GUTTER + 10} y={masterY + baseline + 4}>{master.operands.slice(1).map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={master} index={index + 1}/></>)}</text>
+      {showComments && <CommentText text={deviceComment(master.operands[1], comments)} x={LEFT_GUTTER + 10} y={masterY + baseline + 20} width={CELL * 2 - 20}/>}
+      {line(rootStroke, LEFT_GUTTER - 6, masterY + baseline - 9, LEFT_GUTTER + 6, masterY + baseline - 9)}
+      {line(rootStroke, LEFT_GUTTER - 6, masterY + baseline + 9, LEFT_GUTTER + 6, masterY + baseline + 9)}
     </g>}
     {network.pointer && <g data-instruction-id={network.pointer.id} class={`symbol ${network.pointer.difference?'diff-'+network.pointer.difference.kind:''} ${selected === network.pointer.id ? 'chosen' : ''}`} transform={`translate(0 ${pointerY})`} role="button" tabIndex={0} aria-label={network.pointer.op} onContextMenu={event => instructionMenu(event, network.pointer!, comments, choose)} onClick={() => choose(network.pointer!)} onKeyDown={e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(network.pointer!); } }}>
       <rect class="hit" x={2} y={4} width={LEFT_GUTTER - 27} height={rowHeight - 8}/>
-      <text class="pointer-label" x={6} y={BASELINE + 4}>{network.pointer.op}</text>
-      {showComments && <CommentText text={deviceComment(network.pointer.op, comments)} x={6} y={BASELINE + 20} width={LEFT_GUTTER - 28}/>}
+      <text class="pointer-label" x={6} y={baseline + 4}>{network.pointer.op}</text>
+      {showComments && <CommentText text={deviceComment(network.pointer.op, comments)} x={6} y={baseline + 20} width={LEFT_GUTTER - 28}/>}
     </g>}
     {!markerOnly && line(rootRail, dimensions.width - 8, 0, dimensions.width - 8, dimensions.height, 'rail right-rail')}
     {drawingPages(g, rowHeight, viewMode).map(({page,left,top,width,outputs}) => {
@@ -139,17 +141,20 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
       return <g transform={`translate(${LEFT_GUTTER} ${top})`} key={page}>
         <defs><clipPath id={clip}><rect x={0} y={0} width={width} height={g.rows * rowHeight}/></clipPath></defs>
         {page === 0 && !markerOnly && (master ? <>
-          {line(rail,0,0,0,masterY+BASELINE-9,'rail left-rail')}
-          {line(rail,0,masterY+BASELINE+9,0,g.rows*rowHeight,'rail left-rail')}
+          {line(rail,0,0,0,masterY+baseline-9,'rail left-rail')}
+          {line(rail,0,masterY+baseline+9,0,g.rows*rowHeight,'rail left-rail')}
         </> : line(rail,0,0,0,g.rows*rowHeight,'rail left-rail'))}
-        {outputs.map(s => line(endStroke, scrolling ? (s.col + s.span) * CELL : width, s.row * rowHeight + BASELINE, width + 8, s.row * rowHeight + BASELINE, 'wire'))}
+        {outputs.map(s => line(endStroke, scrolling ? (s.col + s.span) * CELL : width, s.row * rowHeight + baseline, width + 8, s.row * rowHeight + baseline, 'wire'))}
         <g clip-path={`url(#${clip})`}><g transform={`translate(${-left} 0)`}>
-          {g.wires.map(w => line(c, w.x1 * CELL, w.y1 * rowHeight + BASELINE, w.x2 * CELL, w.y2 * rowHeight + BASELINE,w.difference?`wire wire-${w.difference}`:'wire'))}
-          {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} choose={choose} navigate={navigate} c={c} rowHeight={rowHeight} comments={comments} showComments={showComments}/>)}
+          {g.wires.map(w => line(c, w.x1 * CELL, w.y1 * rowHeight + baseline, w.x2 * CELL, w.y2 * rowHeight + baseline,w.difference?`wire wire-${w.difference}`:'wire'))}
+          {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} choose={choose} navigate={navigate} c={c} rowHeight={rowHeight} baseline={baseline} comments={comments} showComments={showComments}/>)}
         </g></g>
+        {notes.filter(note=>note.pointer?page===0:note.col*CELL>=left&&note.col*CELL<left+width).map(note=><foreignObject key={note.owner.id} data-note-instruction-ids={note.instructions.map(i=>i.id).join(' ')} x={note.pointer?-LEFT_GUTTER+6:note.col*CELL-left+6} y={note.row*rowHeight+metrics.padding+note.top} width={note.pointer?LEFT_GUTTER-28:Math.min(3*CELL,note.span*CELL-12)} height={note.lines.length*NOTE_LINE_HEIGHT}>
+          <div class="network-statements network-notes instruction-notes">{note.lines.map((text,index)=><div key={index} class="network-title network-note" title={text}>{text}</div>)}</div>
+        </foreignObject>)}
         {g.symbols.filter(s => s.col * CELL >= left && s.col * CELL < left + width)
           .filter((s, index, all) => all.findIndex(other => other.row === s.row) === index)
-          .map(s => <text class={`step-label ${s.instruction.difference?.kind==='step'?'step-difference':''}`} x={-9} y={s.row * rowHeight + BASELINE + 4}>{network.pointer && page === 0 && s.row === (network.rowAlignment?.[pointerRow] ?? pointerRow) ? network.pointer.step : s.instruction.step}</text>)}
+          .map(s => <text class={`step-label ${s.instruction.difference?.kind==='step'?'step-difference':''}`} x={-9} y={s.row * rowHeight + baseline + 4}>{network.pointer && page === 0 && s.row === (network.rowAlignment?.[pointerRow] ?? pointerRow) ? network.pointer.step : s.instruction.step}</text>)}
         {!scrolling && g.pages > 1 && <text class="continuation" x={8} y={g.rows * rowHeight + 15}>{page + 1} / {g.pages} 段{page + 1 < g.pages ? '　→ 次段へ接続' : ''}{page > 0 ? '　（前段からの続き）' : ''}</text>}
       </g>;
     })}

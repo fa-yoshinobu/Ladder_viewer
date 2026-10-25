@@ -1,6 +1,6 @@
 import Papa from 'papaparse';
 import {diffArrays} from 'diff';
-import {gridLayout} from './layout';
+import {gridLayout,drawingMetrics,ROW} from './layout';
 import {compareConnections} from './connections';
 import { buildProgram, type Instruction, type Network, type Program, type ComparisonChange } from './model';
 
@@ -156,6 +156,9 @@ function alignCircuitRows(source:Network[],target:Network[]) {
    for(let i=0;i<added;i++)positionsB.push(slot+i);
    slot+=Math.max(removed,added);
   }
+  const networks=[...group.source,...group.target];
+  const notePadding=Math.max(0,...networks.map(network=>drawingMetrics(network,ROW).padding));
+  for(const network of networks)network.comparisonNotePadding=notePadding;
   for(const [rows,positions] of [[a,positionsA],[b,positionsB]] as const){
    let start=0,previous:Network|undefined;
    rows.forEach((descriptor,index)=>{

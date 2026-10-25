@@ -111,9 +111,11 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .network .warning{height:25px;line-height:25px;padding:0 12px;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--ld-warning-bg);color:var(--ld-warning)}
 .network-statements{font-family:"MS UI Gothic","Yu Gothic UI",sans-serif;color:var(--ld-statement)}
 .network-title{padding:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:var(--ld-title-bg);border:1px solid var(--ld-title-border);color:var(--ld-title-text)}
-/* Notes sit above the circuit at the output column, as GX Works prints them. */
+/* Notes sit above their own instruction, inside the ladder coordinates. */
 .network-notes{display:flex;flex-direction:column;align-items:flex-end}
 .network-note{padding:0 4px}
+.instruction-notes{font-size:14px}
+.instruction-notes .network-note{height:18px;line-height:16px;max-width:100%}
 .network-scroll{max-width:100%;min-width:0;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain}
 .network-scroll::-webkit-scrollbar{height:16px}
 .network-scroll::-webkit-scrollbar-track{background:var(--ld-scroll-track)}

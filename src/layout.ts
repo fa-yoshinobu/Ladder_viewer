@@ -153,7 +153,40 @@ export function displayGrid(network:Network,viewMode:LadderViewMode='wrap'):Grid
  });
  return compactHorizontalGaps({...g,symbols,wires,width:LEFT_GUTTER+right*CELL+16});
 }
+export const NOTE_LINE_HEIGHT = 18;
+export interface GridNote {
+ owner:Instruction; instructions:Instruction[]; row:number; col:number; span:number; pointer:boolean; top:number; lines:string[];
+}
+export function noteLayout(network:Network,viewMode:LadderViewMode='wrap'):GridNote[] {
+ const grid=displayGrid(network,viewMode),notes=new Map<string,GridNote>(),owners=new Map<string,GridSymbol>();
+ for(const symbol of grid.symbols){
+  owners.set(symbol.instruction.id,symbol);
+  for(const pin of symbol.instruction.pins??[])owners.set(pin.id,symbol);
+ }
+ for(const instruction of network.instructions){
+  if(!instruction.note)continue;
+  let symbol=owners.get(instruction.id);
+  if(!symbol&&instruction!==network.pointer)symbol=[...grid.symbols].sort((a,b)=>Math.abs(a.instruction.sourceRow-instruction.sourceRow)-Math.abs(b.instruction.sourceRow-instruction.sourceRow))[0];
+  const pointer=!symbol&&!!network.pointer,owner=symbol?.instruction??network.pointer;
+  if(!owner)continue;
+  let note=notes.get(owner.id);
+  if(!note){
+   const pointerRow=network.masterControl?1:0;
+   const bodyTop=pointer?BASELINE-7:owner.pins?BASELINE-22:isControlMarker(owner.op)?BASELINE-12:(symbol!.contact&&!isComparisonCondition(owner.op)||isCoil(owner))?BASELINE-26:BASELINE-11;
+   note={owner,instructions:[],row:symbol?.row??network.rowAlignment?.[pointerRow]??pointerRow,col:symbol?.col??0,span:symbol?.span??1,pointer,top:bodyTop,lines:[]};
+   notes.set(owner.id,note);
+  }
+  note.instructions.push(instruction);
+  note.lines.push(...instruction.note.split(/\r\n?|\n/));
+ }
+ return [...notes.values()].map(note=>({...note,top:note.top-3-note.lines.length*NOTE_LINE_HEIGHT}));
+}
+export function drawingMetrics(network:Network,rowHeight=ROW) {
+ const padding=Math.max(network.comparisonNotePadding??0,0,...noteLayout(network).map(note=>-note.top));
+ return {padding,rowHeight:rowHeight+padding,baseline:BASELINE+padding};
+}
 export function networkSize(n:Network,rowHeight=ROW,viewMode:LadderViewMode='wrap'){
+ rowHeight=drawingMetrics(n,rowHeight).rowHeight;
  const g=displayGrid(n,viewMode);
  return viewMode==='scroll'&&g.pages>1
   ?{width:g.width,height:g.rows*rowHeight}
