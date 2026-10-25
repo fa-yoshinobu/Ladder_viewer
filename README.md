@@ -6,7 +6,7 @@ MELSECの命令リストCSVをラダー図として表示するWindows専用ア�
 
 ## 起動
 
-`windows/LadderViewer.exe` をダブルクリックするか、`start-viewer.cmd` を実行してください。専用ウィンドウを閉じると終了します。
+[GitHub Releases](https://github.com/fa-yoshinobu/Ladder_viewer/releases) の `LadderViewer.exe` をダブルクリックしてください（自分でビルドした場合は `windows/LadderViewer.exe`）。専用ウィンドウを閉じると終了します。
 
 | 実行環境 | 要件 |
 | --- | --- |
