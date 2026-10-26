@@ -6,12 +6,13 @@ import {continuationText} from '../continuation';
 import {placeSymbolColumn} from '../ladderGeometry';
 
 export {KEYENCE_CELL,KEYENCE_LEFT,KEYENCE_COLUMNS};
-export interface KeyenceWire {x1:number;y1:number;x2:number;y2:number}
+export interface KeyenceWire {x1:number;y1:number;x2:number;y2:number;difference?:'added'|'removed'}
 export interface KeyenceSymbol {
  instruction:KeyenceInstruction;x:number;y:number;width:number;
  kind:'contact'|'comparison'|'coil'|'command'|'inline'|'keep';negated:boolean;pulse:'rise'|'fall'|null;
  label:string;comment:string;commentLines:string[];
- operation?:'rise'|'fall'|'invert';ports?:{name:'SET'|'RES';y:number}[];height?:number;
+ operation?:'rise'|'fall'|'invert';ports?:{name:'SET'|'RES';y:number;difference?:'added'|'removed'}[];height?:number;
+ inputDifference?:'added'|'removed';outputDifference?:'added'|'removed';
 }
 export interface KeyenceDrawing {
  network:KeyenceNetwork;width:number;height:number;headerHeight:number;rows:number;rowHeight:number;baseline:number;
@@ -272,7 +273,7 @@ export function keyenceViewDrawing(base:KeyenceDrawing,mode:'wrap'|'scroll'):Key
   for(const wire of base.wires){
    if(wire.y1===wire.y2){
     const start=Math.max(page.start,Math.min(wire.x1,wire.x2)),end=Math.min(page.end+(index===pages.length-1?8:0),Math.max(wire.x1,wire.x2));
-    if(start<end)wires.push({x1:start+dx,y1:wire.y1+dy,x2:end+dx,y2:wire.y2+dy});
+    if(start<end)wires.push({...wire,x1:start+dx,y1:wire.y1+dy,x2:end+dx,y2:wire.y2+dy});
    }else if(wire.x1>=page.start&&(wire.x1<page.end||index===pages.length-1&&wire.x1<=base.right)){
     // A vertical branch on a cut belongs to the following page, once.
     wires.push({...wire,x1:wire.x1+dx,x2:wire.x2+dx,y1:wire.y1+dy,y2:wire.y2+dy});
@@ -301,7 +302,9 @@ export function keyenceViewDrawing(base:KeyenceDrawing,mode:'wrap'|'scroll'):Key
   }
   for(const y of left)if(rightSide.has(y)){
    const inputY=y+offset(index+1);
-   wires.push({x1:base.left,y1:inputY,x2:inputX,y2:inputY});
+   const crossing=base.wires.find(w=>w.y1===y&&w.y2===y&&Math.min(w.x1,w.x2)<=cut&&Math.max(w.x1,w.x2)>=cut);
+   const terminal=base.symbols.find(s=>s.x===cut&&s.y===y);
+   wires.push({x1:base.left,y1:inputY,x2:inputX,y2:inputY,difference:crossing?.difference??terminal?.inputDifference});
   }
  }
  const height=headerHeight+pages.length*(pageHeight+PAGE_GAP);

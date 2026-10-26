@@ -11,7 +11,7 @@ export interface Instruction { id: string; sourceRow: number; step: string; op: 
 export type Logic = { kind: 'contact'; instruction: Instruction } | { kind: 'and' | 'or'; children: Logic[] };
 export interface Action { instruction: Instruction; condition: Logic | null; }
 export interface Network { id: string; title: string; step: string; instructions: Instruction[]; actions: Action[]; warnings: string[]; evaluation?:Logic; functionBlock?:FunctionBlock; pointer?: Instruction; masterControl?:Instruction; masterControlRanges?:MasterControlRange[]; controlRanges?:ControlRange[]; rowAlignment?:number[]; comparisonNotePadding?:number; connectionDifferences?: {kind:'added'|'removed'; wires:number[]; inputs:string[]; outputs:string[]}; }
-export interface Program { name: string; cpu: string; instructions: Instruction[]; networks: Network[]; warnings: string[]; comparison?: { target: Program; sourceProject: string; targetProject: string; sourceName: string; targetName: string; differentRows: number; rowCount: number; changes: ComparisonChange[]; shiftedSteps:number }; }
+export interface Program { relativePath?:string;name: string; cpu: string; instructions: Instruction[]; networks: Network[]; warnings: string[]; comparison?: { target: Program; sourceProject: string; targetProject: string; sourceName: string; targetName: string; differentRows: number; rowCount: number; changes: ComparisonChange[]; shiftedSteps:number }; }
 export const instructionKey = (i: Instruction) => JSON.stringify([i.op, i.operands]);
 
 export function decodeCsv(bytes: ArrayBuffer): string {

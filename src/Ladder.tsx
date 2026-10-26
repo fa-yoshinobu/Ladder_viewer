@@ -174,6 +174,7 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
         {g.symbols.filter(s => s.col * CELL >= left && s.col * CELL < left + width)
           .filter((s, index, all) => all.findIndex(other => other.row === s.row) === index)
           .map(s => <text class={`step-label ${s.instruction.difference?.kind==='step'?'step-difference':''}`} x={-9} y={s.row * rowHeight + baseline + 4}>{network.pointer && page === 0 && s.row === (network.rowAlignment?.[pointerRow] ?? pointerRow) ? network.pointer.step : s.instruction.step}</text>)}
+        {page===0&&network.pointer&&!g.symbols.some(s=>s.row*rowHeight===pointerY)&&<text class={`step-label ${network.pointer.difference?.kind==='step'?'step-difference':''}`} x={-9} y={pointerY+baseline+4}>{network.pointer.step}</text>}
         {!scrolling && g.pages > 1 && <text class="continuation" x={8} y={g.rows * rowHeight + 15}>{continuationText(page,g.pages)}</text>}
       </g>;
     })}

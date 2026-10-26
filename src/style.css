@@ -256,3 +256,28 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .symbol:focus,.kv-symbol:focus,.symbol:focus-visible,.kv-symbol:focus-visible{outline:none;box-shadow:none}
 .symbol:focus-visible .ladder-selection-frame,.kv-symbol:focus-visible .ladder-selection-frame{stroke:var(--ld-chosen);stroke-width:2;stroke-dasharray:3 2}
 .symbol:focus-visible .hit:not(.ladder-selection-frame){stroke:var(--ld-chosen);stroke-width:2;stroke-dasharray:3 2}
+
+.direct-inputs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding-left:170px;padding-right:240px;border-bottom:1px solid var(--border);background:var(--surface)}
+.direct-input{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;min-width:0;border-right:1px solid var(--border)}
+.direct-input strong{color:var(--primary)}
+.direct-input button{font-size:12px;padding:5px 8px}
+.direct-input>span{font-size:12px;color:var(--text-muted);overflow-wrap:anywhere}
+.direct-input .error{flex-basis:100%;margin:0;white-space:pre-wrap}
+.direct-empty{margin-left:170px;width:100%}
+.direct-dropzone{display:flex;flex-direction:column;justify-content:center;align-items:center;border-right:1px solid var(--border);padding:24px;text-align:center;color:var(--text-sub);min-width:0}
+.direct-dropzone strong{font-size:18px;color:var(--primary)}
+
+.direct-pane{position:relative}
+.direct-comparison-app[data-source-status=ready] .direct-input[data-side=source],.direct-comparison-app[data-target-status=ready] .direct-input[data-side=target]{background:var(--primary-tint);box-shadow:inset 0 3px var(--primary)}
+.direct-comparison-app[data-source-status=ready] .direct-pane[data-side=source]>.compare-heading,.direct-comparison-app[data-target-status=ready] .direct-pane[data-side=target]>.compare-heading{background:var(--primary-tint)}
+.direct-comparison-app[data-source-status=loading] .direct-input[data-side=source],.direct-comparison-app[data-target-status=loading] .direct-input[data-side=target]{background:var(--warning-bg);box-shadow:inset 0 3px var(--warning)}
+.direct-comparison-app[data-source-status=error] .direct-input[data-side=source],.direct-comparison-app[data-target-status=error] .direct-input[data-side=target]{background:var(--danger-bg);box-shadow:inset 0 3px var(--danger)}
+.direct-comparison-app[data-drag-side=source] [data-side=source].direct-input,.direct-comparison-app[data-drag-side=target] [data-side=target].direct-input{background:var(--primary-tint);outline:3px solid var(--primary);outline-offset:-3px}
+.direct-comparison-app[data-drag-side=source] .direct-pane[data-side=source]::after,.direct-comparison-app[data-drag-side=target] .direct-pane[data-side=target]::after{position:absolute;inset:0;z-index:5;display:flex;justify-content:center;align-items:center;background:color-mix(in srgb,var(--primary-tint) 88%,transparent);color:var(--text);font-size:20px;font-weight:700;border:4px solid var(--primary);pointer-events:none}
+.direct-comparison-app[data-drag-side=source] .direct-pane[data-side=source]::after{content:"比較元に読み込む"}
+.direct-comparison-app[data-drag-side=target] .direct-pane[data-side=target]::after{content:"比較先に読み込む"}
+
+.direct-comparison-app .search-bar{flex:1 0 540px}
+.direct-comparison-app .subbar>div:last-child{max-width:100%;flex-shrink:1}
+.direct-comparison-app .subbar>div:last-child>label{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.direct-comparison-app select[aria-label="比較するプログラム"]{max-width:280px}

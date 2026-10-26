@@ -1,3 +1,4 @@
+import {DirectComparisonWorkspace} from './DirectComparisonWorkspace';
 import { render } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { differenceLabels, type Instruction, type Program } from './model';
@@ -39,6 +40,8 @@ function savedLadderPalette(theme: Theme): LadderPalette {
 }
 document.documentElement.dataset.ladder = savedLadderPalette(document.documentElement.dataset.theme as Theme);
 function App() {
+  const [directComparison,setDirectComparison]=useState(false);
+  const [initialComparison,setInitialComparison]=useState<NativeCsvSelection['comparison']>();
   const [program, setProgram] = useState<Program | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
   const [keyencePrograms,setKeyencePrograms]=useState<KeyenceProgram[]>([]);
@@ -127,6 +130,7 @@ function App() {
       if (message.status === 'loading') { setBusy(true); setProgress('ファイルを読み込んでいます…'); return; }
       if (message.status === 'cancelled') { setBusy(false); setProgress(''); return; }
       if (message.status === 'error') { setBusy(false); setProgress(''); setError(message.error || 'ファイルを読み込めませんでした。'); return; }
+      if(message.comparison){setInitialComparison(message.comparison);setDirectComparison(true);setBusy(false);setProgress('');return;}
       try {
         const inputs = decodeNativeCsvFiles(message.files);
         inputWarnings.current = message.warnings ?? [];
@@ -320,9 +324,10 @@ function App() {
     setSearchCurrent(next);
     const hit=searchResults[next];navigateInstruction(hit.instruction.id,hit.side);
   }
-  if(keyenceProgram)return <KeyenceViewer palette={ladderPalette} changePalette={value=>changeLadderPalette(value as LadderPalette)} program={keyenceProgram} names={programNames} choose={chooseProgram} busy={busy} progress={progress} error={error} dark={theme==='dark'} toggleTheme={toggleTheme} openFiles={()=>openSelection('open-csv')} openFolder={()=>openSelection('open-folder')} drop={files=>{void load(files);}}/>;
+  if(directComparison)return <DirectComparisonWorkspace initial={initialComparison} dark={theme==='dark'} palette={ladderPalette} changePalette={value=>changeLadderPalette(value as LadderPalette)} toggleTheme={toggleTheme} back={()=>{setDirectComparison(false);setInitialComparison(undefined);}}/>;
+  if(keyenceProgram)return <KeyenceViewer onCompare={()=>setDirectComparison(true)} palette={ladderPalette} changePalette={value=>changeLadderPalette(value as LadderPalette)} program={keyenceProgram} names={programNames} choose={chooseProgram} busy={busy} progress={progress} error={error} dark={theme==='dark'} toggleTheme={toggleTheme} openFiles={()=>openSelection('open-csv')} openFolder={()=>openSelection('open-folder')} drop={files=>{void load(files);}}/>;
   return <div class="app" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer?.files.length) void load(Array.from(e.dataTransfer.files)); }}>
-    <ViewerHeader programNames={programNames} currentName={program?.name??''} description={program?(comparison?(comparison.differentRows?`${comparison.differentRows}行相違`:'比較元・比較先 一致'):program.cpu):''}
+    <ViewerHeader onCompare={()=>setDirectComparison(true)} programNames={programNames} currentName={program?.name??''} description={program?(comparison?(comparison.differentRows?`${comparison.differentRows}行相違`:'比較元・比較先 一致'):program.cpu):''}
       busy={busy} dark={theme==='dark'} onChoose={chooseProgram} onToggleTheme={toggleTheme} onAbout={()=>nativeCsv?.postMessage({type:'show-about',dark:theme==='dark'})} onOpenFiles={()=>openSelection('open-csv')} onOpenFolder={()=>openSelection('open-folder')}/>
     <div class="subbar">{program&&<SearchBar query={searchQuery} mode={searchMode} results={searchHeadings} current={searchCurrent} onQuery={setSearchQuery} onMode={setSearchMode} onMove={moveSearch} onClear={()=>setSearchQuery('')}/>}<div>{comparison && <label class="view-mode">表示<select aria-label="比較の表示" value={comparisonDisplay} disabled={busy} onChange={e=>changeComparisonDisplay(e.currentTarget.value as ComparisonDisplay)}><option value="both">左右比較</option><option value="source">比較元のみ</option><option value="target">比較先のみ</option></select></label>}{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<label class="ladder-palette">ラダー配色<select aria-label={`ラダー配色（${theme === 'dark' ? 'ダーク' : 'ライト'}モード）`} title={`${theme === 'dark' ? 'ダーク' : 'ライト'}モード用の配色`} value={ladderPalette} onChange={e => changeLadderPalette(e.currentTarget.value as LadderPalette)}>{ladderPalettes.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label><label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={e => changeViewMode(e.currentTarget.value as LadderViewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label><button onClick={fitToWidth}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(showComparison ? .25 : .5, +(z - .1).toFixed(2)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
     {error && <div class="error" role="alert">{error}</div>}

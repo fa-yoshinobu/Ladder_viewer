@@ -15,10 +15,10 @@ import {keyenceDeviceComment} from './comments';
 interface Props {
  program:KeyenceProgram;names:string[];busy:boolean;progress:string;error:string;dark:boolean;
  palette:string;changePalette:(value:string)=>void;
- choose:(name:string)=>void;openFiles:()=>void;openFolder:()=>void;toggleTheme:()=>void;drop:(files:File[])=>void;
+ onCompare?:()=>void;choose:(name:string)=>void;openFiles:()=>void;openFolder:()=>void;toggleTheme:()=>void;drop:(files:File[])=>void;
 }
 const clampZoom=(value:number)=>Math.min(1.5,Math.max(.5,value));
-export function KeyenceViewer({program,names,busy,progress,error,dark,palette,changePalette,choose,openFiles,openFolder,toggleTheme,drop}:Props) {
+export function KeyenceViewer({program,names,busy,progress,error,dark,palette,changePalette,choose,openFiles,openFolder,toggleTheme,drop,onCompare}:Props) {
  const viewport=useRef<HTMLDivElement>(null),viewAnchor=useRef<number|null>(null);
  const [showComments,setShowComments]=useState(true),[zoom,setZoom]=useState(1);
  const [size,setSize]=useState({width:1000,height:800}),[scrollTop,setScrollTop]=useState(0);
@@ -155,7 +155,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
   catch{setCopyError('コピーできませんでした。');}
  };
  return <div class="app keyence-app" onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();if(event.dataTransfer?.files.length)drop(Array.from(event.dataTransfer.files));}}>
-  <ViewerHeader programNames={names} currentName={program.name} description="KEYENCE" busy={busy} dark={dark} onChoose={choose} onToggleTheme={toggleTheme}
+  <ViewerHeader onCompare={onCompare} programNames={names} currentName={program.name} description="KEYENCE" busy={busy} dark={dark} onChoose={choose} onToggleTheme={toggleTheme}
    onAbout={()=>nativeCsvBridge()?.postMessage({type:'show-about',dark})} onOpenFiles={openFiles} onOpenFolder={openFolder}/>
   <div class="subbar"><SearchBar query={query} mode={searchMode} results={searchResults} current={searchIndex} onQuery={setQuery} onMode={setSearchMode} onMove={searchMove} onClear={()=>setQuery('')} placeholder="デバイス・命令・コメント・元ファイル行"/>
    <div>{hasComments&&<label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={event=>setShowComments(event.currentTarget.checked)}/>コメント</label>}

@@ -136,7 +136,7 @@ export function pairNetworks(source: Network[], target: Network[]): { source: Ne
   }
   return groups;
 }
-function alignCircuitRows(source:Network[],target:Network[]) {
+export function alignCircuitRows(source:Network[],target:Network[]) {
  for(const group of pairNetworks(source,target)){
   const descriptors=(networks:Network[])=>networks.flatMap(network=>{
    const grid=gridLayout(network);

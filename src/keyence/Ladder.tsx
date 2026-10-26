@@ -19,7 +19,7 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
  }
  useLayoutEffect(updateRaster);
  useLayoutEffect(()=>{
-  const scrollers=[root.current?.closest('.network-scroll'),root.current?.closest('.kv-diagram')];
+  const scrollers=[root.current?.closest('.network-scroll'),root.current?.closest('.kv-diagram,.compare-scroll')];
   const resolution=window.matchMedia(`(resolution: ${window.devicePixelRatio||1}dppx)`);
   for(const scroller of scrollers)scroller?.addEventListener('scroll',updateRaster,{passive:true});
   window.addEventListener('resize',updateRaster);
@@ -34,9 +34,21 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
  const c=strokeCoordinates(zoom,raster.ratio,raster.x,raster.y);
  const rail=strokeCoordinates(zoom,raster.ratio,raster.x,raster.y,2);
  const X=c.x,Y=c.y;
- const line=(x1:number,y1:number,x2:number,y2:number,isRail=false)=>{
+ const line=(x1:number,y1:number,x2:number,y2:number,isRail=false,difference?:'added'|'removed')=>{
   const coordinates=isRail?rail:c;
-  return <line x1={coordinates.x(x1)} y1={coordinates.y(y1)} x2={coordinates.x(x2)} y2={coordinates.y(y2)} class={isRail?'kv-rail':'kv-line'}/>;
+  return <line x1={coordinates.x(x1)} y1={coordinates.y(y1)} x2={coordinates.x(x2)} y2={coordinates.y(y2)} class={isRail?'kv-rail':`kv-line${difference?' wire wire-'+difference:''}`}/>;
+ };
+ const label=(symbol:KeyenceSymbol)=>{
+  const difference=symbol.instruction.difference;if(difference?.kind!=='changed')return symbol.label;
+  const parts:(string|ReturnType<typeof textSpan>)[]=[];let cursor=0;
+  function textSpan(text:string,changed:boolean){return <tspan class={changed?'diff-value':''}>{text}</tspan>;}
+  for(const [index,operand] of symbol.instruction.operands.entries()){
+   const at=symbol.label.indexOf(operand,cursor);if(at<0)continue;
+   if(at>cursor)parts.push(textSpan(symbol.label.slice(cursor,at),cursor===0&&difference.opChanged));
+   parts.push(textSpan(operand,difference.operandChanges.includes(index)));cursor=at+operand.length;
+  }
+  if(cursor<symbol.label.length)parts.push(textSpan(symbol.label.slice(cursor),cursor===0&&difference.opChanged));
+  return parts;
  };
  const glyph=(symbol:KeyenceSymbol)=>{
   const {x,y,width,kind}=symbol,center=x+width/2;
@@ -44,15 +56,15 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
    const ports=symbol.ports??[],bottom=Math.max(y,...ports.map(port=>port.y));
    return <>
     <rect class="command-outline" x={X(x+6)} y={Y(y-11)} width={X(x+width-6)-X(x+6)} height={Y(bottom+11)-Y(y-11)}/>
-    <text class="device" x={center} y={y-15}>{symbol.label}</text>
-    {ports.map(port=><g key={port.name}>{line(x,port.y,x+6,port.y)}<text class="command-text" x={x+14} y={port.y+4}>{port.name}</text>{port.name==='SET'&&line(x+width-6,port.y,x+width,port.y)}</g>)}
+    <text class="device" x={center} y={y-15}>{label(symbol)}</text>
+    {ports.map(port=><g key={port.name}>{line(x,port.y,x+6,port.y,false,port.difference)}<text class="command-text" x={x+14} y={port.y+4}>{port.name}</text>{port.name==='SET'&&line(x+width-6,port.y,x+width,port.y)}</g>)}
    </>;
   }
   const centered=kind==='contact'||kind==='coil'||kind==='inline';
   return <>
    <LadderGlyph kind={kind==='inline'?(symbol.operation==='invert'?'invert':'pulse'):kind==='comparison'?'comparison':kind==='contact'?'contact':kind==='coil'?'coil':'command'}
-    x={x} y={y} width={width} c={c} negated={symbol.negated} pulse={kind==='inline'?(symbol.operation==='fall'?'fall':'rise'):symbol.pulse}/>
-   {centered?<text class="device" x={center} y={y-15}>{symbol.label}</text>:<text class="command-text" x={x+14} y={y+4}>{symbol.label}</text>}
+    x={x} y={y} width={width} c={c} inputClass={symbol.inputDifference?'wire wire-'+symbol.inputDifference:'wire'} outputClass={symbol.outputDifference?'wire wire-'+symbol.outputDifference:'wire'} negated={symbol.negated} pulse={kind==='inline'?(symbol.operation==='fall'?'fall':'rise'):symbol.pulse}/>
+   {centered?<text class="device" x={center} y={y-15}>{label(symbol)}</text>:<text class="command-text" x={x+14} y={y+4}>{label(symbol)}</text>}
    {symbol.instruction.opcode.toUpperCase()==='TMR'&&/^#\d+$/.test(symbol.instruction.operands[0]??'')&&<text class="device" x={center} y={y-15}>{'T'+symbol.instruction.operands[0].slice(1)}</text>}
   </>;
  };
@@ -65,10 +77,10 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
   {drawing.network.warnings.map((warning,index)=><text key={warning} class="kv-warning" x={drawing.left+7} y={drawing.statementLines.length*18+index*22+16}>{warning}</text>)}
   {/* Highlight fills stay behind every wire, including branches crossing another symbol's hit area. */}
   <g pointer-events="none">
-   {drawing.symbols.map((symbol,index)=><SelectionRect key={symbolKey(symbol,index)} phase="background" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} {...hitBounds(symbol)}/>)}
+   {drawing.symbols.map((symbol,index)=><SelectionRect key={symbolKey(symbol,index)} phase="background" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} difference={symbol.instruction.difference?.kind} {...hitBounds(symbol)}/>)}
   </g>
   {rails.map((segment,index)=><g key={index}>{line(segment.x,segment.top,segment.x,segment.bottom,true)}</g>)}
-  {drawing.wires.map((wire,index)=><g key={index}>{line(wire.x1,wire.y1,wire.x2,wire.y2)}</g>)}
+  {drawing.wires.map((wire,index)=><g key={index}>{line(wire.x1,wire.y1,wire.x2,wire.y2,false,wire.difference)}</g>)}
   {(drawing.continuationLabels??[]).map((label,index)=><text key={index} class="continuation" x={label.x} y={label.y}>{label.text}</text>)}
   {Array.from(drawing.symbols.reduce((rows,symbol)=>rows.set(symbol.y,Math.min(rows.get(symbol.y)??Infinity,symbol.instruction.sourceLine)),new Map<number,number>()).entries()).map(([y,sourceLine])=><text key={y} class="step-label" x={drawing.left-9} y={y+4} text-anchor="end">{sourceLine}</text>)}
   {/* Match Mitsubishi: paint each glyph after its hit target and selection frame so its leads stay visible. */}
@@ -78,7 +90,7 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
    onClick={()=>onSelect(symbol.instruction)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelect(symbol.instruction);}}}
    onContextMenu={event=>onContextMenu(event,symbol.instruction)}>
    <title>{`元ファイル ${symbol.instruction.sourceLine}行\n${symbol.instruction.opcode} ${symbol.instruction.operands.join(' ')}${symbol.comment?'\n'+symbol.comment:''}`}</title>
-   <SelectionRect phase="frame" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} className="kv-hit" {...hitBounds(symbol)}/>
+   <SelectionRect phase="frame" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} className="kv-hit" difference={symbol.instruction.difference?.kind} {...hitBounds(symbol)}/>
    <g pointer-events="none">
     {glyph(symbol)}
     {symbol.commentLines.length>0&&<CommentText text={symbol.comment} x={symbol.kind==='contact'||symbol.kind==='coil'||symbol.kind==='inline'?symbol.x+symbol.width/2:symbol.x+14}

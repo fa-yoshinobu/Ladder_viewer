@@ -1,8 +1,9 @@
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace LadderViewer;
 
-internal sealed record CsvFilePayload(string Name, string Base64, string Folder);
+internal sealed record CsvFilePayload(string Name, string Base64, string Folder, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RelativePath = null);
 internal sealed record CsvSelectionResult(IReadOnlyList<CsvFilePayload> Files, IReadOnlyList<string> Warnings);
 
 internal static class CsvFileSelection
@@ -15,13 +16,18 @@ internal static class CsvFileSelection
 
     public static CsvSelectionResult ReadFolders(IEnumerable<string> folderPaths)
     {
-        var files = folderPaths.SelectMany(FolderFiles).ToArray();
+        var roots = folderPaths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var files = roots.SelectMany(FolderFiles).ToArray();
         if (files.Length == 0) throw new IOException("選択したフォルダー内にCSV/MNMファイルがありません。");
-        return ReadSelected(files);
+        return ReadSelected(files, roots);
     }
 
-    public static CsvSelectionResult ReadPaths(IEnumerable<string> paths) => ReadSelected(
-        paths.Select(Path.GetFullPath).SelectMany(path => Directory.Exists(path) ? FolderFiles(path) : new[] { path }));
+    public static CsvSelectionResult ReadPaths(IEnumerable<string> paths)
+    {
+        var selected = paths.Select(Path.GetFullPath).ToArray();
+        var roots = selected.Where(Directory.Exists).ToArray();
+        return ReadSelected(selected.SelectMany(path => Directory.Exists(path) ? FolderFiles(path) : new[] { path }), roots);
+    }
 
     private static IEnumerable<string> FolderFiles(string folderPath)
     {
@@ -40,7 +46,7 @@ internal static class CsvFileSelection
             .ThenBy(path => path, StringComparer.Ordinal);
     }
 
-    public static CsvSelectionResult ReadSelected(IEnumerable<string> selectedPaths)
+    public static CsvSelectionResult ReadSelected(IEnumerable<string> selectedPaths, string[]? roots = null)
     {
         var selected = selectedPaths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         if (selected.Length == 0) throw new IOException("CSV/MNMファイルが選択されていません。");
@@ -133,8 +139,19 @@ internal static class CsvFileSelection
         var folders = loaded.Keys.Select(path => Path.GetDirectoryName(path)!).Distinct(StringComparer.OrdinalIgnoreCase)
             .Select((folder, index) => (folder, key: index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
             .ToDictionary(item => item.folder, item => item.key, StringComparer.OrdinalIgnoreCase);
-        var files = loaded.Select(pair => new CsvFilePayload(names[pair.Key], Convert.ToBase64String(pair.Value), folders[Path.GetDirectoryName(pair.Key)!])).ToArray();
+        var files = loaded.Select(pair => new CsvFilePayload(names[pair.Key], Convert.ToBase64String(pair.Value), folders[Path.GetDirectoryName(pair.Key)!], RelativeName(pair.Key, roots))).ToArray();
         return new CsvSelectionResult(files, warnings);
+    }
+
+    private static string? RelativeName(string path, string[]? roots)
+    {
+        foreach (var root in (roots ?? []).OrderByDescending(root => root.Length))
+        {
+            var relative = Path.GetRelativePath(root, path);
+            if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar)) continue;
+            return (roots!.Length > 1 ? Path.GetFileName(Path.TrimEndingDirectorySeparator(root)) + "/" : "") + relative.Replace('\\', '/');
+        }
+        return null;
     }
 
     private static bool IsProgramFile(string path) => IsCsv(path) || string.Equals(Path.GetExtension(path), ".mnm", StringComparison.OrdinalIgnoreCase);

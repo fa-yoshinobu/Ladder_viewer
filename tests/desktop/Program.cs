@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using LadderViewer;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -12,6 +13,13 @@ void Check(bool condition, string name) { if (!condition) throw new Exception(na
 string Folder(string name) { var path = Path.Combine(root, name); Directory.CreateDirectory(path); return path; }
 string Write(string folder, string name, string text, Encoding? encoding = null) { var path = Path.Combine(folder, name); File.WriteAllText(path, text, encoding ?? new UTF8Encoding(false)); return path; }
 
+{
+    var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
+    using var single = JsonDocument.Parse(JsonSerializer.Serialize(new CsvFilePayload("MAIN.csv", "YQ==", "0"), options));
+    Check(!single.RootElement.TryGetProperty("relativePath", out _), "single-file payload omits absent relative path");
+    using var folder = JsonDocument.Parse(JsonSerializer.Serialize(new CsvFilePayload("MAIN.csv", "YQ==", "0", "nested/MAIN.csv"), options));
+    Check(folder.RootElement.GetProperty("relativePath").GetString() == "nested/MAIN.csv", "folder payload retains relative path");
+}
 foreach (var item in new (string Name, Encoding Encoding)[] {
     ("utf8", new UTF8Encoding(false)), ("utf8-bom", new UTF8Encoding(true)),
     ("utf16le", new UnicodeEncoding(false, true)), ("utf16be", new UnicodeEncoding(true, true)),
@@ -277,5 +285,14 @@ if (OperatingSystem.IsWindows())
     var csvResult = CsvFileSelection.ReadSelected(new[] { csv, explicitKeyence });
     Check(csvResult.Files.Count == 3 && csvResult.Warnings.Count == 0,
         "explicit Keyence comments do not suppress automatic Mitsubishi comments for CSV");
+}
+{
+    var folder = Folder("relative-program-identities");
+    var nested = Path.Combine(folder, "axis"); Directory.CreateDirectory(nested);
+    Write(nested, "MAIN.csv", ProgramCsv); Write(nested, "comment.csv", CommentCsv);
+    var files = CsvFileSelection.ReadFolder(folder).Files;
+    Check(files.Single(file => file.Name.EndsWith("MAIN.csv")).RelativePath == "axis/MAIN.csv", "folder comparison retains relative program identity without changing display name");
+    Check(files.All(file => file.RelativePath is { } relative && !Path.IsPathRooted(relative) && !relative.Contains(folder)), "relative identities do not expose absolute input folders");
+    Check(CsvFileSelection.ReadSelected(new[] { Path.Combine(nested, "MAIN.csv") }).Files.All(file => file.RelativePath is null), "individual file selection remains independent from folder identities");
 }
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

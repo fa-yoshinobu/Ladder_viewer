@@ -1,3 +1,4 @@
+import {DifferenceToolbar} from './DifferenceToolbar';
 import {Fragment} from 'preact';
 import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
 import {differenceLabels,type ComparisonChange,type Instruction,type Program,type Network} from './model';
@@ -18,19 +19,8 @@ export function comparisonBlockSize(group:{source:Network[];target:Network[]},ro
  return {sharedScroll,sourceHeight:sourceHeight+bar,targetHeight:targetHeight+bar,height:Math.max(sourceHeight,targetHeight,rowHeight*zoom)+bar};
 }
 
-// Next/previous circuit block with differences, relative to the block at the top of the view.
-// anchor is the block last jumped to when the end of the list stopped it short of the top; it stands in for the top block.
-export function adjacentDifferenceBlock(blocks:{top:number;changes:unknown[]}[],scrollTop:number,direction:1|-1,anchor=-1):number {
- const differences=blocks.flatMap((block,index)=>block.changes.length?[index]:[]);
- if(!differences.length)return -1;
- if(direction>0){
-  let current=anchor;
-  blocks.forEach((block,index)=>{if(block.top<=scrollTop+1)current=Math.max(current,index);});
-  return differences.find(index=>index>current)??-1;
- }
- const before=differences.filter(index=>anchor>=0?index<anchor:blocks[index].top<scrollTop-1);
- return before.at(-1)??-1;
-}
+export {adjacentDifferenceBlock} from './compareCore';
+import {adjacentDifferenceBlock} from './compareCore';
 
 export function differenceSummary(changes:ComparisonChange[]):string {
  const counts=new Map<ComparisonChange['kind'],number>();
@@ -38,7 +28,7 @@ export function differenceSummary(changes:ComparisonChange[]):string {
  return [...counts].map(([kind,count])=>differenceLabels[kind]+count).join('・');
 }
 
-export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,showComments,viewMode='wrap',navigationTarget}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;showComments:boolean;viewMode?:LadderViewMode;navigationTarget?:{instructionId:string;side:CompareSide;request:number}}) {
+export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,targetComments=comments,showComments,viewMode='wrap',navigationTarget}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;targetComments?:DeviceComments;showComments:boolean;viewMode?:LadderViewMode;navigationTarget?:{instructionId:string;side:CompareSide;request:number}}) {
  const comparison=program.comparison!;
  const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null);
  const handledNavigation=useRef<number|undefined>(undefined);
@@ -183,18 +173,17 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
    return <button key={index} class={`nav-item ${active===index?'active':''} ${block.changes.length?'has-differences':''}`} onClick={()=>jump(index)}><span class="number">{String(index+1).padStart(3,'0')}</span><div><strong>{n.title||n.pointer?.op||`STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ')}</small>{!!block.changes.length&&<small class="diff-nav-count">相違 {block.changes.length}行</small>}</div></button>;
   })}</div></aside>
   <div class="compare-area">
-   <div class="diff-toolbar"><div class="diff-legend"><span class="diff-changed">変更</span><span class="diff-added">追加（先のみ）</span><span class="diff-removed">削除（元のみ）</span><span class="connection-legend">配線<i class="wire-swatch wire-removed"/>元の接続<i class="wire-swatch wire-added"/>先の接続</span>{comparison.shiftedSteps>0&&<span class="shifted-steps">ステップ移動 {comparison.shiftedSteps}行（差分対象外）</span>}</div><div class="diff-navigation"><button disabled={differenceDestination(-1)<0} onClick={()=>moveDifference(-1)}>前の差分</button><select aria-label="差分のある回路" disabled={!differenceBlocks.length} value={currentBlock} onChange={e=>goDifferenceBlock(Number(e.currentTarget.value))}><option value={-1} disabled>{differenceBlocks.length?`差分のある回路 ${differenceBlocks.length}`:'差分なし'}</option>{differenceBlocks.map((blockIndex,order)=>{
-    const block=blocks[blockIndex],n=block.source[0]??block.target[0];
-    return <option value={blockIndex} key={blockIndex}>{order+1}/{differenceBlocks.length} · {String(blockIndex+1).padStart(3,'0')} {(n.title||n.pointer?.op||`STEP ${n.step}`).split('\n')[0]} · {differenceSummary(block.changes)}</option>;
-   })}</select><button disabled={differenceDestination(1)<0} onClick={()=>moveDifference(1)}>次の差分</button></div></div>
+   <DifferenceToolbar current={currentBlock} previous={differenceDestination(-1)>=0} next={differenceDestination(1)>=0} onPrevious={()=>moveDifference(-1)} onNext={()=>moveDifference(1)} onChoose={goDifferenceBlock}
+    options={differenceBlocks.map(index=>{const block=blocks[index],n=block.source[0]??block.target[0];return {index,label:String(index+1).padStart(3,'0')+' '+(n.title||n.pointer?.op||`STEP ${n.step}`).split('\n')[0]+' · '+differenceSummary(block.changes)};})}
+    extra={comparison.shiftedSteps>0&&<span class="shifted-steps">ステップ移動 {comparison.shiftedSteps}行（差分対象外）</span>}/>
    {!!previewChanges.length&&<div class="diff-preview">{previewChanges.map(change=><Fragment key={change.alignmentRow}><div class={`diff-${change.kind}`}><b>比較元 · STEP {change.sourceStep||'—'}</b><code>{change.sourceText||'（なし）'}</code></div><div class={`diff-${change.kind}`}><b>比較先 · STEP {change.targetStep||'—'}</b><code>{change.targetText||'（なし）'}</code></div></Fragment>)}</div>}
    <div class="compare-columns">{(['source','target'] as const).map(side=><section class="compare-column" key={side}>
     <div class="compare-heading"><strong>{side==='source'?'比較元':'比較先'}</strong><span>{side==='source'?comparison.sourceProject:comparison.targetProject}</span><b>{side==='source'?comparison.sourceName:comparison.targetName}</b></div>
     <div class="diagram compare-scroll" role="region" tabIndex={0} ref={side==='source'?sourceScroll:targetScroll} aria-label={`${side==='source'?'比較元':'比較先'}ラダー表示`} onScroll={e=>scroll(side,e.currentTarget)}>
      <div style={{height:total?total.top+total.height+8:0,minWidth:width+24,position:'relative'}}>{visible.map(block=><div class={`comparison-block ${block.changes.length?'has-differences':''}`} key={block.top} style={{position:'absolute',top:block.top,left:12,width,minHeight:block.height}}>
       {block[side].length ? block.sharedScroll ? <div class="network-scroll comparison-group-scroll" style={{width,height:side==='source'?block.sourceHeight:block.targetHeight}} role="region" aria-label="長い回路の横スクロール" tabIndex={0}>
-       <div style={{width:Math.max(LADDER_WIDTH,...block[side].map(n=>networkSize(n,rowHeight,viewMode).width))*zoom}}>{block[side].map(network=><div class={`network ${gridLayout(network).pages===1?'fixed-short-network':''}`} key={network.id} data-network-id={network.id} style={{width:networkSize(network,rowHeight,viewMode).width*zoom}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} scrollContainer={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={comments} showComments={showComments}/></div>)}</div>
-      </div> : block[side].map(network=><div class="network" key={network.id} data-network-id={network.id} style={{width}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={comments} showComments={showComments}/></div>) : <div class="missing-circuit">この範囲に回路なし</div>}
+       <div style={{width:Math.max(LADDER_WIDTH,...block[side].map(n=>networkSize(n,rowHeight,viewMode).width))*zoom}}>{block[side].map(network=><div class={`network ${gridLayout(network).pages===1?'fixed-short-network':''}`} key={network.id} data-network-id={network.id} style={{width:networkSize(network,rowHeight,viewMode).width*zoom}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} scrollContainer={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={side==='target'?targetComments:comments} showComments={showComments}/></div>)}</div>
+      </div> : block[side].map(network=><div class="network" key={network.id} data-network-id={network.id} style={{width}}><NetworkDrawing network={network} viewMode={viewMode} showMasterScope={false} zoom={zoom} rowHeight={rowHeight} selected={selected} choose={i=>selectInstruction(i,side)} navigate={id=>navigate(id,side)} comments={side==='target'?targetComments:comments} showComments={showComments}/></div>) : <div class="missing-circuit">この範囲に回路なし</div>}
       {block.scopes[side].map(scope=><div key={scope.network.id} style={{position:'absolute',top:scope.top,left:0,width,height:scope.height,pointerEvents:'none'}}>{!!scope.ranges.length&&<MasterControlScope network={scope.network} ranges={scope.ranges} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}{!!scope.controls.length&&<ControlFlowScope network={scope.network} ranges={scope.controls} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}</div>)}
      </div>)}</div>
     </div>

@@ -296,7 +296,7 @@ internal sealed class AboutWindow : Form
             var top = (Height - titleSize.Height - 54 * s) / 2;
             g.DrawString(product, title, Brushes.White, textLeft, top);
             using (var soft = new SolidBrush(ColorTranslator.FromHtml("#D9E6FF")))
-                g.DrawString("MELSEC命令リストのラダー表示・比較", tagline, soft, textLeft + 2 * s, top + titleSize.Height - 4 * s);
+                g.DrawString("MELSEC/KEYENCE ラダー表示・比較", tagline, soft, textLeft + 2 * s, top + titleSize.Height - 4 * s);
 
             var badgeText = "Version " + version;
             var badgeSize = g.MeasureString(badgeText, badgeFont);

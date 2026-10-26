@@ -115,7 +115,7 @@ internal sealed class ViewerWindow : Form
                 dialog.ShowDialog(this);
                 return;
             }
-            if (action is not ("open-csv" or "open-folder" or "open-startup") || !root.TryGetProperty("token", out var value)
+            if (action is not ("open-csv" or "open-folder" or "open-startup" or "read-dropped") || !root.TryGetProperty("token", out var value)
                 || value.ValueKind != JsonValueKind.Number || !value.TryGetInt64(out token) || token < 0) return;
             if (action == "open-startup" && startupPaths.Length == 0) return;
         }
@@ -129,11 +129,26 @@ internal sealed class ViewerWindow : Form
         try
         {
             CsvSelectionResult result;
-            if (action == "open-startup")
+            if (action == "read-dropped")
+            {
+                var paths = request.AdditionalObjects.OfType<CoreWebView2File>().Select(file => file.Path).ToArray();
+                if (paths.Length == 0) throw new IOException("読み込むファイルがありません。");
+                Reply(new { type = "csv-selection", token, status = "loading" });
+                result = await Task.Run(() => CsvFileSelection.ReadPaths(paths));
+            }
+            else if (action == "open-startup")
             {
                 Reply(new { type = "csv-selection", token, status = "loading" });
                 var paths = startupPaths;
                 startupPaths = [];
+                if (paths.Length > 0 && paths[0] == "--compare")
+                {
+                    if (paths.Length != 3) throw new IOException("--compare の後に比較元と比較先のファイルまたはフォルダーを指定してください。");
+                    var source = await Task.Run(() => CsvFileSelection.ReadPaths(new[] { paths[1] }));
+                    var target = await Task.Run(() => CsvFileSelection.ReadPaths(new[] { paths[2] }));
+                    Reply(new { type = "csv-selection", token, status = "ok", comparison = new { source = source.Files, target = target.Files, sourceWarnings = source.Warnings, targetWarnings = target.Warnings }, warnings = source.Warnings.Concat(target.Warnings).ToArray() });
+                    return;
+                }
                 result = await Task.Run(() => CsvFileSelection.ReadPaths(paths));
             }
             else if (action == "open-folder")

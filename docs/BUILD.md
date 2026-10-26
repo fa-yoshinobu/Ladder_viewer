@@ -34,6 +34,16 @@ npm run windows:build
 
 `npm run build` は内部画面だけを作成します。`dotnet publish` を直接使う場合も、先に内部画面をビルドしてください。
 
+## 引数を指定して起動する
+
+```powershell
+LadderViewer.exe "プログラム.csv"
+LadderViewer.exe --compare "比較元フォルダー" "比較先フォルダー"
+LadderViewer.exe --compare "比較元.mnm" "比較先.mnm"
+```
+
+`--compare` の後は比較元・比較先の順に2件指定します。ファイルとフォルダーのどちらも指定できます。
+
 ## GitHub Releases
 
 [Release Windows](../.github/workflows/release.yml) は `v0.1.0` 形式のタグをpushすると実行されます。タグを付ける前に、リリースする変更をGitHubへ反映してください。
@@ -53,7 +63,7 @@ dotnet run --project tests/desktop/Check.csproj
 ```
 
 テストは架空データを使用します。シンボリックリンクの作成権限がない環境では、C#チェックのリンク用fixtureがスキップされます。
-未実行チェックと画面確認の残件は [TODO](TODO.md) にまとめています。
+実施した画面確認と計測は [確認記録](VERIFICATION.md)、残件は [TODO](TODO.md) にまとめています。
 
 ## 構成と管理対象
 
