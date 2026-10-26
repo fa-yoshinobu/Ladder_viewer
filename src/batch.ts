@@ -1,4 +1,4 @@
-import Papa from 'papaparse';
+import {csvRows} from './gxFormat';
 import { isComparisonHeader, parseComparison } from './comparison';
 import type { DeviceComments } from './comments';
 import { decodeCsv, parseProgram, type Program } from './model';
@@ -16,9 +16,9 @@ export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total
   for (const [index, file] of ordered.entries()) {
     try {
       const text = decodeCsv(file.bytes);
-      const headers = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { delimiter: '\t', preview: 10, skipEmptyLines: true }).data;
+      const headers = csvRows(text,10).data;
       if (headers.some(row => row[0] === 'デバイス名' && row.length > 1 && !row.includes('命令'))) {
-        const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { delimiter: '\t', skipEmptyLines: true });
+        const parsed = csvRows(text);
         if (parsed.errors.length) throw new Error(parsed.errors[0].message);
         result.comments.push(file.name);
         if (namedTables.has(folderOf(file)) && !/^comment\.csv$/i.test(file.name.split(/[\\/]/).at(-1)!)) {

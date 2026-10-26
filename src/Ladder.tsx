@@ -8,7 +8,7 @@ import { isControlMarker } from './controlFlow';
 import { CommentText } from './CommentText';
 import { deviceComment, type DeviceComments } from './comments';
 import { strokeCoordinates, type StrokeCoordinates } from './drawing';
-import { CELL, BASELINE, LEFT_GUTTER, displayGrid, networkSize, drawingPages, isCoil, drawingMetrics, noteLayout, NOTE_LINE_HEIGHT, type GridSymbol, type LadderViewMode } from './layout';
+import { CELL, BASELINE, LEFT_GUTTER, displayGrid, networkSize, drawingPages, isCoil, drawingMetrics, noteLayout, NOTE_LINE_HEIGHT, inlineSTLines, inlineSTHeight, type GridSymbol, type LadderViewMode } from './layout';
 
 const line = (c: StrokeCoordinates, x1: number, y1: number, x2: number, y2: number, className = 'wire') =>
   <line x1={c.x(x1)} y1={c.y(y1)} x2={c.x(x2)} y2={c.y(y2)} class={className}/>;
@@ -45,11 +45,31 @@ function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comment
     aria-label={`${i.op} ${i.operands.join(' ')}`} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose)}
     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i); } }}>
     <title>{`${i.op} ${i.operands.join(' ')} / CSV ${i.sourceRow}行\n${i.note}${i.difference ? '\n'+differenceLabels[i.difference.kind]+' / 相手側: '+(i.difference.otherText||'なし') : ''}`}</title>
-    <rect class="hit" x={x + 1} y={s.row * rowHeight + 4} width={w - 2} height={i.pins ? i.pins.length * 22 + 54 + baseline - BASELINE : rowHeight - 8} rx={2}/>
+    <rect class="hit" x={x + (i.inlineST?6:1)} y={i.inlineST?y-11:s.row * rowHeight + 4} width={w - (i.inlineST?12:2)} height={s.fb?s.fb.rows*rowHeight-8:i.inlineST?inlineSTHeight(i,s.span):i.pins ? i.pins.length * 22 + 54 + baseline - BASELINE : rowHeight - 8} rx={2}/>
     {i.op === 'NOP' ? null : marker ? <>
       <rect class={`command-outline flow-marker ${i.controlFlow?.kind==='loop'?'flow-loop':''}`} x={X(x+6)} y={Y(y-12)} width={X(x+w-6)-X(x+6)} height={Y(y+12)-Y(y-12)}/>
       <text class="command-text" x={x+14} y={y+4}><tspan class={i.difference?.opChanged?'diff-value':''}>{i.op}</tspan>{i.operands.map((operand,index)=><>{' '}<Operand instruction={i} index={index}/></>)}</text>
       {flow&&<text class="flow-note" x={x+14} y={y+26}>{flowArrow}{flow.label}{flow.targetStep!==undefined&&<>{scopeTarget?' ～ ':' → '}{flow.targetId&&navigate?<tspan class="flow-target" role="button" tabIndex={0} aria-label={`STEP ${flow.targetStep||'—'}へ移動`} onClick={event=>{event.stopPropagation();navigate(flow.targetId!);}} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();navigate(flow.targetId!);}}}>STEP {flow.targetStep||'—'}</tspan>:<>STEP {flow.targetStep||'—'}</>}</>}</text>}
+    </> : s.fb ? <>
+      <rect class="fb-outline" x={X(x)} y={Y(y-22)} width={X(x+w)-X(x)} height={Y(s.fb.rows*rowHeight-8)-Y(y-22)}/>
+      <text class="fb-title" x={x+w/2} y={y-5} text-anchor="middle">{s.fb.model.instance} ({s.fb.model.name})</text>
+      {line(c,x,rowHeight-8,x+w,rowHeight-8)}
+      {s.fb.ports.map(({port,row,input})=><g key={`${input}-${port.definition.id}`} data-instruction-id={port.definition.id} class={`symbol ${selected===port.definition.id?'chosen':''}`} role="button" tabIndex={0}
+        onClick={event=>{event.stopPropagation();choose(port.definition);}} onContextMenu={event=>instructionMenu(event,port.definition,comments,choose)}
+        onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();choose(port.definition);}}}>
+        <title>{port.definition.op}</title>
+        <rect class="hit" x={input?x+1:x+w/2} y={row*rowHeight+4} width={w/2-2} height={rowHeight-8}/>
+        <text class="fb-pin" x={input?x+8:x+w-8} y={row*rowHeight+baseline-8} text-anchor={input?'start':'end'}>{port.name}</text>
+        {showComments&&<CommentText text={deviceComment(`${s.fb!.model.instance}.${port.name}`,comments)} x={input?x+8:x+w/2+8} y={row*rowHeight+baseline+16} width={w/2-16}/>}
+      </g>)}
+    </> : i.inlineST ? <>
+      {line(c,x,y,x+6,y,inputClass)}{line(c,x+w-6,y,x+w,y,outputClass)}
+      <rect class="command-outline" x={X(x+6)} y={Y(y-11)} width={X(x+w-6)-X(x+6)} height={Y(y-11+inlineSTHeight(i,s.span))-Y(y-11)}/>
+      <text class="command-text" x={x+14} y={y+4}>{i.op}</text>
+      <foreignObject x={x+14} y={y+14} width={w-28} height={inlineSTHeight(i,s.span)-28}><pre class="inline-st-code">{inlineSTLines(i,s.span).join('\n')}</pre></foreignObject>
+    </> : s.value!==undefined ? <>
+      {line(c,x,y,x+w,y,inputClass)}
+      <text class={`device fb-binding ${s.valueEnd?'fb-binding-input':''}`} x={s.valueEnd?x+w-8:x+8} y={y-10}><AddressText text={s.value} svg maxLength={s.valueEnd?12:undefined}/></text>
     </> : i.pins ? <>
       {line(c, x, y, x + 10, y,inputClass)}{line(c, x + w - 10, y, x + w, y,outputClass)}
       <rect class="fb-outline" x={X(x + 10)} y={Y(y - 22)} width={X(x + w - 10) - X(x + 10)} height={Y(y + i.pins.length * 22 + 30) - Y(y - 22)}/>
@@ -84,7 +104,7 @@ function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comment
         : <rect class="command-outline" x={X(x + 6)} y={Y(y - 11)} width={X(x + w - 6) - X(x + 6)} height={Y(y + 11) - Y(y - 11)}/>}
       <text class="command-text" x={x + 14} y={y + 4}><tspan class={i.difference?.opChanged?'diff-value':''}>{command}</tspan>{i.operands.map((operand,index) => <>{' '}<Operand instruction={i} index={index}/></>)}</text>
     </>}
-    {showComments && !i.pins && !marker && <CommentText text={description} x={centered ? cx : x + 14} y={y + 20} width={centered ? CELL - 4 : w - 28} centered={centered}/>}
+    {showComments && !s.fb && !i.inlineST && !i.pins && !marker && <CommentText text={description} x={centered ? cx : x + 14} y={y + 20} width={centered ? CELL - 4 : w - 28} centered={centered}/>}
   </g>;
 }
 

@@ -214,4 +214,11 @@ if (OperatingSystem.IsWindows())
     Check(string.Equals(Target(path, out _), second, StringComparison.OrdinalIgnoreCase) && Directory.GetFiles(folder, "*.lnk").Length == 1,
         "Send To registration updates the existing shortcut after moving the EXE");
 }
+{
+    var folder = Folder("comma-comment-table");
+    var program = Write(folder, "MAIN.csv", ProgramCsv);
+    Write(folder, "comment.csv", "デバイス名,Japanese/日本語\nM0,架空コメント\n");
+    var result = CsvFileSelection.ReadSelected(new[] { program });
+    Check(result.Files.Count == 2 && result.Warnings.Count == 0, "comma-separated comment.csv is automatically detected beside the program");
+}
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

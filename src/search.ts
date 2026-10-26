@@ -26,7 +26,9 @@ export function buildSearchIndex(
         [instruction.op, ...instruction.operands].join(' '),
         ...(step ? [step, 'STEP ' + step] : []),
         instruction.note,
-        instruction.statement
+        instruction.statement,
+        instruction.piStatement??'',
+        instruction.inlineST?.text??''
       ];
       for (const address of [instruction.op, ...instruction.operands]) {
         const parts = addressParts(address);

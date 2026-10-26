@@ -147,7 +147,7 @@ internal static class CsvFileSelection
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             count++;
-            var columns = line.Split('\t').Select(column => column.Trim().Trim('"').Replace("\"\"", "\"")).ToArray();
+            var columns = line.Split(line.Contains('\t') ? '\t' : ',').Select(column => column.Trim().Trim('"').Replace("\"\"", "\"")).ToArray();
             if (columns.Length > 1 && columns[0] == "デバイス名" && !columns.Contains("命令")) return true;
         }
         return false;

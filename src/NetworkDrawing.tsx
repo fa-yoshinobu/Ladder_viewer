@@ -38,7 +38,7 @@ export function instructionDrawingOffset(network:Network,instructionId:string,ro
  let symbol=grid.symbols.find(s=>s.instruction.id===instructionId),inside=0;
  if(!symbol){
   symbol=grid.symbols.find(s=>s.instruction.pins?.some(pin=>pin.id===instructionId));
-  if(symbol)inside=24+symbol.instruction.pins!.findIndex(pin=>pin.id===instructionId)*22;
+  if(symbol)inside=symbol.fb?(symbol.fb.ports.find(slot=>slot.port.definition.id===instructionId)!.row-symbol.row)*rowHeight:24+symbol.instruction.pins!.findIndex(pin=>pin.id===instructionId)*22;
  }
  if(!symbol){
   const instruction=network.instructions.find(i=>i.id===instructionId);

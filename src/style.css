@@ -209,3 +209,8 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .changed-operand{background:var(--ld-changed-fill);box-shadow:inset 4px 0 var(--ld-changed-stroke)}
 
 @media(max-width:1100px){.details{width:230px}.navigation{width:200px}.brand strong{font-size:16px}}
+
+.inline-st-code{margin:0;font:12px/18px Consolas,"MS Gothic",monospace;white-space:pre;color:var(--ld-text);overflow:hidden}
+.detail-st-code{margin:0;font:12px/1.5 Consolas,"MS Gothic",monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.fb-binding{font-size:11px;text-anchor:start}
+.fb-binding-input{text-anchor:end}

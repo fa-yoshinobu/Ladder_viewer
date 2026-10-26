@@ -1,4 +1,5 @@
 import type { Instruction, Logic, Network } from './model';
+import type {FunctionBlock,FunctionPort} from './functionBlocks';
 import { isComparisonCondition } from './instructions';
 import { isControlMarker, isMemoryControl } from './controlFlow';
 export const CELL = 74;
@@ -16,9 +17,19 @@ export const BASELINE = 28;
 export const PAGE_GAP = 22;
 export type LadderViewMode = 'wrap' | 'scroll';
 export const SCROLLBAR_HEIGHT = 16;
-export interface GridSymbol { instruction: Instruction; col: number; row: number; span: number; contact: boolean; inputDifference?:'added'|'removed'; outputDifference?:'added'|'removed'; }
+export interface GridSymbol { instruction: Instruction; col: number; row: number; span: number; contact: boolean; value?:string; valueEnd?:boolean; fb?:{model:FunctionBlock;rows:number;ports:{port:FunctionPort;row:number;input:boolean}[]}; inputDifference?:'added'|'removed'; outputDifference?:'added'|'removed'; }
 export interface GridWire { x1: number; y1: number; x2: number; y2: number; difference?:'added'|'removed'; }
 export interface GridLayout { symbols: GridSymbol[]; wires: GridWire[]; rows: number; pages: number; width: number; height: number; }
+export function inlineSTLines(instruction:Instruction,span=8):string[] {
+ const limit=Math.floor((span*CELL-28)/7.2),lines:string[]=[];
+ for(const source of (instruction.inlineST?.text??'').split(/\r\n?|\n/)){
+  let text='',units=0;
+  for(const c of source){const width=c.charCodeAt(0)>255?2:1;if(units+width>limit){lines.push(text);text='';units=0;}text+=c;units+=width;}
+  lines.push(text);
+ }
+ return lines;
+}
+export const inlineSTHeight=(instruction:Instruction,span=8)=>38+inlineSTLines(instruction,span).length*18;
 export function size(logic: Logic | null): { width: number; height: number } {
  if(!logic) return {width:0,height:1};
  if(logic.kind==='contact') return {width:isComparisonCondition(logic.instruction.op)||logic.instruction.op==='PHASE'?1+logic.instruction.operands.length:1,height:1};
@@ -75,6 +86,31 @@ export function gridLayout(n: Network): GridLayout {
   }
   placed.set(e,end);return end;
  }
+ if(n.functionBlock){
+  const fb=n.functionBlock,ports:NonNullable<GridSymbol['fb']>['ports']=[];let row=1;
+  const always=(condition:Logic|null)=>condition?.kind==='contact'&&condition.instruction.op==='LD'&&condition.instruction.operands[0]==='TRUE';
+  for(let index=0;index<Math.max(fb.inputs.length,fb.outputs.length);index++){
+   const input=fb.inputs[index],output=fb.outputs[index];let bottom=row;
+   if(input){
+    ports.push({port:input,row,input:true});
+    if(input.action){const action=input.action,i=action.instruction;
+     const end=action.condition&&!always(action.condition)?place(action.condition,0,row):{col:0,row,bottom:row};
+     if(i.op==='MOV'){route(end,3,row);symbols.push({instruction:i,col:3,row,span:1,contact:false,value:i.operands[0],valueEnd:true});}
+     else route(end,4,row);
+     bottom=Math.max(bottom,end.bottom);
+    }
+   }
+   if(output){
+    ports.push({port:output,row,input:false});
+    if(output.action){const i=output.action.instruction,span=i.op==='MOV'?5:isCoil(i)?1:1+i.operands.length,col=COLUMNS-span;
+     line(7,row,col,row);symbols.push({instruction:i,col,row,span,contact:false,value:i.op==='MOV'?i.operands[1]:undefined});
+    }
+   }
+   row=bottom+1;
+  }
+  symbols.unshift({instruction:fb.call,col:4,row:0,span:3,contact:false,fb:{model:fb,ports,rows:row}});
+  const result={symbols,wires:mergeWires(wires),rows:row,pages:1,width:LADDER_WIDTH,height:row*ROW};cache.set(n,result);return alignedGrid(n,result);
+ }
  let nextRow=n.masterControl?1:0,occupiedRows=nextRow;let maxCol=COLUMNS;
  let previousCondition:Logic|null|undefined;
  for(const action of n.actions) {
@@ -83,12 +119,12 @@ export function gridLayout(n: Network): GridLayout {
   const end=action.condition?place(action.condition,0,startRow):{col:0,row:startRow,bottom:startRow};
   const i=action.instruction;
   const coil=isCoil(i),marker=isControlMarker(i.op);
-  const span=marker?Math.max(4,1+i.operands.length):i.pins?5:coil?1:Math.max(1,1+i.operands.length);
+  const span=marker?Math.max(4,1+i.operands.length):i.inlineST?8:i.pins?5:coil?1:Math.max(1,1+i.operands.length);
   const target=marker&&!action.condition?0:Math.ceil((end.col+span)/COLUMNS)*COLUMNS-span;
   if(i.op!=='NOP'&&!isMemoryControl(i.op)&&(!marker||action.condition))route(end,target,startRow);
   symbols.push({instruction:i,col:target,row:startRow,span,contact:false});
   maxCol=Math.max(maxCol,target+span);
-  nextRow=startRow+(i.pins ? Math.ceil((i.pins.length*22+66)/ROW) : 1);
+  nextRow=startRow+(i.inlineST?Math.ceil((inlineSTHeight(i,span)+10)/ROW):i.pins ? Math.ceil((i.pins.length*22+66)/ROW) : 1);
   occupiedRows=Math.max(occupiedRows,end.bottom+1,nextRow);
   previousCondition=action.condition;
  }
@@ -162,6 +198,7 @@ export function noteLayout(network:Network,viewMode:LadderViewMode='wrap'):GridN
  for(const symbol of grid.symbols){
   owners.set(symbol.instruction.id,symbol);
   for(const pin of symbol.instruction.pins??[])owners.set(pin.id,symbol);
+  for(const slot of symbol.fb?.ports??[])owners.set(slot.port.definition.id,{...symbol,instruction:slot.port.definition,row:slot.row,col:slot.input?4:6,span:1,fb:undefined});
  }
  for(const instruction of network.instructions){
   if(!instruction.note)continue;
@@ -196,7 +233,7 @@ export function drawingPages(g:GridLayout,rowHeight=ROW,viewMode:LadderViewMode=
  const scrolling=viewMode==='scroll'&&g.pages>1;
  return Array.from({length:scrolling?1:g.pages},(_,page)=>({
   page,left:page*GRID_WIDTH,top:page*(g.rows*rowHeight+PAGE_GAP),width:scrolling?compactColumns(g)*CELL:GRID_WIDTH,
-  outputs:g.symbols.filter(s=>!s.contact&&s.instruction.op!=='NOP'&&!isControlMarker(s.instruction.op)&&(scrolling||s.col+s.span===(page+1)*COLUMNS))
+  outputs:g.symbols.filter(s=>!s.contact&&!s.fb&&s.instruction.op!=='NOP'&&!isControlMarker(s.instruction.op)&&(scrolling||s.col+s.span===(page+1)*COLUMNS))
  }));
 }
 
@@ -206,5 +243,5 @@ function alignedGrid(network:Network,grid:GridLayout):GridLayout {
  const row=(index:number)=>mapping?.[index]??index;
  const rows=mapping?Math.max(0,...mapping)+1:grid.rows;
  const wires=new Set(difference?.wires),inputs=new Set(difference?.inputs),outputs=new Set(difference?.outputs);
- return {...grid,rows,height:grid.pages*rows*ROW+(grid.pages>1?grid.pages*PAGE_GAP:0),symbols:grid.symbols.map(s=>({...s,row:row(s.row),inputDifference:inputs.has(s.instruction.id)?difference!.kind:undefined,outputDifference:outputs.has(s.instruction.id)?difference!.kind:undefined})),wires:grid.wires.map((w,index)=>({...w,y1:row(w.y1),y2:row(w.y2),difference:wires.has(index)?difference!.kind:undefined}))};
+ return {...grid,rows,height:grid.pages*rows*ROW+(grid.pages>1?grid.pages*PAGE_GAP:0),symbols:grid.symbols.map(s=>({...s,row:row(s.row),fb:s.fb?{...s.fb,rows,ports:s.fb.ports.map(slot=>({...slot,row:row(slot.row)}))}:undefined,inputDifference:inputs.has(s.instruction.id)?difference!.kind:undefined,outputDifference:outputs.has(s.instruction.id)?difference!.kind:undefined})),wires:grid.wires.map((w,index)=>({...w,y1:row(w.y1),y2:row(w.y2),difference:wires.has(index)?difference!.kind:undefined}))};
 }

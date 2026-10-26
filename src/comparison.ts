@@ -1,4 +1,4 @@
-import Papa from 'papaparse';
+import {csvRows,instructionFields,pinDefinition,isFunctionCall} from './gxFormat';
 import {diffArrays} from 'diff';
 import {gridLayout,drawingMetrics,ROW} from './layout';
 import {compareConnections} from './connections';
@@ -11,7 +11,7 @@ export const isComparisonHeader = (row: string[]) => row[0] === '行' && row.inc
 export function comparisonComment(raw: string, legacy: boolean): { kind: 'statement' | 'note'; text: string } | null {
   const text = raw.trim();
   if (text.startsWith(';')) return { kind: 'statement', text: text.slice(1).replace(/^\*/, '') };
-  if (!legacy || !text) return null;
+  if (!legacy || !text || isFunctionCall(text) || pinDefinition(text)) return null;
   if (/^\s/.test(raw)) return { kind: 'note', text: text.replace(/^\*/, '').replace(/^<(.*)>$/, '$1') };
   // Keep uppercase mnemonics (including unknown ones) and pointers; lowercase headings are text.
   if (/^[*[]/.test(text) || /[a-z]|[^\x00-\x7f]/.test(text.split(/\s/)[0])) return { kind: 'statement', text: text.replace(/^\*/, '') };
@@ -19,7 +19,7 @@ export function comparisonComment(raw: string, legacy: boolean): { kind: 'statem
 }
 
 export function parseComparison(text: string, name: string): Program {
-  const parsed = Papa.parse<string[]>(text.replace(/^\uFEFF/, ''), { delimiter: '\t', skipEmptyLines: true });
+  const parsed = csvRows(text);
   if (parsed.errors.length) throw new Error(`CSV形式エラー: ${parsed.errors[0].message}`);
   const header = parsed.data.findIndex(isComparisonHeader);
   if (header < 0) throw new Error('照合元・照合先の列がありません。');
@@ -62,7 +62,7 @@ export function parseComparison(text: string, name: string): Program {
   const circuits=(records:RecordLine[])=>{
     const instructions:Instruction[]=records.flatMap((record,index)=>{
       if(comparisonComment(record.raw,legacy))return [];
-      const [op='',...operands]=tokens(record.text);
+      const {op,operands}=instructionFields(record.text);
       return [{id:String(index),sourceRow:record.csvRow,step:record.step,op,operands,note:'',statement:''}];
     });
     return buildProgram(instructions,name).networks.map(network=>({
@@ -104,12 +104,12 @@ export function parseComparison(text: string, name: string): Program {
        else statement=[statement,comment.text].filter(Boolean).join('\n');
        return;
       }
-      const [op='',...operands]=tokens(value);
+      const {op,operands,note}=instructionFields(value);
       const other=pair[which==='source'?'target':'source'];
-      const otherTokens=tokens(other?.text??'');
+      const otherFields=instructionFields(other?.text??'');
       const change=changesByAlignment.get(index+1);
-      const difference=change?{kind:change.kind,opChanged:change.kind==='changed'&&op!==otherTokens[0],operandChanges:change.kind==='changed'?operands.flatMap((token,index)=>token!==otherTokens[index+1]?[index]:[]):[],otherText:other?.text??'',otherStep:other?.step??''}:undefined;
-      instructions.push({id:`${which}-row-${record.csvRow}`,sourceRow:record.csvRow,comparisonRow:index+1,step:record.step,op,operands,note:'',statement,difference});statement='';
+      const difference=change?{kind:change.kind,opChanged:change.kind==='changed'&&op!==otherFields.op,operandChanges:change.kind==='changed'?operands.flatMap((token,index)=>token!==otherFields.operands[index]?[index]:[]):[],otherText:other?.text??'',otherStep:other?.step??''}:undefined;
+      instructions.push({id:`${which}-row-${record.csvRow}`,sourceRow:record.csvRow,comparisonRow:index+1,step:record.step,op,operands,note,statement,difference});statement='';
     });
     return buildProgram(instructions,name);
   }
