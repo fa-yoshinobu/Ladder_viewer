@@ -2,29 +2,35 @@ using System.Text;
 
 namespace LadderViewer;
 
-internal sealed record CsvFilePayload(string Name, string Base64);
+internal sealed record CsvFilePayload(string Name, string Base64, string Folder);
 internal sealed record CsvSelectionResult(IReadOnlyList<CsvFilePayload> Files, IReadOnlyList<string> Warnings);
 
 internal static class CsvFileSelection
 {
     static CsvFileSelection() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
-    public static CsvSelectionResult ReadFolder(string folderPath)
+    public static CsvSelectionResult ReadFolder(string folderPath) => ReadFolders(new[] { folderPath });
+
+    public static CsvSelectionResult ReadFolders(IEnumerable<string> folderPaths)
     {
-        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folderPath));
-        if ((File.GetAttributes(folder) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != FileAttributes.Directory)
-            throw new IOException("リンクではないフォルダーを選択してください。");
-        var options = new EnumerationOptions
+        var files = new List<string>();
+        foreach (var folderPath in folderPaths)
         {
-            RecurseSubdirectories = true,
-            AttributesToSkip = FileAttributes.ReparsePoint,
-            IgnoreInaccessible = false,
-            ReturnSpecialDirectories = false
-        };
-        var files = Directory.EnumerateFiles(folder, "*", options).Where(IsCsv)
-            .OrderBy(path => Path.GetRelativePath(folder, path), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(path => path, StringComparer.Ordinal).ToArray();
-        if (files.Length == 0) throw new IOException("選択したフォルダー内にCSVファイルがありません。");
+            var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folderPath));
+            if ((File.GetAttributes(folder) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != FileAttributes.Directory)
+                throw new IOException("リンクではないフォルダーを選択してください。");
+            var options = new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                AttributesToSkip = FileAttributes.ReparsePoint,
+                IgnoreInaccessible = false,
+                ReturnSpecialDirectories = false
+            };
+            files.AddRange(Directory.EnumerateFiles(folder, "*", options).Where(IsCsv)
+                .OrderBy(path => Path.GetRelativePath(folder, path), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(path => path, StringComparer.Ordinal));
+        }
+        if (files.Count == 0) throw new IOException("選択したフォルダー内にCSVファイルがありません。");
         return ReadSelected(files);
     }
 
@@ -61,13 +67,14 @@ internal static class CsvFileSelection
             }
         }
 
-        var commentFolders = new HashSet<string>(explicitComments.Keys, StringComparer.OrdinalIgnoreCase);
         foreach (var folder in selected.Select(path => Path.GetDirectoryName(path)!).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             // An explicitly chosen comment table takes precedence over every automatic table in that folder.
             if (explicitComments.TryGetValue(folder, out var explicitCount))
             {
-                if (explicitCount > 1)
+                if (explicitCount > 1 && !loaded.Keys.Any(path =>
+                    string.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(Path.GetFileName(path), "comment.csv", StringComparison.OrdinalIgnoreCase)))
                     warnings.Add("同じフォルダーで複数のコメントCSVが選択されています。重複するデバイスのコメントは読込み順で上書きされます。");
                 continue;
             }
@@ -75,7 +82,8 @@ internal static class CsvFileSelection
             try
             {
                 candidates = Directory.EnumerateFiles(folder, "*", SearchOption.TopDirectoryOnly)
-                    .Where(IsCsv).Where(path => !loaded.ContainsKey(path))
+                    .Where(path => string.Equals(Path.GetFileName(path), "comment.csv", StringComparison.OrdinalIgnoreCase))
+                    .Where(path => !loaded.ContainsKey(path))
                     .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase).ThenBy(path => path, StringComparer.Ordinal).ToArray();
             }
             catch (Exception error) when (IsReadError(error))
@@ -83,7 +91,6 @@ internal static class CsvFileSelection
                 warnings.Add($"同じフォルダーのコメントCSVを確認できませんでした: {error.Message}");
                 continue;
             }
-            var comments = new List<string>();
             foreach (var path in candidates)
             {
                 try
@@ -91,22 +98,19 @@ internal static class CsvFileSelection
                     if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
                     if (!IsCommentCsv(() => File.OpenRead(path))) continue;
                     loaded.Add(path, File.ReadAllBytes(path));
-                    comments.Add(Path.GetFileName(path));
                 }
                 catch (Exception error) when (IsReadError(error))
                 {
                     warnings.Add($"自動読込み候補 {Path.GetFileName(path)} を読み込めませんでした: {error.Message}");
                 }
             }
-            if (comments.Count > 0) commentFolders.Add(folder);
-            if (comments.Count > 1)
-                warnings.Add($"同じフォルダーにコメントCSVが複数あります（{string.Join("、", comments)}）。重複するデバイスのコメントは読込み順で上書きされます。");
         }
 
-        if (commentFolders.Count > 1)
-            warnings.Add("複数フォルダーのコメントCSVを共通のコメント表へ読み込みます。重複するデバイスのコメントが異なる場合は、フォルダーごとに開いてください。");
         var names = DisplayNames(loaded.Keys);
-        var files = loaded.Select(pair => new CsvFilePayload(names[pair.Key], Convert.ToBase64String(pair.Value))).ToArray();
+        var folders = loaded.Keys.Select(path => Path.GetDirectoryName(path)!).Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select((folder, index) => (folder, key: index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
+            .ToDictionary(item => item.folder, item => item.key, StringComparer.OrdinalIgnoreCase);
+        var files = loaded.Select(pair => new CsvFilePayload(names[pair.Key], Convert.ToBase64String(pair.Value), folders[Path.GetDirectoryName(pair.Key)!])).ToArray();
         return new CsvSelectionResult(files, warnings);
     }
 

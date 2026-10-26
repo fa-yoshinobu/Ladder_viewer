@@ -60,8 +60,8 @@ for (const [encoding, programBytes, commentBytes] of [
   assert.deepEqual(parsed.programs.map(item => item.name), ['架空プログラム.csv']);
   assert.deepEqual(parsed.programs[0].instructions.map(item => item.operands), [['X12'], ['Y12']]);
   assert.deepEqual(parsed.comments, ['COMMENT.csv']);
-  assert.equal(parsed.deviceComments.X12, '試験入力');
-  assert.equal(parsed.deviceComments.Y12, '試験出力');
+  assert.equal(parsed.commentsByProgram['架空プログラム.csv'].X12, '試験入力');
+  assert.equal(parsed.commentsByProgram[parsed.programs[0].name].Y12, '試験出力');
 });
 
 test('native CSV rejects malformed or noncanonical Base64 instead of accepting corrupted input', () => {
@@ -94,7 +94,17 @@ test('native CSV retains empty CSV errors without discarding valid files and rej
   assert.deepEqual(parsed.programs.map(item => item.name), ['program.csv']);
   assert.deepEqual(parsed.programs[0].instructions.map(item => item.operands), [['X12'], ['Y12']]);
   assert.deepEqual(parsed.comments, ['COMMENT.csv']);
-  assert.equal(parsed.deviceComments.Y12, '試験出力');
+  assert.equal(parsed.commentsByProgram[parsed.programs[0].name].Y12, '試験出力');
   assert.deepEqual(parsed.errors.map(item => item.name), ['empty.csv']);
   assert.match(parsed.errors[0].message, /対応/);
+});
+
+
+test('native folder identity survives decoding without exposing or inferring paths',()=>{
+ const files=decodeNativeCsvFiles([
+  {...encodedFile('first.csv',utf8(program)),folder:'0'},
+  {...encodedFile('second.csv',utf8(program)),folder:'1'}
+ ]);
+ assert.deepEqual(files.map(file=>file.folder),['0','1']);
+ assert.throws(()=>decodeNativeCsvFiles([{name:'bad.csv',base64:'YQ==',folder:3}] as unknown as Parameters<typeof decodeNativeCsvFiles>[0]),/不正/);
 });

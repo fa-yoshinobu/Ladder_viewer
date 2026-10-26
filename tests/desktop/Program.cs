@@ -2,7 +2,7 @@ using System.Text;
 using LadderViewer;
 
 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
-var root = Path.Combine(AppContext.BaseDirectory, "fake-input");
+var root = Path.Combine(AppContext.BaseDirectory, "fake-input", Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(root);
 const string ProgramCsv = "\"ステップ番号\"\t\"命令\"\t\"I/O(デバイス)\"\n\"0\"\t\"OUT\"\t\"M0\"\n";
 const string CommentCsv = "\"test\"\n\"デバイス名\"\t\"Japanese/日本語\"\n\"M0\"\t\"架空の運転コメント\"\n";
@@ -19,28 +19,28 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
 {
     var folder = Folder(item.Name);
     var program = Write(folder, "MAIN.csv", ProgramCsv);
-    var comment = Write(folder, "renamed-table.CSV", CommentCsv, item.Encoding);
+    var comment = Write(folder, "COMMENT.csv", CommentCsv, item.Encoding);
     var result = CsvFileSelection.ReadSelected(new[] { program, program });
-    Check(result.Files.Count == 2 && result.Files.Any(file => file.Name == "renamed-table.CSV"), "comment encoding " + item.Name);
-    Check(Convert.FromBase64String(result.Files.Single(file => file.Name == "renamed-table.CSV").Base64).SequenceEqual(File.ReadAllBytes(comment)), "original bytes retained " + item.Name);
+    Check(result.Files.Count == 2 && result.Files.Any(file => file.Name == "COMMENT.csv"), "comment encoding " + item.Name);
+    Check(Convert.FromBase64String(result.Files.Single(file => file.Name == "COMMENT.csv").Base64).SequenceEqual(File.ReadAllBytes(comment)), "original bytes retained " + item.Name);
 }
 
 {
     var folder = Folder("scope");
     var program = Write(folder, "MAIN.csv", ProgramCsv);
-    Write(folder, "comments.csv", CommentCsv);
+    Write(folder, "comment.csv", CommentCsv);
     Write(folder, "OTHER.csv", ProgramCsv);
     Write(root, "parent-comments.csv", CommentCsv);
     Write(Folder("scope/nested"), "nested-comments.csv", CommentCsv);
     Write(folder, "false-header.csv", "\"デバイス名\"\t\"命令\"\n\"M0\"\t\"OUT\"");
     Write(folder, "late-header.csv", string.Join('\n', Enumerable.Repeat("\"p\"", 10)) + "\n" + CommentCsv);
     var result = CsvFileSelection.ReadSelected(new[] { program });
-    Check(result.Files.Select(file => file.Name).Order().SequenceEqual(new[] { "MAIN.csv", "comments.csv" }.Order()), "direct folder only; exclude programs, command header and late header");
+    Check(result.Files.Select(file => file.Name).Order().SequenceEqual(new[] { "MAIN.csv", "comment.csv" }.Order()), "direct folder only; exclude programs, command header and late header");
 }
 {
     var folder = Folder("blank-lines");
     var program = Write(folder, "MAIN.csv", ProgramCsv);
-    Write(folder, "comments.csv", "\n\n\n\n\n\n\n\n\n\n" + CommentCsv);
+    Write(folder, "comment.csv", "\n\n\n\n\n\n\n\n\n\n" + CommentCsv);
     Check(CsvFileSelection.ReadSelected(new[] { program }).Files.Count == 2, "first ten nonempty lines ignore blank lines");
 }
 {
@@ -57,8 +57,10 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
     var program = Write(folder, "MAIN.csv", ProgramCsv);
     Write(folder, "table-b.csv", CommentCsv); Write(folder, "table-a.csv", CommentCsv);
     var result = CsvFileSelection.ReadSelected(new[] { program });
-    Check(result.Files.Select(file => file.Name).SequenceEqual(new[] { "MAIN.csv", "table-a.csv", "table-b.csv" }), "automatic comments use stable ordinal file order");
-    Check(result.Warnings.Count == 1 && result.Warnings[0].Contains("複数"), "multiple comment candidate warning");
+    Check(result.Files.Count == 1 && result.Warnings.Count == 0, "automatic discovery ignores other comment filenames");
+    Write(folder, "CoMmEnT.CsV", CommentCsv);
+    var named = CsvFileSelection.ReadSelected(new[] { program });
+    Check(named.Files.Count == 2 && named.Files.Any(file => file.Name == "CoMmEnT.CsV"), "automatic discovery matches comment.csv without case sensitivity");
 }
 {
     var a = Folder("same-name-a"); var b = Folder("same-name-b");
@@ -67,14 +69,15 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
     var result = CsvFileSelection.ReadSelected(new[] { first, second });
     Check(result.Files.Count == 4 && result.Files.Select(file => file.Name).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 4, "same filenames in different folders remain distinct");
     Check(result.Files.All(file => !Path.IsPathRooted(file.Name) && file.Name.Split('/').Length == 2), "display name uses minimal folder prefix");
-    Check(result.Warnings.Any(w => w.Contains("複数フォルダー")), "cross-folder comment sharing warns instead of silently merging tables");
+    Check(result.Warnings.Count == 0 && result.Files.GroupBy(file => file.Folder).Count() == 2 &&
+        result.Files.GroupBy(file => file.Folder).All(group => group.Count() == 2), "each program and its comment table share only their own folder key");
 }
 {
     var folder = Folder("locked-auto"); var program = Write(folder, "MAIN.csv", ProgramCsv);
-    var comment = Write(folder, "locked.csv", CommentCsv);
+    var comment = Write(folder, "comment.csv", CommentCsv);
     using var locked = new FileStream(comment, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
     var result = CsvFileSelection.ReadSelected(new[] { program });
-    Check(result.Files.Count == 1 && result.Warnings.Any(w => w.Contains("locked.csv")), "unreadable automatic candidate warns and preserves selected program");
+    Check(result.Files.Count == 1 && result.Warnings.Any(w => w.Contains("comment.csv")), "unreadable automatic candidate warns and preserves selected program");
 }
 {
     var folder = Folder("locked-selected"); var program = Write(folder, "MAIN.csv", ProgramCsv);
@@ -85,11 +88,11 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
 }
 {
     var folder = Folder("bad-encoding"); var program = Write(folder, "MAIN.csv", ProgramCsv);
-    var bad = Path.Combine(folder, "bad.csv"); File.WriteAllBytes(bad, new byte[] { 0x81 });
+    var bad = Path.Combine(folder, "comment.csv"); File.WriteAllBytes(bad, new byte[] { 0x81 });
     var automatic = CsvFileSelection.ReadSelected(new[] { program });
     Check(automatic.Files.Count == 1 && automatic.Warnings.Count == 1, "invalid automatic header warns");
     var selected = CsvFileSelection.ReadSelected(new[] { program, bad });
-    Check(selected.Files.Count == 2 && Convert.FromBase64String(selected.Files.Single(file => file.Name == "bad.csv").Base64).SequenceEqual(new byte[] { 0x81 }), "invalid selected encoding remains available to normal CSV parser");
+    Check(selected.Files.Count == 2 && Convert.FromBase64String(selected.Files.Single(file => file.Name == "comment.csv").Base64).SequenceEqual(new byte[] { 0x81 }), "invalid selected encoding remains available to normal CSV parser");
 }
 {
     var threw = false;
@@ -117,8 +120,8 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
         "folder display names use the existing relative-name policy");
     Check(Convert.FromBase64String(result.Files.Single(file => file.Name == "COMPARISON.CSV").Base64).SequenceEqual(Encoding.UTF8.GetBytes(ComparisonCsv)),
         "folder selection preserves comparison CSV bytes");
-    Check(result.Files.Count(file => file.Name.EndsWith("COMMENT.csv", StringComparison.OrdinalIgnoreCase)) == 2 && result.Warnings.Any(warning => warning.Contains("複数フォルダー")),
-        "folder selection retains comment tables and shared-comment warnings");
+    Check(result.Files.Count(file => file.Name.EndsWith("COMMENT.csv", StringComparison.OrdinalIgnoreCase)) == 2 && result.Warnings.Count == 0,
+        "folder selection retains separate comment tables without cross-folder warnings");
 }
 {
     var folder = Folder("folder-empty"); Write(folder, "ignored.txt", ProgramCsv);
@@ -160,5 +163,15 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
         try { CsvFileSelection.ReadFolder(directoryLink); } catch (IOException) { threw = true; }
         Check(threw, "a selected reparse folder is rejected instead of traversed");
     }
+}
+{
+    var a = Folder("multi-folder-a"); var b = Folder("multi-folder-b");
+    Write(a, "FIRST.csv", ProgramCsv); Write(a, "comment.csv", CommentCsv);
+    Write(b, "SECOND.csv", ProgramCsv); Write(b, "comment.csv", CommentCsv);
+    var result = CsvFileSelection.ReadFolders(new[] { a, b, a });
+    Check(result.Files.Count == 4 && result.Files.GroupBy(file => file.Folder).Count() == 2,
+        "multiple selected folders retain separate comment identities and deduplicate files");
+    Check(result.Files.GroupBy(file => file.Folder).All(group => group.Count() == 2),
+        "unique program display names still carry the same folder key as their comment.csv");
 }
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

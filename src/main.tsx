@@ -38,7 +38,8 @@ document.documentElement.dataset.ladder = savedLadderPalette(document.documentEl
 function App() {
   const [program, setProgram] = useState<Program | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
-  const [deviceComments, setDeviceComments] = useState<DeviceComments>({});
+  const [commentsByProgram, setCommentsByProgram] = useState<Record<string, DeviceComments>>({});
+  const deviceComments = useMemo(() => commentsByProgram[program?.name ?? ''] ?? {}, [program, commentsByProgram]);
   const [showComments, setShowComments] = useState(true);
   const [theme, setTheme] = useState<Theme>(() => document.documentElement.dataset.theme as Theme);
   const [ladderPalette, setLadderPalette] = useState<LadderPalette>(() => document.documentElement.dataset.ladder as LadderPalette);
@@ -99,7 +100,7 @@ function App() {
         setError(failures.join('\n') || 'プログラムCSVがありません。コメントCSVはプログラム切替の対象外です。');
         return;
       }
-      setPrograms(result.programs); setDeviceComments(result.deviceComments); setError(failures.join('\n'));
+      setPrograms(result.programs); setCommentsByProgram(result.commentsByProgram); setError(failures.join('\n'));
 
       showProgram(result.programs[0]);
     };

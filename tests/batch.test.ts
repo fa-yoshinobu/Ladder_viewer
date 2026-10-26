@@ -10,7 +10,7 @@ test('batch keeps all programs sorted and excludes comment CSV by its columns',(
   {name:'02_SAMPLE.csv',bytes:encode(csv)}
  ]);
  assert.deepEqual(result.programs.map(p=>p.name),['02_SAMPLE.csv','10_SAMPLE.csv']);
- assert.deepEqual(result.comments,['renamed.csv']);assert.equal(result.deviceComments.M0,'運転');assert.deepEqual(result.errors,[]);
+ assert.deepEqual(result.comments,['renamed.csv']);assert.equal(result.commentsByProgram['02_SAMPLE.csv'].M0,'運転');assert.deepEqual(result.errors,[]);
  assert.ok(result.programs.every(p=>p.instructions.length===2));
 });
 test('a bad CSV does not discard other programs and progress includes every CSV',()=>{
@@ -22,4 +22,35 @@ test('different folders retain distinct program names and independent instructio
  const result=parseCsvBatch([{name:'a/main.csv',bytes:encode(csv)},{name:'b/main.csv',bytes:encode(csv.replace('"M0"','"M1"'))}]);
  assert.deepEqual(result.programs.map(p=>p.name),['a/main.csv','b/main.csv']);
  assert.deepEqual(result.programs.map(p=>p.instructions[1].operands),[['M0'],['M1']]);
+});
+
+
+test('comments are isolated by native folder keys even when display names omit folder paths',()=>{
+ const result=parseCsvBatch([
+  {name:'alpha.csv',folder:'0',bytes:encode(csv)},
+  {name:'a/COMMENT.csv',folder:'0',bytes:encode('デバイス名\tJapanese/日本語\nM0\t運転A')},
+  {name:'beta.csv',folder:'1',bytes:encode(csv)},
+  {name:'b/comment.csv',folder:'1',bytes:encode('デバイス名\tJapanese/日本語\nM0\t運転B')},
+  {name:'empty.csv',folder:'2',bytes:encode(csv)}
+ ]);
+ assert.equal(result.commentsByProgram['alpha.csv'].M0,'運転A');
+ assert.equal(result.commentsByProgram['beta.csv'].M0,'運転B');
+ assert.equal(result.commentsByProgram['empty.csv'].M0,undefined);
+ assert.notEqual(result.commentsByProgram['alpha.csv'],result.commentsByProgram['beta.csv']);
+ assert.deepEqual(result.errors,[]);
+});
+
+test('relative folder comments do not fall back to parent tables and comment.csv takes precedence',()=>{
+ const progress:number[]=[];
+ const result=parseCsvBatch([
+  {name:'a/main.csv',bytes:encode(csv)},
+  {name:'a/other.csv',bytes:encode('デバイス名\tJapanese/日本語\nM0\t別表')},
+  {name:'a/COMMENT.csv',bytes:encode('デバイス名\tJapanese/日本語\nM0\t同じ場所')},
+  {name:'a/sub/main.csv',bytes:encode(csv)},
+  {name:'b/main.csv',bytes:encode(csv)}
+ ],done=>progress.push(done));
+ assert.equal(result.commentsByProgram['a/main.csv'].M0,'同じ場所');
+ assert.equal(result.commentsByProgram['a/sub/main.csv'].M0,undefined);
+ assert.equal(result.commentsByProgram['b/main.csv'].M0,undefined);
+ assert.deepEqual(progress,[1,2,3,4,5]);
 });

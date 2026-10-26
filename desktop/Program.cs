@@ -132,15 +132,16 @@ internal sealed class ViewerWindow : Form
                 {
                     Description = "CSVを読み込むフォルダーを選択",
                     UseDescriptionForTitle = true,
-                    ShowNewFolderButton = false
+                    ShowNewFolderButton = false,
+                    Multiselect = true
                 };
                 if (dialog.ShowDialog(this) != DialogResult.OK)
                 {
                     Reply(new { type = "csv-selection", token, status = "cancelled" });
                     return;
                 }
-                var path = dialog.SelectedPath;
-                result = await Task.Run(() => CsvFileSelection.ReadFolder(path));
+                var paths = dialog.SelectedPaths;
+                result = await Task.Run(() => CsvFileSelection.ReadFolders(paths));
             }
             else
             {
