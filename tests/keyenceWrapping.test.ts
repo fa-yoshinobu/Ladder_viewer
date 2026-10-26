@@ -96,7 +96,7 @@ test('a vertical branch on a page cut is retained once with continued input line
 test('KEEP keeps its special two-input height while both independently wired ports move with the page',()=>{
  const base=drawing([...contacts(14),'LD MR50','KEEP MR60']),before=structuredClone(base);
  const keep=base.symbols.find(symbol=>symbol.kind==='keep')!;
- assert.deepEqual(keep.ports?.map(port=>port.name),['SET','RES']);assert.equal(keep.width,2*CELL);
+ assert.deepEqual(keep.ports?.map(port=>port.name),['SET','RES']);assert.equal(keep.width,CELL);
  const wrapped=keyenceViewDrawing(base,'wrap'),placed=wrapped.symbols.find(symbol=>symbol.kind==='keep')!,dy=placed.y-keep.y;
  assert.ok(dy>0);assert.equal(placed.width,keep.width);assert.equal(placed.height,keep.height);
  assert.deepEqual(placed.ports,keep.ports!.map(port=>({...port,y:port.y+dy})));
@@ -150,7 +150,7 @@ test('staggered parallel comparisons are re-placed inside twelve columns without
 test('wrap-only command packing keeps a CON chain ordered with every command inside one page',()=>{
  const base=drawing(['LD MR1','LDA DM100','CON','CAL+ DM100 #1 DM101','CON','MOV DM101 DM102','CON','CAL* DM102 #2 DM103','CON','STA DM104']);
  const before=structuredClone(base),wrapped=keyenceViewDrawing(base,'wrap');
- const commands=wrapped.symbols.filter(symbol=>symbol.kind==='command');
+ const commands=wrapped.symbols.filter(symbol=>symbol.kind==='command'||symbol.kind==='calculation');
  assert.equal(wrapped.width,LADDER_WIDTH);
  assert.deepEqual(commands.map(symbol=>symbol.instruction.opcode),['LDA','CAL+','MOV','CAL*','STA']);
  assert.ok(commands.every(symbol=>symbol.x>=wrapped.left&&symbol.x+symbol.width<=wrapped.right-8));

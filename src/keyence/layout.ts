@@ -1,6 +1,7 @@
 import type {KeyenceInstruction,KeyenceProgram} from './model';
 import type {KeyenceExpression,KeyenceNetwork,KeyenceAction} from './logic';
 import {keyenceDeviceComment} from './comments';
+import {keyenceOutputStyle,keyenceNumberedDevice,type KeyenceOutputStyle} from './outputStyle';
 import {CELL as KEYENCE_CELL,LEFT_GUTTER as KEYENCE_LEFT,COLUMNS as KEYENCE_COLUMNS,ROW,COMMENT_ROW,BASELINE,PAGE_GAP} from '../ladderMetrics';
 import {continuationText} from '../continuation';
 import {placeSymbolColumn} from '../ladderGeometry';
@@ -9,7 +10,7 @@ export {KEYENCE_CELL,KEYENCE_LEFT,KEYENCE_COLUMNS};
 export interface KeyenceWire {x1:number;y1:number;x2:number;y2:number;difference?:'added'|'removed'}
 export interface KeyenceSymbol {
  instruction:KeyenceInstruction;x:number;y:number;width:number;
- kind:'contact'|'comparison'|'coil'|'command'|'inline'|'keep';negated:boolean;pulse:'rise'|'fall'|null;
+ kind:'contact'|'comparison'|'inline'|KeyenceOutputStyle['kind'];negated:boolean;pulse:'rise'|'fall'|null;
  label:string;comment:string;commentLines:string[];
  operation?:'rise'|'fall'|'invert';ports?:{name:'SET'|'RES';y:number;difference?:'added'|'removed'}[];height?:number;
  inputDifference?:'added'|'removed';outputDifference?:'added'|'removed';
@@ -44,9 +45,9 @@ export function wrapKeyenceText(text:string,width:number):string[] {
 export function keyenceInstructionComment(instruction:KeyenceInstruction,program:KeyenceProgram):string {
  if(instruction.comment)return instruction.comment;
  const comments=[...new Set(instruction.operands.map(address=>keyenceDeviceComment(address,program.deviceComments)).filter(Boolean))];
- if(instruction.opcode.toUpperCase()==='TMR'){
-  const timer=/^#(\d+)$/.exec(instruction.operands[0]??'');
-  const comment=timer&&keyenceDeviceComment('T'+timer[1],program.deviceComments);
+ const device=keyenceNumberedDevice(instruction);
+ if(device){
+  const comment=keyenceDeviceComment(device,program.deviceComments);
   if(comment&&!comments.includes(comment))comments.unshift(comment);
  }
  return comments.join(' / ');
@@ -65,8 +66,12 @@ function endColumn(expression:Component,column:number,wrap:boolean):number {
  const left=endColumn(expression.left,column,wrap);
  return expression.kind==='and'?endColumn(expression.right,left,wrap):Math.max(left,endColumn(expression.right,column,wrap));
 }
-const outputWidth=(instruction:KeyenceInstruction)=>instruction.opcode.toUpperCase()==='OUT'&&instruction.operands.length===1?1:
- Math.max(instruction.opcode.toUpperCase()==='KEEP'?2:1+instruction.operands.length,Math.ceil((visualLength(commandLabel(instruction))*7+24)/KEYENCE_CELL));
+const outputWidth=(instruction:KeyenceInstruction)=>{
+ const style=keyenceOutputStyle(instruction);
+ if(style.kind==='coil')return 1;
+ return style.kind==='command'?Math.max(1+instruction.operands.length,Math.ceil((visualLength(style.body)*7+24)/KEYENCE_CELL)):
+  Math.max(1,Math.ceil((Math.max(visualLength(style.body),visualLength(style.above))*7+24)/KEYENCE_CELL));
+};
 function actionEnd(action:KeyenceAction,column:number,wrap:boolean):number {
  for(const instruction of [action.instruction,...action.continuations??[]]){
   const span=outputWidth(instruction);column=symbolColumn(column,span,wrap)+span;
@@ -207,8 +212,8 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
      let previous=outputColumn;
      for(const {instruction,column:output,span} of positions){
       wire(x(previous),y(cursor),x(output),y(cursor));
-      const isCoil=instruction.opcode.toUpperCase()==='OUT'&&instruction.operands.length===1;
-      symbol(instruction,output,cursor,span,isCoil?'coil':'command',isCoil?instruction.operands[0]:commandLabel(instruction));previous=output+span;
+      const style=keyenceOutputStyle(instruction);
+      symbol(instruction,output,cursor,span,style.kind,style.kind==='coil'?style.body:commandLabel(instruction));previous=output+span;
      }
      wire(x(previous),y(cursor),right,y(cursor));
     }

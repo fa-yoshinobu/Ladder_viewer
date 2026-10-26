@@ -266,7 +266,7 @@ test('Keyence CON command chain survives STA and leaves an unconnected output as
  assert.equal(rung.instructions.filter(i=>i.opcode==='CON').length,3);
  assert.deepEqual(networks.flatMap(n=>n.warnings),[]);
  const drawing=layoutKeyenceNetwork(rung,p);
- const commands=drawing.symbols.filter(s=>s.kind==='command'),out=drawing.symbols.find(s=>s.kind==='coil')!;
+ const commands=drawing.symbols.filter(s=>['command','calculation'].includes(s.kind)),out=drawing.symbols.find(s=>s.kind==='coil')!;
  assert.deepEqual(commands.map(s=>s.instruction.opcode),['LDA','TBCD','STA','MOV']);
  assert.ok(commands.every(s=>s.y===commands[0].y));
  assert.ok(commands.slice(1).every((s,i)=>s.x>=commands[i].x+commands[i].width));

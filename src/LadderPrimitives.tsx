@@ -1,6 +1,6 @@
 import type {StrokeCoordinates} from './drawing';
 
-export type LadderGlyphKind='contact'|'coil'|'command'|'comparison'|'pulse'|'invert';
+export type LadderGlyphKind='contact'|'coil'|'command'|'comparison'|'pulse'|'invert'|'labeled-coil'|'calculation';
 export function LadderGlyph({kind,x,y,width,c,negated=false,pulse=null,inputClass='wire',outputClass='wire'}:{
  kind:LadderGlyphKind;x:number;y:number;width:number;c:StrokeCoordinates;negated?:boolean;pulse?:'rise'|'fall'|null;inputClass?:string;outputClass?:string;
 }){
@@ -25,7 +25,9 @@ export function LadderGlyph({kind,x,y,width,c,negated=false,pulse=null,inputClas
  </>;
  return <>
   {line(x,x+6,inputClass)}{line(x+width-6,x+width,outputClass)}
-  {kind==='comparison'?<path class="command-outline" d={`M${X(x+12)},${Y(y-10)}H${X(x+6)}V${Y(y+10)}H${X(x+12)} M${X(x+width-12)},${Y(y-10)}H${X(x+width-6)}V${Y(y+10)}H${X(x+width-12)}`}/>:<rect class="command-outline" x={X(x+6)} y={Y(y-11)} width={X(x+width-6)-X(x+6)} height={Y(y+11)-Y(y-11)}/>}
+  {kind==='labeled-coil'?<path class="command-outline" d={['M',X(x+12),Y(y-10),'Q',X(x),Y(y),X(x+12),Y(y+10),'M',X(x+width-12),Y(y-10),'Q',X(x+width),Y(y),X(x+width-12),Y(y+10)].join(' ')}/>:
+   kind==='calculation'?<path class="command-outline" d={['M',X(x+12),Y(y-10),'L',X(x+6),Y(y),X(x+12),Y(y+10),'M',X(x+width-12),Y(y-10),'L',X(x+width-6),Y(y),X(x+width-12),Y(y+10)].join(' ')}/>:
+   kind==='comparison'?<path class="command-outline" d={`M${X(x+12)},${Y(y-10)}H${X(x+6)}V${Y(y+10)}H${X(x+12)} M${X(x+width-12)},${Y(y-10)}H${X(x+width-6)}V${Y(y+10)}H${X(x+width-12)}`}/>:<rect class="command-outline" x={X(x+6)} y={Y(y-11)} width={X(x+width-6)-X(x+6)} height={Y(y+11)-Y(y-11)}/>}
  </>;
 }
 

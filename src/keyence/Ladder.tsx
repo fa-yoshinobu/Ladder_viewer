@@ -4,6 +4,7 @@ import {LadderGlyph,SelectionRect} from '../LadderPrimitives';
 import {CommentText} from '../CommentText';
 import type {KeyenceDrawing,KeyenceSymbol} from './layout';
 import type {KeyenceInstruction} from './model';
+import {keyenceOutputStyle} from './outputStyle';
 
 export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{drawing:KeyenceDrawing;zoom:number;selected:string;
  onSelect:(instruction:KeyenceInstruction)=>void;onContextMenu:(event:MouseEvent,instruction:KeyenceInstruction)=>void}) {
@@ -50,22 +51,34 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
   if(cursor<symbol.label.length)parts.push(textSpan(symbol.label.slice(cursor),cursor===0&&difference.opChanged));
   return parts;
  };
+ const centeredComment=(symbol:KeyenceSymbol)=>symbol.kind!=='command'&&symbol.kind!=='comparison';
  const glyph=(symbol:KeyenceSymbol)=>{
   const {x,y,width,kind}=symbol,center=x+width/2;
+  const style=keyenceOutputStyle(symbol.instruction);
+  const part=(text:string,operand?:number,includesOpcode=false)=>{
+   const diff=symbol.instruction.difference,changed=diff?.kind==='changed'&&(operand===undefined?diff.opChanged:diff.operandChanges.includes(operand)||(includesOpcode&&diff.opChanged));
+   return <tspan class={changed?'diff-value':''}>{text}</tspan>;
+  };
   if(kind==='keep'){
    const ports=symbol.ports??[],bottom=Math.max(y,...ports.map(port=>port.y));
    return <>
-    <rect class="command-outline" x={X(x+6)} y={Y(y-11)} width={X(x+width-6)-X(x+6)} height={Y(bottom+11)-Y(y-11)}/>
-    <text class="device" x={center} y={y-15}>{label(symbol)}</text>
-    {ports.map(port=><g key={port.name}>{line(x,port.y,x+6,port.y,false,port.difference)}<text class="command-text" x={x+14} y={port.y+4}>{port.name}</text>{port.name==='SET'&&line(x+width-6,port.y,x+width,port.y)}</g>)}
+    <rect class="command-outline" x={X(x+6)} y={Y(y-21)} width={X(x+width-6)-X(x+6)} height={Y(bottom+11)-Y(y-21)}/>
+    <text class="command-text" x={x+12} y={y-9}>{part(style.body)}</text>
+    <text class="device" x={center} y={y+18}>{part(style.above,style.aboveOperand)}</text>
+    {ports.map(port=><g key={port.name}>{line(x,port.y,x+6,port.y,false,port.difference)}<text class="command-text" x={x+12} y={port.y+4}>{port.name}</text>{port.name==='SET'&&line(x+width-6,port.y,x+width,port.y)}</g>)}
    </>;
   }
+  if(kind==='timer'||kind==='counter'||kind==='labeled-coil'||kind==='calculation'||kind==='application')return <>
+   <LadderGlyph kind={kind==='timer'||kind==='application'?'comparison':kind==='counter'?'labeled-coil':kind} x={x} y={y} width={width} c={c}
+    inputClass={symbol.inputDifference?'wire wire-'+symbol.inputDifference:'wire'} outputClass={symbol.outputDifference?'wire wire-'+symbol.outputDifference:'wire'}/>
+   <text class="operator" x={center} y={y+4}>{part(style.body,style.bodyOperand,kind==='timer'||kind==='counter')}</text>
+   {style.above&&<text class="device" x={center} y={y-15}>{part(style.above,style.aboveOperand)}</text>}
+  </>;
   const centered=kind==='contact'||kind==='coil'||kind==='inline';
   return <>
    <LadderGlyph kind={kind==='inline'?(symbol.operation==='invert'?'invert':'pulse'):kind==='comparison'?'comparison':kind==='contact'?'contact':kind==='coil'?'coil':'command'}
     x={x} y={y} width={width} c={c} inputClass={symbol.inputDifference?'wire wire-'+symbol.inputDifference:'wire'} outputClass={symbol.outputDifference?'wire wire-'+symbol.outputDifference:'wire'} negated={symbol.negated} pulse={kind==='inline'?(symbol.operation==='fall'?'fall':'rise'):symbol.pulse}/>
    {centered?<text class="device" x={center} y={y-15}>{label(symbol)}</text>:<text class="command-text" x={x+14} y={y+4}>{label(symbol)}</text>}
-   {symbol.instruction.opcode.toUpperCase()==='TMR'&&/^#\d+$/.test(symbol.instruction.operands[0]??'')&&<text class="device" x={center} y={y-15}>{'T'+symbol.instruction.operands[0].slice(1)}</text>}
   </>;
  };
  const hitBounds=(symbol:KeyenceSymbol)=>({x:symbol.x+1,y:symbol.y-drawing.baseline+4,width:symbol.width-2,
@@ -93,9 +106,9 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
    <SelectionRect phase="frame" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} className="kv-hit" difference={symbol.instruction.difference?.kind} {...hitBounds(symbol)}/>
    <g pointer-events="none">
     {glyph(symbol)}
-    {symbol.commentLines.length>0&&<CommentText text={symbol.comment} x={symbol.kind==='contact'||symbol.kind==='coil'||symbol.kind==='inline'?symbol.x+symbol.width/2:symbol.x+14}
+    {symbol.commentLines.length>0&&<CommentText text={symbol.comment} x={centeredComment(symbol)?symbol.x+symbol.width/2:symbol.x+14}
      y={(symbol.kind==='keep'?Math.max(symbol.y,...(symbol.ports??[]).map(port=>port.y)):symbol.y)+20}
-     width={symbol.width-(symbol.kind==='contact'||symbol.kind==='coil'||symbol.kind==='inline'?4:28)} centered={symbol.kind==='contact'||symbol.kind==='coil'||symbol.kind==='inline'}/>}
+     width={symbol.width-(centeredComment(symbol)?4:28)} centered={centeredComment(symbol)}/>}
    </g>
   </g>)}
  </svg>;
