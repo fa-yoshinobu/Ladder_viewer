@@ -13,25 +13,29 @@ internal static class CsvFileSelection
 
     public static CsvSelectionResult ReadFolders(IEnumerable<string> folderPaths)
     {
-        var files = new List<string>();
-        foreach (var folderPath in folderPaths)
-        {
-            var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folderPath));
-            if ((File.GetAttributes(folder) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != FileAttributes.Directory)
-                throw new IOException("リンクではないフォルダーを選択してください。");
-            var options = new EnumerationOptions
-            {
-                RecurseSubdirectories = true,
-                AttributesToSkip = FileAttributes.ReparsePoint,
-                IgnoreInaccessible = false,
-                ReturnSpecialDirectories = false
-            };
-            files.AddRange(Directory.EnumerateFiles(folder, "*", options).Where(IsCsv)
-                .OrderBy(path => Path.GetRelativePath(folder, path), StringComparer.OrdinalIgnoreCase)
-                .ThenBy(path => path, StringComparer.Ordinal));
-        }
-        if (files.Count == 0) throw new IOException("選択したフォルダー内にCSVファイルがありません。");
+        var files = folderPaths.SelectMany(FolderFiles).ToArray();
+        if (files.Length == 0) throw new IOException("選択したフォルダー内にCSVファイルがありません。");
         return ReadSelected(files);
+    }
+
+    public static CsvSelectionResult ReadPaths(IEnumerable<string> paths) => ReadSelected(
+        paths.Select(Path.GetFullPath).SelectMany(path => Directory.Exists(path) ? FolderFiles(path) : new[] { path }));
+
+    private static IEnumerable<string> FolderFiles(string folderPath)
+    {
+        var folder = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folderPath));
+        if ((File.GetAttributes(folder) & (FileAttributes.Directory | FileAttributes.ReparsePoint)) != FileAttributes.Directory)
+            throw new IOException("リンクではないフォルダーを選択してください。");
+        var options = new EnumerationOptions
+        {
+            RecurseSubdirectories = true,
+            AttributesToSkip = FileAttributes.ReparsePoint,
+            IgnoreInaccessible = false,
+            ReturnSpecialDirectories = false
+        };
+        return Directory.EnumerateFiles(folder, "*", options).Where(IsCsv)
+            .OrderBy(path => Path.GetRelativePath(folder, path), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(path => path, StringComparer.Ordinal);
     }
 
     public static CsvSelectionResult ReadSelected(IEnumerable<string> selectedPaths)

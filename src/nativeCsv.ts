@@ -3,14 +3,14 @@ import type { CsvInput } from './batch';
 export interface NativeCsvSelection {
   type: 'csv-selection';
   token: number;
-  status: 'ok' | 'cancelled' | 'error';
+  status: 'ok' | 'cancelled' | 'error' | 'loading';
   files?: { name: string; base64: string; folder?: string }[];
   warnings?: string[];
   error?: string;
 }
 
 export interface NativeCsvBridge {
-  postMessage(message: { type: 'open-csv' | 'open-folder'; token: number } | { type: 'instruction-menu'; text: string } | { type: 'show-about'; dark?: boolean }): void;
+  postMessage(message: { type: 'open-csv' | 'open-folder' | 'open-startup'; token: number } | { type: 'instruction-menu'; text: string } | { type: 'show-about'; dark?: boolean }): void;
   addEventListener(type: 'message', listener: (event: MessageEvent<NativeCsvSelection>) => void): void;
   removeEventListener(type: 'message', listener: (event: MessageEvent<NativeCsvSelection>) => void): void;
 }

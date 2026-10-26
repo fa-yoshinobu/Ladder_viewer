@@ -10,10 +10,10 @@ namespace LadderViewer;
 internal static class Program
 {
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
         ApplicationConfiguration.Initialize();
-        Application.Run(new ViewerWindow());
+        Application.Run(new ViewerWindow(args));
     }
 }
 
@@ -26,8 +26,11 @@ internal sealed class ViewerWindow : Form
     private string instructionText = "";
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
-    public ViewerWindow()
+    private string[] startupPaths;
+
+    public ViewerWindow(string[] paths)
     {
+        startupPaths = paths;
         Text = "Ladder Viewer";
         Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         MinimumSize = new Size(960, 640);
@@ -89,7 +92,7 @@ internal sealed class ViewerWindow : Form
     {
         if (!string.Equals(request.Source, $"https://{AppHost}/index.html", StringComparison.Ordinal)) return;
         long token;
-        bool openFolder;
+        string action;
         try
         {
             using var message = JsonDocument.Parse(request.WebMessageAsJson);
@@ -105,16 +108,16 @@ internal sealed class ViewerWindow : Form
                 instructionMenu.Show(Cursor.Position);
                 return;
             }
-            var action = type.GetString();
+            action = type.GetString()!;
             if (action == "show-about")
             {
                 using var dialog = new AboutWindow(root.TryGetProperty("dark", out var dark) && dark.ValueKind == JsonValueKind.True);
                 dialog.ShowDialog(this);
                 return;
             }
-            if (action is not ("open-csv" or "open-folder") || !root.TryGetProperty("token", out var value)
+            if (action is not ("open-csv" or "open-folder" or "open-startup") || !root.TryGetProperty("token", out var value)
                 || value.ValueKind != JsonValueKind.Number || !value.TryGetInt64(out token) || token < 0) return;
-            openFolder = action == "open-folder";
+            if (action == "open-startup" && startupPaths.Length == 0) return;
         }
         catch (JsonException) { return; }
         if (selectionBusy)
@@ -126,7 +129,14 @@ internal sealed class ViewerWindow : Form
         try
         {
             CsvSelectionResult result;
-            if (openFolder)
+            if (action == "open-startup")
+            {
+                Reply(new { type = "csv-selection", token, status = "loading" });
+                var paths = startupPaths;
+                startupPaths = [];
+                result = await Task.Run(() => CsvFileSelection.ReadPaths(paths));
+            }
+            else if (action == "open-folder")
             {
                 using var dialog = new FolderBrowserDialog
                 {

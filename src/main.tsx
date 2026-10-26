@@ -108,17 +108,21 @@ function App() {
     const onNativeCsv = (event: MessageEvent<NativeCsvSelection>) => {
       const message = event.data;
       if (message?.type !== 'csv-selection' || message.token !== token.current) return;
+      if (message.status === 'loading') { setBusy(true); setProgress('CSVを読み込んでいます…'); return; }
       if (message.status === 'cancelled') { setBusy(false); setProgress(''); return; }
       if (message.status === 'error') { setBusy(false); setProgress(''); setError(message.error || 'CSVを読み込めませんでした。'); return; }
       try {
         const inputs = decodeNativeCsvFiles(message.files);
         inputWarnings.current = message.warnings ?? [];
+        setBusy(true); setProgress('CSVを読み込んでいます…');
         submitFiles(inputs, message.token);
       } catch (error) {
         setBusy(false); setProgress(''); setError(error instanceof Error ? error.message : String(error));
       }
     };
     nativeCsv?.addEventListener('message', onNativeCsv);
+    try { nativeCsv?.postMessage({ type: 'open-startup', token: token.current }); }
+    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
     return () => { nativeCsv?.removeEventListener('message', onNativeCsv); };
   }, []);
   useEffect(()=>{

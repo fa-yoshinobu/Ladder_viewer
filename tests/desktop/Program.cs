@@ -174,4 +174,41 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
     Check(result.Files.GroupBy(file => file.Folder).All(group => group.Count() == 2),
         "unique program display names still carry the same folder key as their comment.csv");
 }
+{
+    var a = Folder("sent files"); var b = Folder("sent folder");
+    var first = Write(a, "FIRST.csv", ProgramCsv);
+    Write(a, "comment.csv", CommentCsv); Write(b, "SECOND.csv", ProgramCsv); Write(b, "comment.csv", CommentCsv);
+    var result = CsvFileSelection.ReadPaths(new[] { first, b, first });
+    Check(result.Files.Count == 4 && result.Files.GroupBy(file => file.Folder).Count() == 2,
+        "Send To accepts mixed CSV and folder paths and retains matching comments");
+    var threw = false;
+    try { CsvFileSelection.ReadPaths(new[] { Write(a, "ignored.txt", "synthetic") }); } catch (IOException) { threw = true; }
+    Check(threw, "Send To rejects non-CSV file arguments");
+}
+if (OperatingSystem.IsWindows())
+{
+    var folder = Folder("synthetic send-to");
+    var first = Write(Folder("synthetic app 日本語"), "LadderViewer.exe", "synthetic executable path only");
+    var second = Write(Folder("moved synthetic app"), "LadderViewer.exe", "synthetic executable path only");
+    SendToShortcut.Create(first, folder);
+    object shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
+    object? shortcut = null;
+    try
+    {
+        var path = Path.Combine(folder, "Ladder Viewer.lnk");
+        shortcut = ((dynamic)shell).CreateShortcut(path);
+        Check(string.Equals((string)((dynamic)shortcut).TargetPath, first, StringComparison.OrdinalIgnoreCase) &&
+            (string)((dynamic)shortcut).Arguments == "", "Send To shortcut targets the selected EXE without fixed input arguments");
+        System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut); shortcut = null;
+        SendToShortcut.Create(second, folder);
+        shortcut = ((dynamic)shell).CreateShortcut(path);
+        Check(string.Equals((string)((dynamic)shortcut).TargetPath, second, StringComparison.OrdinalIgnoreCase) &&
+            Directory.GetFiles(folder, "*.lnk").Length == 1, "Send To registration updates the existing shortcut after moving the EXE");
+    }
+    finally
+    {
+        if (shortcut is not null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut);
+        System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
+    }
+}
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

@@ -106,7 +106,7 @@ internal sealed class AboutWindow : Form
         if (dark) licenseText.HandleCreated += (_, _) => SetWindowTheme(licenseText.Handle, "DarkMode_Explorer", null);
         layout.Controls.Add(licenseText, 0, 4);
 
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2, RowCount = 1, Margin = new Padding(0, 16, 0, 0) };
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 3, RowCount = 1, Margin = new Padding(0, 16, 0, 0) };
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         footer.Controls.Add(new Label { AutoSize = true, Anchor = AnchorStyles.Left, Text = copyright, ForeColor = colors.SubText, Margin = Padding.Empty }, 0, 0);
@@ -126,7 +126,32 @@ internal sealed class AboutWindow : Form
         close.FlatAppearance.BorderSize = 0;
         close.FlatAppearance.MouseOverBackColor = dark ? ColorTranslator.FromHtml("#C5D7FB") : ColorTranslator.FromHtml("#00118F");
         close.FlatAppearance.MouseDownBackColor = dark ? ColorTranslator.FromHtml("#D9E6FF") : ColorTranslator.FromHtml("#000082");
-        footer.Controls.Add(close, 1, 0);
+        footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var sendTo = new Button
+        {
+            Text = "「送る」に追加",
+            AutoSize = true,
+            MinimumSize = new Size(136, 36),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = colors.Surface,
+            ForeColor = colors.Text,
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, 0, 8, 0)
+        };
+        sendTo.Click += (_, _) =>
+        {
+            try
+            {
+                SendToShortcut.Create(Application.ExecutablePath, Environment.GetFolderPath(Environment.SpecialFolder.SendTo));
+                MessageBox.Show(this, "「送る」にLadder Viewerを追加しました。", "Ladder Viewer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            catch (Exception error)
+            {
+                MessageBox.Show(this, $"「送る」に追加できませんでした。\n{error.Message}", "Ladder Viewer", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        };
+        footer.Controls.Add(sendTo, 1, 0);
+        footer.Controls.Add(close, 2, 0);
         layout.Controls.Add(footer, 0, 5);
         AcceptButton = close;
         CancelButton = close;
