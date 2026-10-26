@@ -188,27 +188,30 @@ foreach (var item in new (string Name, Encoding Encoding)[] {
 if (OperatingSystem.IsWindows())
 {
     var folder = Folder("synthetic send-to");
-    var first = Write(Folder("synthetic app 日本語"), "LadderViewer.exe", "synthetic executable path only");
+    var first = Write(Folder("synthetic app 日本語 U0001f680"), "LadderViewer.exe", "synthetic executable path only");
     var second = Write(Folder("moved synthetic app"), "LadderViewer.exe", "synthetic executable path only");
+    string Target(string path, out string arguments)
+    {
+        object shortcut = new SendToShortcut.ShellLink();
+        try
+        {
+            ((System.Runtime.InteropServices.ComTypes.IPersistFile)shortcut).Load(path, 0);
+            var link = (SendToShortcut.IShellLinkW)shortcut;
+            var target = new StringBuilder(32768);
+            link.GetPath(target, target.Capacity, IntPtr.Zero, 4);
+            var args = new StringBuilder(32768);
+            link.GetArguments(args, args.Capacity);
+            arguments = args.ToString();
+            return target.ToString();
+        }
+        finally { System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut); }
+    }
     SendToShortcut.Create(first, folder);
-    object shell = Activator.CreateInstance(Type.GetTypeFromProgID("WScript.Shell")!)!;
-    object? shortcut = null;
-    try
-    {
-        var path = Path.Combine(folder, "Ladder Viewer.lnk");
-        shortcut = ((dynamic)shell).CreateShortcut(path);
-        Check(string.Equals((string)((dynamic)shortcut).TargetPath, first, StringComparison.OrdinalIgnoreCase) &&
-            (string)((dynamic)shortcut).Arguments == "", "Send To shortcut targets the selected EXE without fixed input arguments");
-        System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut); shortcut = null;
-        SendToShortcut.Create(second, folder);
-        shortcut = ((dynamic)shell).CreateShortcut(path);
-        Check(string.Equals((string)((dynamic)shortcut).TargetPath, second, StringComparison.OrdinalIgnoreCase) &&
-            Directory.GetFiles(folder, "*.lnk").Length == 1, "Send To registration updates the existing shortcut after moving the EXE");
-    }
-    finally
-    {
-        if (shortcut is not null) System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shortcut);
-        System.Runtime.InteropServices.Marshal.FinalReleaseComObject(shell);
-    }
+    var path = Path.Combine(folder, "Ladder Viewer.lnk");
+    Check(string.Equals(Target(path, out var arguments), first, StringComparison.OrdinalIgnoreCase) && arguments == "",
+        "Send To shortcut preserves Unicode EXE paths without fixed input arguments");
+    SendToShortcut.Create(second, folder);
+    Check(string.Equals(Target(path, out _), second, StringComparison.OrdinalIgnoreCase) && Directory.GetFiles(folder, "*.lnk").Length == 1,
+        "Send To registration updates the existing shortcut after moving the EXE");
 }
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");
