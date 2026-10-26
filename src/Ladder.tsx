@@ -169,8 +169,8 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
           {g.wires.map(w => line(c, w.x1 * CELL, w.y1 * rowHeight + baseline, w.x2 * CELL, w.y2 * rowHeight + baseline,w.difference?`wire wire-${w.difference}`:'wire'))}
           {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} choose={choose} navigate={navigate} c={c} rowHeight={rowHeight} baseline={baseline} comments={comments} showComments={showComments}/>)}
         </g></g>
-        {notes.filter(note=>note.pointer?page===0:note.col*CELL>=left&&note.col*CELL<left+width).map(note=><foreignObject key={note.owner.id} data-note-instruction-ids={note.instructions.map(i=>i.id).join(' ')} x={note.pointer?-LEFT_GUTTER+6:note.col*CELL-left+6} y={note.row*rowHeight+metrics.padding+note.top} width={note.pointer?LEFT_GUTTER-28:Math.min(3*CELL,note.span*CELL-12)} height={note.lines.length*NOTE_LINE_HEIGHT}>
-          <div class="network-statements network-notes instruction-notes">{note.lines.map((text,index)=><div key={index} class="network-title network-note" title={text}>{text}</div>)}</div>
+        {notes.filter(note=>note.pointer?page===0:note.col*CELL>=left&&note.col*CELL<left+width).map(note=><foreignObject key={note.owner.id} data-note-instruction-ids={note.instructions.map(i=>i.id).join(' ')} x={note.pointer?-LEFT_GUTTER+6:note.col*CELL-left+6} y={note.row*rowHeight+metrics.padding+note.top} width={note.pointer?LEFT_GUTTER-28:note.owner.inlineST?note.span*CELL-12:Math.min(3*CELL,note.span*CELL-12)} height={note.lines.length*NOTE_LINE_HEIGHT}>
+          <div class={`network-statements network-notes instruction-notes ${note.owner.inlineST?'inline-st-notes':''}`}>{note.lines.map((text,index)=><div key={index} class="network-title network-note" title={text}>{text}</div>)}</div>
         </foreignObject>)}
         {g.symbols.filter(s => s.col * CELL >= left && s.col * CELL < left + width)
           .filter((s, index, all) => all.findIndex(other => other.row === s.row) === index)

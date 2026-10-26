@@ -214,3 +214,5 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .detail-st-code{margin:0;font:12px/1.5 Consolas,"MS Gothic",monospace;white-space:pre-wrap;overflow-wrap:anywhere}
 .fb-binding{font-size:11px;text-anchor:start}
 .fb-binding-input{text-anchor:end}
+
+.inline-st-notes{align-items:stretch}
