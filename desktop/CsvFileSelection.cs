@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace LadderViewer;
 
-internal sealed record CsvFilePayload(string Name, string Base64, string Folder, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RelativePath = null);
+internal sealed record CsvFilePayload(string Name, string Base64, string Folder, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? RelativePath = null, [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? ReferenceHtml = null);
 internal sealed record CsvSelectionResult(IReadOnlyList<CsvFilePayload> Files, IReadOnlyList<string> Warnings);
 
 internal static class CsvFileSelection
@@ -135,11 +135,25 @@ internal static class CsvFileSelection
             }
         }
 
+        var references = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var path in loaded.Keys.Where(path => string.Equals(Path.GetExtension(path), ".mnm", StringComparison.OrdinalIgnoreCase)))
+        {
+            var html = Path.ChangeExtension(path, ".html");
+            try
+            {
+                if (File.Exists(html) && (File.GetAttributes(html) & FileAttributes.ReparsePoint) == 0)
+                    references[path] = File.ReadAllText(html, new UTF8Encoding(false, true));
+            }
+            catch (Exception error) when (IsReadError(error))
+            {
+                warnings.Add($"補助HTML {Path.GetFileName(html)} を読み込めませんでした。FBは簡易表示になります。{error.Message}");
+            }
+        }
         var names = DisplayNames(loaded.Keys);
         var folders = loaded.Keys.Select(path => Path.GetDirectoryName(path)!).Distinct(StringComparer.OrdinalIgnoreCase)
             .Select((folder, index) => (folder, key: index.ToString(System.Globalization.CultureInfo.InvariantCulture)))
             .ToDictionary(item => item.folder, item => item.key, StringComparer.OrdinalIgnoreCase);
-        var files = loaded.Select(pair => new CsvFilePayload(names[pair.Key], Convert.ToBase64String(pair.Value), folders[Path.GetDirectoryName(pair.Key)!], RelativeName(pair.Key, roots))).ToArray();
+        var files = loaded.Select(pair => new CsvFilePayload(names[pair.Key], Convert.ToBase64String(pair.Value), folders[Path.GetDirectoryName(pair.Key)!], RelativeName(pair.Key, roots), references.GetValueOrDefault(pair.Key))).ToArray();
         return new CsvSelectionResult(files, warnings);
     }
 

@@ -3,7 +3,7 @@ import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
 import type {KeyenceInstruction,KeyenceProgram} from './model';
 import {nativeCsvBridge} from '../nativeCsv';
 import {buildKeyenceNetworks} from './logic';
-import {keyenceInstructionComment,layoutKeyenceNetwork,keyenceViewDrawing} from './layout';
+import {keyenceInstructionComment,layoutKeyenceNetwork,keyenceViewDrawing,keyenceSymbolOwns} from './layout';
 import {LADDER_WIDTH,SCROLLBAR_HEIGHT} from '../ladderMetrics';
 import {HorizontalScroll} from '../HorizontalScroll';
 import {KeyenceLadder} from './Ladder';
@@ -29,7 +29,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
  const [pendingTarget,setPendingTarget]=useState<KeyenceInstruction|null>(null);
  const [menu,setMenu]=useState<{x:number;y:number;instruction:KeyenceInstruction}|null>(null),[copyError,setCopyError]=useState('');
  const networks=useMemo(()=>buildKeyenceNetworks(program),[program]);
- const hasComments=useMemo(()=>Object.keys(program.deviceComments).length>0||program.instructions.some(instruction=>!!instruction.comment),[program]);
+ const hasComments=useMemo(()=>Object.keys(program.deviceComments).length>0||program.instructions.some(instruction=>!!instruction.comment||!!instruction.fb?.pins.some(pin=>pin.comment||pin.description)),[program]);
  const baseDrawings=useMemo(()=>networks.map(network=>layoutKeyenceNetwork(network,program,showComments)),[networks,program,showComments]);
  const drawings=useMemo(()=>baseDrawings.map(drawing=>keyenceViewDrawing(drawing,viewMode)),[baseDrawings,viewMode]);
  const scrolling=useMemo(()=>drawings.map(drawing=>viewMode==='scroll'&&drawing.width>LADDER_WIDTH),[drawings,viewMode]);
@@ -56,7 +56,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
  const searchEntries=useMemo(()=>{
 
   return program.instructions.map(item=>({item,fields:[item.opcode,...item.operands,[item.opcode,...item.operands].join(' '),
-   String(item.sourceLine),`元ファイル ${item.sourceLine}行`,`行 ${item.sourceLine}`,item.comment,item.statement,
+   keyenceInstructionCopyText(item,program),String(item.sourceLine),`元ファイル ${item.sourceLine}行`,`行 ${item.sourceLine}`,item.comment,item.statement,
    keyenceInstructionComment(item,program),...item.operands.map(address=>keyenceDeviceComment(address,program.deviceComments))].map(normalize).filter(Boolean)}));
  },[program]);
  const matches=useMemo(()=>{
@@ -95,7 +95,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
   const element=viewport.current;
   const index=instructionNetworks.get(pendingTarget.id);
   if(index===undefined){setPendingTarget(null);return;}
-  const symbol=drawings[index].symbols.find(symbol=>symbol.instruction.id===pendingTarget.id);
+  const symbol=drawings[index].symbols.find(symbol=>keyenceSymbolOwns(symbol,pendingTarget.id));
   const networkElement=element.querySelector<HTMLElement>('[data-network="'+networks[index].id+'"]');
   if(!symbol){setPendingTarget(null);return;}
   if(!networkElement)return;
@@ -113,7 +113,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
   }
   const element=viewport.current;
   if(element){
-   const symbol=item&&drawings[index].symbols.find(symbol=>symbol.instruction.id===item.id);
+   const symbol=item&&drawings[index].symbols.find(symbol=>keyenceSymbolOwns(symbol,item.id));
    const target=dimensions.offsets[index]+(symbol?Math.max(0,symbol.y*zoom-60):0);
    element.scrollTop=Math.max(0,Math.min(target,element.scrollHeight-element.clientHeight));setScrollTop(element.scrollTop);
   }

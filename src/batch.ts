@@ -7,7 +7,7 @@ import { isComparisonHeader, parseComparison } from './comparison';
 import type { DeviceComments } from './comments';
 import { decodeCsv, parseProgram, type Program } from './model';
 
-export interface CsvInput { name: string; bytes: ArrayBuffer; folder?: string; relativePath?:string; }
+export interface CsvInput { name: string; bytes: ArrayBuffer; folder?: string; relativePath?:string; referenceHtml?:string; }
 export interface BatchResult { programs: Program[]; keyencePrograms:KeyenceProgram[]; comments: string[]; commentsByProgram: Record<string, DeviceComments>; errors: { name: string; message: string }[]; }
 
 export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total: number, name: string) => void): BatchResult {
@@ -63,7 +63,7 @@ export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total
     const {file}=item;
     try{
       if(item.kind==='error')throw new Error(item.message);
-      if(item.kind==='keyence'){const program=parseKeyenceMnm(file.bytes,file.name,keyenceTables.get(folderOf(file)));if(file.relativePath!==undefined)program.relativePath=file.relativePath;result.keyencePrograms.push(program);}
+      if(item.kind==='keyence'){const program=parseKeyenceMnm(file.bytes,file.name,keyenceTables.get(folderOf(file)),file.referenceHtml);if(file.relativePath!==undefined)program.relativePath=file.relativePath;result.keyencePrograms.push(program);}
       else if(item.kind==='keyence-comments'||item.kind==='mitsubishi-comments')result.comments.push(file.name);
       else{
         const program=item.comparison?parseComparison(item.text,file.name):parseProgram(item.text,file.name);

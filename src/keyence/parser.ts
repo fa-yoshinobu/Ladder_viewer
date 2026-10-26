@@ -1,6 +1,7 @@
 import type {KeyenceProgram} from './model';
 import type {KeyenceDeviceComments} from './comments';
 import {decodeKeyenceText} from './encoding';
+import {applyKeyenceReference} from './reference';
 
 // Quoted strings may contain semicolons; only an unquoted semicolon starts a comment.
 function instructionParts(line:string):{tokens:string[];comment:string} {
@@ -23,7 +24,7 @@ function instructionParts(line:string):{tokens:string[];comment:string} {
 }
 
 // GX CSV normalization and instruction semantics do not apply to MNM.
-export function parseKeyenceMnm(bytes:ArrayBuffer,name:string,externalComments:KeyenceDeviceComments={}):KeyenceProgram {
+export function parseKeyenceMnm(bytes:ArrayBuffer,name:string,externalComments:KeyenceDeviceComments={},referenceHtml?:string):KeyenceProgram {
  const text=decodeKeyenceText(bytes);
  const lines=text.split(/\r\n?|\n/),device=/^DEVICE:(.+)$/.exec(lines.find(line=>line.trim())?.trim()??'');
  if(!device)throw new Error('キーエンスMNMのDEVICEヘッダーがありません。');
@@ -31,13 +32,13 @@ export function parseKeyenceMnm(bytes:ArrayBuffer,name:string,externalComments:K
  let statements:string[]=[];
  for(const [index,raw] of lines.entries()){
   const line=raw.trim();if(!line)continue;
-  const metadata=/^;?(DEVICE|MODULE|MODULE_TYPE):(.*)$/.exec(line);
+  const metadata=/^;?(DEVICE|MODULE|MODULE_TYPE|SCRIPT_TYPE):(.*)$/.exec(line);
   if(metadata){
    const [,key,value]=metadata;program.metadata.push({sourceLine:index+1,key,value});
    if(key==='MODULE')program.moduleName=value;
    if(key==='MODULE_TYPE')program.moduleType=value;
   }else if(line.startsWith(';')){
-   const comment=line.slice(1);
+   const comment=line.slice(1).replace(/<h[1-6]\s*\/>/gi,'');
    program.comments.push({sourceLine:index+1,text:comment});
    statements.push(comment.trim());
   }else{
@@ -48,5 +49,6 @@ export function parseKeyenceMnm(bytes:ArrayBuffer,name:string,externalComments:K
   }
  }
  if(!program.instructions.length)throw new Error('キーエンスMNMに命令がありません。');
+ applyKeyenceReference(program,referenceHtml);
  return program;
 }

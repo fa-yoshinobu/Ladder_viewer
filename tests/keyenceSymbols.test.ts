@@ -24,7 +24,7 @@ test('native KEYENCE output symbols place device, preset and operation in separa
 });
 
 test('unconfirmed variants and multioperand calculations retain their full command text',()=>{
- const p=program(['CAL+.S DM100 +2 DM110','LDA.X DM100','EXT.S DM100','TMR DM1 #30','FLOAT.S DM100','CUSTOM DM1 DM2']);
+ const p=program(['CAL+.S DM100 +2 DM110','LDA.X DM100','EXT.S DM100','TMR #0 #30 #40','FLOAT.S DM100','CUSTOM DM1 DM2']);
  for(const instruction of p.instructions){
   const style=keyenceOutputStyle(instruction);assert.equal(style.kind,'command');
   assert.equal(style.body,[instruction.opcode,...instruction.operands].join(' '));

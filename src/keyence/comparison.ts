@@ -1,4 +1,5 @@
 import {diffArrays} from 'diff';
+import {linkKeyenceScripts} from './reference';
 import {alignInstructions,commandKey,pairAlignedNetworks,type ChangeKind} from '../compareCore';
 import {compareConnectionGraphs,type ConnectionTerminal} from '../connectionGraph';
 import {buildKeyenceNetworks,type KeyenceNetwork} from './logic';
@@ -7,7 +8,10 @@ import type {KeyenceProgram,KeyenceInstruction} from './model';
 export interface KeyenceChange {row:number;kind:ChangeKind;source?:KeyenceInstruction;target?:KeyenceInstruction;}
 export interface KeyenceComparison {source:KeyenceProgram;target:KeyenceProgram;groups:{source:KeyenceNetwork[];target:KeyenceNetwork[];changes:KeyenceChange[]}[];changes:KeyenceChange[];}
 export function compareKeyencePrograms(sourceInput:KeyenceProgram,targetInput:KeyenceProgram):KeyenceComparison {
- const source=structuredClone(sourceInput),target=structuredClone(targetInput),a=buildKeyenceNetworks(source),b=buildKeyenceNetworks(target);
+ const source=structuredClone(sourceInput),target=structuredClone(targetInput);
+ const scriptSources=[...source.instructions,...target.instructions].flatMap(i=>i.script?[i.script.text]:[]);
+ linkKeyenceScripts(source,scriptSources);linkKeyenceScripts(target,scriptSources);
+ const a=buildKeyenceNetworks(source),b=buildKeyenceNetworks(target);
  const describe=(networks:KeyenceNetwork[],p:KeyenceProgram)=>networks.map(n=>{
   const actions=new Set(n.actions.flatMap(a=>[a.instruction,...a.continuations??[]]).map(i=>i.id)),conditions=new Set<string>();
   const visit=(e:KeyenceNetwork['condition'])=>{if(!e)return;if(e.kind==='contact')conditions.add(e.instruction.id);else if(e.kind==='unary'){conditions.add(e.instruction.id);visit(e.input);}else{visit(e.left);visit(e.right);}};
@@ -18,7 +22,7 @@ export function compareKeyencePrograms(sourceInput:KeyenceProgram,targetInput:Ke
    annotation:JSON.stringify([i.statement,keyenceInstructionComment(i,p)])}));
  });
  const sources=new Map(source.instructions.map(i=>[i.id,i])),targets=new Map(target.instructions.map(i=>[i.id,i])),changes:KeyenceChange[]=[];
- alignInstructions(describe(a,source),describe(b,target)).forEach((pair,index)=>{
+ alignInstructions(describe(buildKeyenceNetworks(source,false),source),describe(buildKeyenceNetworks(target,false),target)).forEach((pair,index)=>{
   const row=index+1,left=pair.source&&sources.get(pair.source.id),right=pair.target&&targets.get(pair.target.id);
   if(left)left.comparisonRow=row;if(right)right.comparisonRow=row;
   if(pair.source&&pair.target&&commandKey(pair.source)===commandKey(pair.target)&&pair.source.annotation===pair.target.annotation)return;

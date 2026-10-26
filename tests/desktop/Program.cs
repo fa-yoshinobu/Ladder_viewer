@@ -295,4 +295,21 @@ if (OperatingSystem.IsWindows())
     Check(files.All(file => file.RelativePath is { } relative && !Path.IsPathRooted(relative) && !relative.Contains(folder)), "relative identities do not expose absolute input folders");
     Check(CsvFileSelection.ReadSelected(new[] { Path.Combine(nested, "MAIN.csv") }).Files.All(file => file.RelativePath is null), "individual file selection remains independent from folder identities");
 }
+{
+    var folderA = Folder("reference-a");
+    var folderB = Folder("reference-b");
+    const string mnm = "DEVICE:99\\n;MODULE:Synthetic\\nLD MR1\\nFB Simple DM1\\nEND\\n";
+    var a = Write(folderA, "Synthetic.mnm", mnm);
+    var b = Write(folderB, "Synthetic.mnm", mnm);
+    Write(folderA, "Synthetic.html", "<title>Synthetic</title><p>reference-a</p>");
+    Write(folderB, "Synthetic.html", "<title>Synthetic</title><p>reference-b</p>");
+    var one = CsvFileSelection.ReadSelected(new[] { a });
+    Check(one.Files.Count == 1 && one.Files[0].ReferenceHtml!.Contains("reference-a"), "MNM automatically reads same-name HTML without adding another program");
+    var both = CsvFileSelection.ReadPaths(new[] { folderA, folderB });
+    Check(both.Files.Count == 2 && both.Files.Select(f => f.ReferenceHtml).Distinct().Count() == 2, "same-name HTML stays with its own MNM folder");
+    var plain = Write(folderB, "Plain.mnm", mnm);
+    Check(CsvFileSelection.ReadSelected(new[] { plain }).Files[0].ReferenceHtml is null, "MNM without HTML remains available for simple FB display");
+    var csv = Write(folderA, "Synthetic.csv", ProgramCsv);
+    Check(CsvFileSelection.ReadSelected(new[] { csv }).Files.All(f => f.ReferenceHtml is null), "Mitsubishi CSV never consumes Keyence HTML");
+}
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

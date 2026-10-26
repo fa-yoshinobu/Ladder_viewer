@@ -175,6 +175,7 @@ function App() {
   async function load(files: File[]) {
     const request = startLoad();
     try {
+      if(nativeCsv?.postMessageWithAdditionalObjects){nativeCsv.postMessageWithAdditionalObjects({type:'read-dropped',token:request},files);return;}
       const csvFiles = files.filter(file => programFormat(file.name)!==undefined);
       if (!csvFiles.length) throw new Error('CSV/MNMがありません。フォルダーは「フォルダーを開く」で選択してください。');
       const inputs: CsvInput[] = await Promise.all(csvFiles.map(async file => ({

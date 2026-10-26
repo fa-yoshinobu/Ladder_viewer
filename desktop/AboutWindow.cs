@@ -19,6 +19,7 @@ internal sealed class AboutWindow : Form
     [
         ("Preact", "画面表示", "MIT"),
         ("Papa Parse", "CSV解析", "MIT"),
+        ("htmlparser2", "補助HTML解析", "MIT"),
         ("diff", "差分", "BSD 3-Clause"),
         ("WebView2 SDK", "画面ホスト", "BSD 3-Clause"),
         ("Vite modulepreload polyfill", "読込み補助", "MIT"),

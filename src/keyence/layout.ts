@@ -11,14 +11,14 @@ export interface KeyenceWire {x1:number;y1:number;x2:number;y2:number;difference
 export interface KeyenceSymbol {
  instruction:KeyenceInstruction;x:number;y:number;width:number;
  kind:'contact'|'comparison'|'inline'|KeyenceOutputStyle['kind'];negated:boolean;pulse:'rise'|'fall'|null;
- label:string;comment:string;commentLines:string[];
+ label:string;comment:string;commentLines:string[];bodyLines?:string[];blockRows?:number;
  operation?:'rise'|'fall'|'invert';ports?:{name:'SET'|'RES';y:number;difference?:'added'|'removed'}[];height?:number;
  inputDifference?:'added'|'removed';outputDifference?:'added'|'removed';
 }
 export interface KeyenceDrawing {
  network:KeyenceNetwork;width:number;height:number;headerHeight:number;rows:number;rowHeight:number;baseline:number;
  symbols:KeyenceSymbol[];wires:KeyenceWire[];left:number;right:number;railTop:number;railBottom:number;
- statementLines:string[];
+ showComments?:boolean;statementLines:string[];
  rails?:{x:number;top:number;bottom:number}[];
  continuationLabels?:{x:number;y:number;text:string}[];
 }
@@ -69,6 +69,8 @@ function endColumn(expression:Component,column:number,wrap:boolean):number {
 const outputWidth=(instruction:KeyenceInstruction)=>{
  const style=keyenceOutputStyle(instruction);
  if(style.kind==='coil')return 1;
+ if(style.kind==='fb')return instruction.fb?.defined?8:6;
+ if(style.kind==='script')return 10;
  return style.kind==='command'?Math.max(1+instruction.operands.length,Math.ceil((visualLength(style.body)*7+24)/KEYENCE_CELL)):
   Math.max(1,Math.ceil((Math.max(visualLength(style.body),visualLength(style.above))*7+24)/KEYENCE_CELL));
 };
@@ -137,7 +139,7 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
  const gridRight=KEYENCE_LEFT+columns*KEYENCE_CELL,right=gridRight+8;
  const statementLines=network.statement?wrapKeyenceText(network.statement,Math.max(20,Math.floor((right-KEYENCE_LEFT)/7))):[];
  const headerHeight=statementLines.length*18+network.warnings.length*22;
- const hasComments=program.instructions.some(instruction=>!!instruction.comment)||Object.keys(program.deviceComments).length>0;
+ const hasComments=program.instructions.some(instruction=>!!instruction.comment||!!instruction.fb?.pins.some(pin=>pin.comment||pin.description))||Object.keys(program.deviceComments).length>0;
  const rowHeight=showComments&&hasComments?COMMENT_ROW:ROW,top=headerHeight+BASELINE;
  const symbols:KeyenceSymbol[]=[],wires:KeyenceWire[]=[];
  const x=(column:number)=>KEYENCE_LEFT+column*KEYENCE_CELL,y=(row:number)=>top+row*rowHeight;
@@ -147,6 +149,14 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
   const commentLines=showComments&&comment?wrapKeyenceText(comment,Math.max(8,Math.floor((span*KEYENCE_CELL-12)/6))):[];
   const result:KeyenceSymbol={instruction,x:x(column),y:y(row),width:span*KEYENCE_CELL,kind,negated,pulse,label,comment,
    commentLines:commentLines.length>2?[commentLines[0],commentLines[1].slice(0,-1)+'…']:commentLines};
+  if(instruction.script){
+   result.bodyLines=wrapKeyenceText(instruction.script.text.replace(/\t/g,'    '),Math.max(16,Math.floor((span*KEYENCE_CELL-28)/7)));
+   result.blockRows=Math.ceil((result.bodyLines.length*14+64)/rowHeight);
+  }else if(instruction.fb){
+   const pins=instruction.fb.pins,count=instruction.fb.defined?Math.max(pins.filter(p=>p.direction==='in').length,pins.filter(p=>p.direction==='out').length):pins.length;
+   result.blockRows=Math.ceil((count*44+80)/rowHeight);
+  }
+  if(result.blockRows)result.height=result.blockRows*rowHeight-8;
   symbols.push(result);return result;
  };
  // OR trees keep separate split/merge points; later outputs cannot feed earlier ones.
@@ -217,7 +227,7 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
      }
      wire(x(previous),y(cursor),right,y(cursor));
     }
-    cursor++;
+    cursor+=Math.max(1,...symbols.filter(s=>s.y===y(cursor)).map(s=>s.blockRows??1));
    }else{
     const component=expression(entry.term,column,cursor);
     const children=drawTrie(entry.node,component.end,cursor);
@@ -236,7 +246,7 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
  }
  const height=headerHeight+rows*rowHeight;
  const drawing:KeyenceDrawing={network,width:right+8,height,headerHeight,rows,rowHeight,baseline:BASELINE,symbols,wires:mergedWires(wires),left:KEYENCE_LEFT,right,
-  railTop:headerHeight,railBottom:height,statementLines};
+  railTop:headerHeight,railBottom:height,showComments,statementLines};
  if(!wrap)drawingSources.set(drawing,{program,showComments});
  return drawing;
 }
@@ -316,3 +326,5 @@ export function keyenceViewDrawing(base:KeyenceDrawing,mode:'wrap'|'scroll'):Key
  return {...base,width:right+8,right,height,headerHeight,statementLines,rows:base.rows*pages.length,
   symbols,wires,rails,continuationLabels,railTop:headerHeight,railBottom:height};
 }
+
+export const keyenceSymbolOwns=(symbol:KeyenceSymbol,id:string)=>symbol.instruction.id===id||!!symbol.instruction.script?.bodyIds.includes(id);

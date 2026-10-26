@@ -2,6 +2,9 @@ import {useLayoutEffect,useRef,useState} from 'preact/hooks';
 import {strokeCoordinates} from '../drawing';
 import {LadderGlyph,SelectionRect} from '../LadderPrimitives';
 import {CommentText} from '../CommentText';
+import {AddressText} from '../AddressText';
+import {KeyenceBlock} from './blocks';
+import {keyenceSymbolOwns} from './layout';
 import type {KeyenceDrawing,KeyenceSymbol} from './layout';
 import type {KeyenceInstruction} from './model';
 import {keyenceOutputStyle} from './outputStyle';
@@ -39,7 +42,13 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
   const coordinates=isRail?rail:c;
   return <line x1={coordinates.x(x1)} y1={coordinates.y(y1)} x2={coordinates.x(x2)} y2={coordinates.y(y2)} class={isRail?'kv-rail':`kv-line${difference?' wire wire-'+difference:''}`}/>;
  };
+ const differenceOf=(symbol:KeyenceSymbol)=>{
+  if(symbol.instruction.difference)return symbol.instruction.difference;
+  const nested=symbol.instruction.script&&drawing.network.instructions.find(i=>symbol.instruction.script!.bodyIds.includes(i.id)&&i.difference)?.difference;
+  return nested?{...nested,kind:'changed' as const}:undefined;
+ };
  const label=(symbol:KeyenceSymbol)=>{
+  if(symbol.kind==='contact'||symbol.kind==='coil')return <tspan class={symbol.instruction.difference?.kind==='changed'&&symbol.instruction.difference.operandChanges.includes(0)?'diff-value':''}><AddressText text={symbol.label} svg maxLength={11}/></tspan>;
   const difference=symbol.instruction.difference;if(difference?.kind!=='changed')return symbol.label;
   const parts:(string|ReturnType<typeof textSpan>)[]=[];let cursor=0;
   function textSpan(text:string,changed:boolean){return <tspan class={changed?'diff-value':''}>{text}</tspan>;}
@@ -59,6 +68,7 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
    const diff=symbol.instruction.difference,changed=diff?.kind==='changed'&&(operand===undefined?diff.opChanged:diff.operandChanges.includes(operand)||(includesOpcode&&diff.opChanged));
    return <tspan class={changed?'diff-value':''}>{text}</tspan>;
   };
+  if(kind==='fb'||kind==='script')return <KeyenceBlock symbol={symbol} c={c} showComments={drawing.showComments??true}/>;
   if(kind==='keep'){
    const ports=symbol.ports??[],bottom=Math.max(y,...ports.map(port=>port.y));
    return <>
@@ -82,7 +92,7 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
   </>;
  };
  const hitBounds=(symbol:KeyenceSymbol)=>({x:symbol.x+1,y:symbol.y-drawing.baseline+4,width:symbol.width-2,
-  height:(symbol.kind==='keep'?Math.max(symbol.y,...(symbol.ports??[]).map(port=>port.y))-symbol.y:0)+drawing.rowHeight-8});
+  height:symbol.blockRows?symbol.height!:(symbol.kind==='keep'?Math.max(symbol.y,...(symbol.ports??[]).map(port=>port.y))-symbol.y:0)+drawing.rowHeight-8});
  const symbolKey=(symbol:KeyenceSymbol,index:number)=>symbol.instruction.id+'-'+index;
  const rails=drawing.rails??[{x:drawing.left,top:drawing.railTop,bottom:drawing.railBottom},{x:drawing.right,top:drawing.railTop,bottom:drawing.railBottom}];
  return <svg ref={root} class="kv-ladder" aria-label={`キーエンス 回路 元ファイル${drawing.network.instructions[0].sourceLine}行`} width={drawing.width*zoom} height={drawing.height*zoom} viewBox={`0 0 ${drawing.width} ${drawing.height}`} style={{'--drawing-stroke':`${c.width}px`,'--drawing-rail':`${rail.width}px`}}>
@@ -90,23 +100,23 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
   {drawing.network.warnings.map((warning,index)=><text key={warning} class="kv-warning" x={drawing.left+7} y={drawing.statementLines.length*18+index*22+16}>{warning}</text>)}
   {/* Highlight fills stay behind every wire, including branches crossing another symbol's hit area. */}
   <g pointer-events="none">
-   {drawing.symbols.map((symbol,index)=><SelectionRect key={symbolKey(symbol,index)} phase="background" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} difference={symbol.instruction.difference?.kind} {...hitBounds(symbol)}/>)}
+   {drawing.symbols.map((symbol,index)=><SelectionRect key={symbolKey(symbol,index)} phase="background" selected={keyenceSymbolOwns(symbol,selected)} hovered={symbolKey(symbol,index)===hovered} difference={differenceOf(symbol)?.kind} {...hitBounds(symbol)}/>)}
   </g>
   {rails.map((segment,index)=><g key={index}>{line(segment.x,segment.top,segment.x,segment.bottom,true)}</g>)}
   {drawing.wires.map((wire,index)=><g key={index}>{line(wire.x1,wire.y1,wire.x2,wire.y2,false,wire.difference)}</g>)}
   {(drawing.continuationLabels??[]).map((label,index)=><text key={index} class="continuation" x={label.x} y={label.y}>{label.text}</text>)}
   {Array.from(drawing.symbols.reduce((rows,symbol)=>rows.set(symbol.y,Math.min(rows.get(symbol.y)??Infinity,symbol.instruction.sourceLine)),new Map<number,number>()).entries()).map(([y,sourceLine])=><text key={y} class="step-label" x={drawing.left-9} y={y+4} text-anchor="end">{sourceLine}</text>)}
   {/* Match Mitsubishi: paint each glyph after its hit target and selection frame so its leads stay visible. */}
-  {drawing.symbols.map((symbol,index)=><g key={symbolKey(symbol,index)} class={`kv-symbol${symbol.instruction.id===selected?' selected':''}`}
+  {drawing.symbols.map((symbol,index)=><g key={symbolKey(symbol,index)} class={`kv-symbol${keyenceSymbolOwns(symbol,selected)?' selected':''}`}
    role="button" tabindex={0} aria-label={`${symbol.instruction.opcode} ${symbol.instruction.operands.join(' ')} ${symbol.comment}`}
    onMouseEnter={()=>setHovered(symbolKey(symbol,index))} onMouseLeave={()=>setHovered('')}
    onClick={()=>onSelect(symbol.instruction)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelect(symbol.instruction);}}}
    onContextMenu={event=>onContextMenu(event,symbol.instruction)}>
    <title>{`元ファイル ${symbol.instruction.sourceLine}行\n${symbol.instruction.opcode} ${symbol.instruction.operands.join(' ')}${symbol.comment?'\n'+symbol.comment:''}`}</title>
-   <SelectionRect phase="frame" selected={symbol.instruction.id===selected} hovered={symbolKey(symbol,index)===hovered} className="kv-hit" difference={symbol.instruction.difference?.kind} {...hitBounds(symbol)}/>
+   <SelectionRect phase="frame" selected={keyenceSymbolOwns(symbol,selected)} hovered={symbolKey(symbol,index)===hovered} className="kv-hit" difference={differenceOf(symbol)?.kind} {...hitBounds(symbol)}/>
    <g pointer-events="none">
     {glyph(symbol)}
-    {symbol.commentLines.length>0&&<CommentText text={symbol.comment} x={centeredComment(symbol)?symbol.x+symbol.width/2:symbol.x+14}
+    {!symbol.blockRows&&symbol.commentLines.length>0&&<CommentText text={symbol.comment} x={centeredComment(symbol)?symbol.x+symbol.width/2:symbol.x+14}
      y={(symbol.kind==='keep'?Math.max(symbol.y,...(symbol.ports??[]).map(port=>port.y)):symbol.y)+20}
      width={symbol.width-(centeredComment(symbol)?4:28)} centered={centeredComment(symbol)}/>}
    </g>

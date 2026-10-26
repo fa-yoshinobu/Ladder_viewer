@@ -3,18 +3,18 @@ import {HorizontalScroll} from '../HorizontalScroll';
 import {LADDER_WIDTH,SCROLLBAR_HEIGHT} from '../ladderMetrics';
 import {KeyenceLadder} from './Ladder';
 import {keyenceComparisonDrawings,type KeyenceComparison} from './comparison';
-import {keyenceInstructionComment,type KeyenceDrawing} from './layout';
+import {keyenceInstructionComment,keyenceSymbolOwns,type KeyenceDrawing} from './layout';
 import {keyenceInstructionCopyText} from './instructionCopy';
 import type {KeyenceInstruction,KeyenceProgram} from './model';
 export const projectKeyenceInstruction=(i:KeyenceInstruction,program:KeyenceProgram):DirectInstruction=>({id:i.id,op:i.opcode,operands:i.operands,line:`元ファイル ${i.sourceLine}行`,row:i.comparisonRow,statement:i.statement,
-   comment:keyenceInstructionComment(i,program),copyText:keyenceInstructionCopyText(i,program),difference:i.difference});
+   comment:[keyenceInstructionComment(i,program),i.script?.text,...i.fb?.pins.map(p=>[p.name,p.comment,p.description].filter(Boolean).join(' '))??[]].filter(Boolean).join('\n'),copyText:keyenceInstructionCopyText(i,program),difference:i.difference});
 export function keyenceCompareDrawing(comparison:KeyenceComparison,showComments:boolean,zoom:number,viewMode:'wrap'|'scroll',display:'both'|'source'|'target'):DirectBlock[]{
  const circuit=(drawing:KeyenceDrawing,program:KeyenceProgram)=>{
   const project=(i:KeyenceInstruction)=>projectKeyenceInstruction(i,program);
   const scrolling=viewMode==='scroll'&&drawing.width>LADDER_WIDTH,height=Math.ceil(drawing.height*zoom)+(scrolling?SCROLLBAR_HEIGHT:0);
   const instructions=drawing.network.instructions.map(project);
   return {id:drawing.network.id,title:drawing.network.statement||`元ファイル ${drawing.network.instructions[0].sourceLine}行`,height,instructions,
-   locations:instructions.map((i,index)=>{const original=drawing.network.instructions[index];const symbol=drawing.symbols.find(s=>s.instruction.id===i.id)??[...drawing.symbols].sort((a,b)=>Math.abs(a.instruction.sourceLine-original.sourceLine)-Math.abs(b.instruction.sourceLine-original.sourceLine))[0];
+   locations:instructions.map((i,index)=>{const original=drawing.network.instructions[index];const symbol=drawing.symbols.find(s=>keyenceSymbolOwns(s,i.id))??[...drawing.symbols].sort((a,b)=>Math.abs(a.instruction.sourceLine-original.sourceLine)-Math.abs(b.instruction.sourceLine-original.sourceLine))[0];
     return {id:i.id,x:(symbol?.x??0)*zoom,y:Math.max(0,(symbol?.y??drawing.headerHeight)*zoom-28*zoom),width:(symbol?.width??74)*zoom};}),
    render:(selected:string,choose:(i:DirectInstruction)=>void,context:(event:MouseEvent,i:DirectInstruction)=>void)=><HorizontalScroll enabled={scrolling} width={LADDER_WIDTH*zoom} contentWidth={drawing.width*zoom} height={height} label={`回路 元ファイル ${drawing.network.instructions[0].sourceLine}行 横スクロール`}><KeyenceLadder drawing={drawing} zoom={zoom} selected={selected} onSelect={i=>choose(project(i))} onContextMenu={(event,i)=>context(event,project(i))}/></HorizontalScroll>
   };

@@ -11,7 +11,8 @@
   "dependencies": {
     "preact": "^10.27.0",
     "papaparse": "^5.5.3",
-    "diff": "^8.0.2"
+    "diff": "^8.0.2",
+    "htmlparser2": "^12.0.0"
   },
   "devDependencies": {
     "typescript": "^5.9.0",

@@ -11,6 +11,8 @@ export function keyenceInstructionCopyText(instruction:KeyenceInstruction,progra
  const devices=[...new Set(instruction.operands.filter(address=>/^@?(?:MR|LR|CR|DM|EM|FM|CM|TM|R|T|C|B|W)[0-9A-F]+(?:\.[0-9A-F]+)?(?::L?Z\d+)?$/i.test(address)))];
  const target=numberedDevice||(devices.length===1?devices[0]:'');
  const inline=instruction.comment,extras:string[]=[];
+ if(instruction.script)extras.push(instruction.script.text);
+ if(instruction.fb)for(const pin of instruction.fb.pins)extras.push(pin.name+': '+pin.value+([pin.comment,pin.description].filter(Boolean).length?' / '+[pin.comment,pin.description].filter(Boolean).join(' / '):''));
  if(inline&&target){
   const existing=labels.find(item=>item.address===target);
   if(existing)existing.comment=inline;else labels.push({address:target,comment:inline});

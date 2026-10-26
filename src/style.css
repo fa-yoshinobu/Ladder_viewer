@@ -281,3 +281,5 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .direct-comparison-app .subbar>div:last-child{max-width:100%;flex-shrink:1}
 .direct-comparison-app .subbar>div:last-child>label{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
 .direct-comparison-app select[aria-label="比較するプログラム"]{max-width:280px}
+
+.kv-script-text{white-space:pre}

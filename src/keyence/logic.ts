@@ -32,11 +32,11 @@ function contactSpec(opcode:string):ContactSpec|null {
 
 // KEYENCE ANB/ORB are b contacts. Block operations are ANL/ORL.
 // Expression objects keep the identity of shared conditions saved by MPS.
-export function buildKeyenceNetworks(program:KeyenceProgram):KeyenceNetwork[] {
+export function buildKeyenceNetworks(program:KeyenceProgram,foldScripts=true):KeyenceNetwork[] {
  const networks:KeyenceNetwork[]=[];
  let current:KeyenceExpression|null=null,blocks:KeyenceExpression[]=[],saved:{condition:KeyenceExpression|null;depth:number}[]=[];
- let instructions:KeyenceInstruction[]=[],actions:KeyenceAction[]=[],warnings:string[]=[],statements:string[]=[];
- let restored=false,continuation=false;
+ let instructions:KeyenceInstruction[]=[],actions:KeyenceAction[]=[],warnings:string[]=program.referenceWarning?[program.referenceWarning]:[],statements:string[]=[];
+ let restored=false,continuation=false,scriptEnd:string|null=null;
  const warn=(message:string)=>{if(!warnings.includes(message))warnings.push(message);};
  const flush=()=>{
   if(!instructions.length)return;
@@ -48,15 +48,16 @@ export function buildKeyenceNetworks(program:KeyenceProgram):KeyenceNetwork[] {
   current=null;blocks=[];saved=[];instructions=[];actions=[];warnings=[];statements=[];restored=false;continuation=false;
  };
  for(const instruction of program.instructions){
+  if(scriptEnd&&foldScripts){instructions.push(instruction);if(instruction.id===scriptEnd)scriptEnd=null;continue;}
   const op=instruction.opcode.toUpperCase(),spec=contactSpec(op);
   if(op==='END'||op==='ENDH') {
    flush();instructions.push(instruction);
-   if(instruction.statement)statements.push(instruction.statement);
+   if(instruction.displayStatement??instruction.statement)statements.push(instruction.displayStatement??instruction.statement);
    actions.push({instruction,condition:null});flush();continue;
   }
   if(spec?.join==='load'&&actions.length&&!saved.length&&!restored)flush();
   instructions.push(instruction);
-  if(instruction.statement)statements.push(instruction.statement);
+  if(instruction.displayStatement??instruction.statement)statements.push(instruction.displayStatement??instruction.statement);
   if(spec){
    const contact:KeyenceExpression={kind:'contact',instruction,negated:spec.negated,pulse:spec.pulse,comparison:spec.comparison};
    if(spec.join==='load'){if(current)blocks.push(current);current=contact;}
@@ -75,6 +76,8 @@ export function buildKeyenceNetworks(program:KeyenceProgram):KeyenceNetwork[] {
    const state=op==='MPP'?saved.pop():saved.at(-1);
    if(state){current=state.condition;blocks.length=state.depth;restored=true;}
    else warn(`${op}に対応するMPSがありません。`);
+  }else if(instruction.script&&foldScripts){
+   actions.push({instruction,condition:current});scriptEnd=instruction.script.endId;restored=false;
   }else if(op==='CON'){
    if(!actions.length||continuation)warn('CONの接続元の命令がありません。');
    continuation=true;
