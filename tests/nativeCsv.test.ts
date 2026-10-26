@@ -81,7 +81,7 @@ test('native CSV retains empty CSV errors without discarding valid files and rej
     [{ name: 'wrong-type.csv', base64: 1 }]
   ];
   for (const files of malformed) {
-    assert.throws(() => decodeNativeCsvFiles(files as Parameters<typeof decodeNativeCsvFiles>[0]), /CSV/);
+    assert.throws(() => decodeNativeCsvFiles(files as Parameters<typeof decodeNativeCsvFiles>[0]), /ファイル/);
   }
   const files = decodeNativeCsvFiles([
     { name: 'empty.csv', base64: '' },

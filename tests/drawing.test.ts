@@ -5,15 +5,15 @@ import { mergeWires, gridLayout, type GridWire } from '../src/layout.ts';
 import { buildProgram, parseProgram } from '../src/model.ts';
 import { parseComparison } from '../src/comparison.ts';
 
-test('horizontal and vertical stroke edges align at fractional zoom and DPI',()=>{
- for(const zoom of [0.8,1,1.4,1.41,1.5])for(const ratio of [1,1.25,1.5,2])for(const origin of [0,0.2,151.2,386.2]) {
-  const c=strokeCoordinates(zoom,ratio,origin,origin,1);
+test('wire and rail stroke edges align at fractional zoom and DPI',()=>{
+ for(const cssWidth of [1,2])for(const zoom of [0.8,1,1.4,1.41,1.5])for(const ratio of [1,1.25,1.5,2])for(const origin of [0,0.2,151.2,386.2]) {
+  const c=strokeCoordinates(zoom,ratio,origin,origin,cssWidth);
   for(const value of [0,7,28,37,74,148,392])for(const position of [c.x(value),c.y(value)]) {
    const center=(origin+position*zoom)*ratio;
    const half=c.width*zoom*ratio/2;
    for(const edge of [center-half,center+half])assert.ok(Math.abs(edge-Math.round(edge))<1e-7,`${zoom}, ${ratio}, ${origin}, ${value}`);
   }
-  assert.equal(Math.round(c.width*c.scale),Math.max(1,Math.round(ratio)));
+  assert.equal(Math.round(c.width*c.scale),Math.max(1,Math.round(cssWidth*ratio)));
  }
 });
 test('overlapping and reversed spans merge without joining parallel wires',()=>{

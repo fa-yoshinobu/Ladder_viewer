@@ -7,6 +7,8 @@ internal sealed record CsvSelectionResult(IReadOnlyList<CsvFilePayload> Files, I
 
 internal static class CsvFileSelection
 {
+    private enum CommentFormat { Mitsubishi, Keyence }
+
     static CsvFileSelection() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
     public static CsvSelectionResult ReadFolder(string folderPath) => ReadFolders(new[] { folderPath });
@@ -14,7 +16,7 @@ internal static class CsvFileSelection
     public static CsvSelectionResult ReadFolders(IEnumerable<string> folderPaths)
     {
         var files = folderPaths.SelectMany(FolderFiles).ToArray();
-        if (files.Length == 0) throw new IOException("選択したフォルダー内にCSVファイルがありません。");
+        if (files.Length == 0) throw new IOException("選択したフォルダー内にCSV/MNMファイルがありません。");
         return ReadSelected(files);
     }
 
@@ -33,7 +35,7 @@ internal static class CsvFileSelection
             IgnoreInaccessible = false,
             ReturnSpecialDirectories = false
         };
-        return Directory.EnumerateFiles(folder, "*", options).Where(IsCsv)
+        return Directory.EnumerateFiles(folder, "*", options).Where(IsProgramFile)
             .OrderBy(path => Path.GetRelativePath(folder, path), StringComparer.OrdinalIgnoreCase)
             .ThenBy(path => path, StringComparer.Ordinal);
     }
@@ -41,28 +43,41 @@ internal static class CsvFileSelection
     public static CsvSelectionResult ReadSelected(IEnumerable<string> selectedPaths)
     {
         var selected = selectedPaths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        if (selected.Length == 0) throw new IOException("CSVファイルが選択されていません。");
+        if (selected.Length == 0) throw new IOException("CSV/MNMファイルが選択されていません。");
         var loaded = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
-        var explicitComments = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var explicitComments = new Dictionary<string, List<CommentFormat>>(StringComparer.OrdinalIgnoreCase);
+        var requestedFormats = new Dictionary<string, HashSet<CommentFormat>>(StringComparer.OrdinalIgnoreCase);
+        var selectedCommentFormats = new Dictionary<string, CommentFormat>(StringComparer.OrdinalIgnoreCase);
         var warnings = new List<string>();
         foreach (var path in selected)
         {
-            if (!IsCsv(path)) throw new IOException($"CSVファイルを選択してください: {Path.GetFileName(path)}");
+            if (!IsProgramFile(path)) throw new IOException($"CSVまたはMNMファイルを選択してください: {Path.GetFileName(path)}");
             try
             {
                 var bytes = File.ReadAllBytes(path);
                 loaded.Add(path, bytes);
+                CommentFormat? commentFormat = null;
                 try
                 {
-                    if (IsCommentCsv(() => new MemoryStream(bytes)))
-                    {
-                        var folder = Path.GetDirectoryName(path)!;
-                        explicitComments[folder] = explicitComments.GetValueOrDefault(folder) + 1;
-                    }
+                    if (IsCsv(path)) commentFormat = DetectCommentFormat(() => new MemoryStream(bytes));
                 }
                 catch (DecoderFallbackException)
                 {
-                    // Keep selected bytes unchanged so the normal CSV parser can report that file's decoding error.
+                    // Keep selected bytes unchanged so the appropriate parser can report that file's decoding error.
+                }
+                var folder = Path.GetDirectoryName(path)!;
+                if (commentFormat is { } format)
+                {
+                    if (!explicitComments.TryGetValue(folder, out var formats))
+                        explicitComments[folder] = formats = new List<CommentFormat>();
+                    formats.Add(format);
+                    selectedCommentFormats[path] = format;
+                }
+                else
+                {
+                    if (!requestedFormats.TryGetValue(folder, out var formats))
+                        requestedFormats[folder] = formats = new HashSet<CommentFormat>();
+                    formats.Add(IsCsv(path) ? CommentFormat.Mitsubishi : CommentFormat.Keyence);
                 }
             }
             catch (Exception error) when (IsReadError(error))
@@ -73,15 +88,18 @@ internal static class CsvFileSelection
 
         foreach (var folder in selected.Select(path => Path.GetDirectoryName(path)!).Distinct(StringComparer.OrdinalIgnoreCase))
         {
-            // An explicitly chosen comment table takes precedence over every automatic table in that folder.
-            if (explicitComments.TryGetValue(folder, out var explicitCount))
+            // Explicit tables suppress automatic lookup only for their own manufacturer.
+            var explicitFormats = explicitComments.GetValueOrDefault(folder) ?? new List<CommentFormat>();
+            foreach (var group in explicitFormats.GroupBy(format => format))
             {
-                if (explicitCount > 1 && !loaded.Keys.Any(path =>
-                    string.Equals(Path.GetDirectoryName(path), folder, StringComparison.OrdinalIgnoreCase) &&
-                    string.Equals(Path.GetFileName(path), "comment.csv", StringComparison.OrdinalIgnoreCase)))
+                if (group.Count() > 1 && !selectedCommentFormats.Any(pair => pair.Value == group.Key &&
+                    string.Equals(Path.GetDirectoryName(pair.Key), folder, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(Path.GetFileName(pair.Key), "comment.csv", StringComparison.OrdinalIgnoreCase)))
                     warnings.Add("同じフォルダーで複数のコメントCSVが選択されています。重複するデバイスのコメントは読込み順で上書きされます。");
-                continue;
             }
+            var automaticFormats = (requestedFormats.GetValueOrDefault(folder) ?? new HashSet<CommentFormat>())
+                .Where(format => !explicitFormats.Contains(format)).ToHashSet();
+            if (automaticFormats.Count == 0) continue;
             string[] candidates;
             try
             {
@@ -100,7 +118,8 @@ internal static class CsvFileSelection
                 try
                 {
                     if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
-                    if (!IsCommentCsv(() => File.OpenRead(path))) continue;
+                    var format = DetectCommentFormat(() => File.OpenRead(path));
+                    if (format is null || !automaticFormats.Contains(format.Value)) continue;
                     loaded.Add(path, File.ReadAllBytes(path));
                 }
                 catch (Exception error) when (IsReadError(error))
@@ -118,19 +137,20 @@ internal static class CsvFileSelection
         return new CsvSelectionResult(files, warnings);
     }
 
+    private static bool IsProgramFile(string path) => IsCsv(path) || string.Equals(Path.GetExtension(path), ".mnm", StringComparison.OrdinalIgnoreCase);
     private static bool IsCsv(string path) => string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase);
     private static bool IsReadError(Exception error) => error is IOException or UnauthorizedAccessException or DecoderFallbackException or System.Security.SecurityException;
 
-    private static bool IsCommentCsv(Func<Stream> open)
+    private static CommentFormat? DetectCommentFormat(Func<Stream> open)
     {
-        try { return HasCommentHeader(open, new UTF8Encoding(false, true)); }
+        try { return ReadCommentFormat(open, new UTF8Encoding(false, true)); }
         catch (DecoderFallbackException)
         {
-            return HasCommentHeader(open, Encoding.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback));
+            return ReadCommentFormat(open, Encoding.GetEncoding(932, EncoderFallback.ExceptionFallback, DecoderFallback.ExceptionFallback));
         }
     }
 
-    private static bool HasCommentHeader(Func<Stream> open, Encoding fallback)
+    private static CommentFormat? ReadCommentFormat(Func<Stream> open, Encoding fallback)
     {
         using var stream = open();
         Span<byte> prefix = stackalloc byte[3];
@@ -148,9 +168,10 @@ internal static class CsvFileSelection
             if (string.IsNullOrWhiteSpace(line)) continue;
             count++;
             var columns = line.Split(line.Contains('\t') ? '\t' : ',').Select(column => column.Trim().Trim('"').Replace("\"\"", "\"")).ToArray();
-            if (columns.Length > 1 && columns[0] == "デバイス名" && !columns.Contains("命令")) return true;
+            if (columns.Length > 1 && columns[0] == "デバイス名" && !columns.Contains("命令")) return CommentFormat.Mitsubishi;
+            if (columns.Length > 2 && columns[0] == "" && columns[1] == "" && columns[2] == "コメント1") return CommentFormat.Keyence;
         }
-        return false;
+        return null;
     }
 
     private static Dictionary<string, string> DisplayNames(IEnumerable<string> paths)

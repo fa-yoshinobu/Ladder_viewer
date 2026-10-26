@@ -6,15 +6,18 @@ import { ROW, networkSize, fitLadderZoom, type LadderViewMode } from './layout';
 import './style.css';
 import { NetworkDrawing, drawingHeight, instructionDrawingOffset } from './NetworkDrawing';
 import { SearchBar } from './SearchBar';
+import {ViewerHeader} from './ViewerHeader';
 import { buildSearchIndex, searchInstructions, type SearchMode } from './search';
 import { ComparisonView, type CompareSide } from './ComparisonView';
 import { comparisonDisplayProgram, type ComparisonDisplay } from './comparisonDisplay';
 import { AddressText } from './AddressText';
 import { deviceComment, type DeviceComments } from './comments';
+import {programFormat} from './programFormat';
+import type {KeyenceProgram} from './keyence/model';
+import {KeyenceViewer} from './keyence/Viewer';
 import { nativeCsvBridge, decodeNativeCsvFiles, type NativeCsvSelection } from './nativeCsv';
 
 const worker = new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' });
-const iconUrl = new URL('./icon.svg', import.meta.url).href;
 type Theme = 'light' | 'dark';
 function initialTheme(): Theme {
   try { const saved = localStorage.getItem('theme'); if (saved === 'light' || saved === 'dark') return saved; } catch {}
@@ -38,6 +41,9 @@ document.documentElement.dataset.ladder = savedLadderPalette(document.documentEl
 function App() {
   const [program, setProgram] = useState<Program | null>(null);
   const [programs, setPrograms] = useState<Program[]>([]);
+  const [keyencePrograms,setKeyencePrograms]=useState<KeyenceProgram[]>([]);
+  const [keyenceProgram,setKeyenceProgram]=useState<KeyenceProgram|null>(null);
+  const programNames=useMemo(()=>[...programs,...keyencePrograms].map(p=>p.name).sort((a,b)=>a.localeCompare(b,'ja',{numeric:true})),[programs,keyencePrograms]);
   const [commentsByProgram, setCommentsByProgram] = useState<Record<string, DeviceComments>>({});
   const deviceComments = useMemo(() => commentsByProgram[program?.name ?? ''] ?? {}, [program, commentsByProgram]);
   const [showComments, setShowComments] = useState(true);
@@ -78,7 +84,17 @@ function App() {
   const token = useRef(0);
   const inputWarnings = useRef<string[]>([]);
   const nativeCsv = nativeCsvBridge();
+  function showKeyenceProgram(next:KeyenceProgram) {
+    pendingFit.current=false;pendingInstruction.current=null;setComparisonNavigation(undefined);
+    setProgram(null);setKeyenceProgram(next);setSelected(null);
+  }
+  function chooseProgram(name:string) {
+    const keyence=keyencePrograms.find(p=>p.name===name);
+    if(keyence){showKeyenceProgram(keyence);return;}
+    const mitsubishi=programs.find(p=>p.name===name);if(mitsubishi)showProgram(mitsubishi);
+  }
   function showProgram(next: Program) {
+    setKeyenceProgram(null);
     pendingFit.current=true;
     setComparisonNavigation(undefined);pendingInstruction.current=null;
     setProgram(next); setSelected(null); setSelectedSide('source'); setActive(next.networks[0]?.id ?? '');
@@ -96,25 +112,25 @@ function App() {
       if (e.data.error) { setError(e.data.error); return; }
       const result = e.data.result!;
       const failures = [...inputWarnings.current, ...result.errors.map(item => `${item.name}: ${item.message}`)];
-      if (!result.programs.length) {
-        setError(failures.join('\n') || 'プログラムCSVがありません。コメントCSVはプログラム切替の対象外です。');
+      if (!result.programs.length && !result.keyencePrograms.length) {
+        setError(failures.join('\n') || 'プログラムファイルがありません。コメントCSVはプログラム切替の対象外です。');
         return;
       }
-      setPrograms(result.programs); setCommentsByProgram(result.commentsByProgram); setError(failures.join('\n'));
+      setPrograms(result.programs); setKeyencePrograms(result.keyencePrograms); setCommentsByProgram(result.commentsByProgram); setError(failures.join('\n'));
 
-      showProgram(result.programs[0]);
+      if(result.programs.length)showProgram(result.programs[0]);else showKeyenceProgram(result.keyencePrograms.find(p=>/^Main$/i.test(p.moduleName))??result.keyencePrograms[0]);
     };
     worker.onerror = () => { setBusy(false); setProgress(''); setError('解析処理でエラーが発生しました。再読み込みしてください。'); };
     const onNativeCsv = (event: MessageEvent<NativeCsvSelection>) => {
       const message = event.data;
       if (message?.type !== 'csv-selection' || message.token !== token.current) return;
-      if (message.status === 'loading') { setBusy(true); setProgress('CSVを読み込んでいます…'); return; }
+      if (message.status === 'loading') { setBusy(true); setProgress('ファイルを読み込んでいます…'); return; }
       if (message.status === 'cancelled') { setBusy(false); setProgress(''); return; }
-      if (message.status === 'error') { setBusy(false); setProgress(''); setError(message.error || 'CSVを読み込めませんでした。'); return; }
+      if (message.status === 'error') { setBusy(false); setProgress(''); setError(message.error || 'ファイルを読み込めませんでした。'); return; }
       try {
         const inputs = decodeNativeCsvFiles(message.files);
         inputWarnings.current = message.warnings ?? [];
-        setBusy(true); setProgress('CSVを読み込んでいます…');
+        setBusy(true); setProgress('ファイルを読み込んでいます…');
         submitFiles(inputs, message.token);
       } catch (error) {
         setBusy(false); setProgress(''); setError(error instanceof Error ? error.message : String(error));
@@ -136,7 +152,7 @@ function App() {
     window.addEventListener('keydown',find);
     return()=>window.removeEventListener('keydown',find);
   },[]);
-  function startLoad(progress = 'CSVを読み込んでいます…') {
+  function startLoad(progress = 'ファイルを読み込んでいます…') {
     const request = ++token.current;
     inputWarnings.current = [];
     setBusy(true); setProgress(progress); setError('');
@@ -148,15 +164,15 @@ function App() {
   }
   function openSelection(type: 'open-csv' | 'open-folder') {
     if (!nativeCsv) { setError('ファイル選択を開始できませんでした。アプリを起動し直してください。'); return; }
-    const request = startLoad(type === 'open-folder' ? 'フォルダーを選択しています…' : 'CSVを選択しています…');
+    const request = startLoad(type === 'open-folder' ? 'フォルダーを選択しています…' : 'ファイルを選択しています…');
     try { nativeCsv.postMessage({ type, token: request }); }
     catch (error) { setBusy(false); setProgress(''); setError(error instanceof Error ? error.message : String(error)); }
   }
   async function load(files: File[]) {
     const request = startLoad();
     try {
-      const csvFiles = files.filter(file => /\.csv$/i.test(file.name));
-      if (!csvFiles.length) throw new Error('CSVがありません。フォルダーは「フォルダーを開く」で選択してください。');
+      const csvFiles = files.filter(file => programFormat(file.name)!==undefined);
+      if (!csvFiles.length) throw new Error('CSV/MNMがありません。フォルダーは「フォルダーを開く」で選択してください。');
       const inputs: CsvInput[] = await Promise.all(csvFiles.map(async file => ({
         name: file.webkitRelativePath ? file.webkitRelativePath.split('/').slice(1).join('/') || file.name : file.name,
         bytes: await file.arrayBuffer()
@@ -177,6 +193,7 @@ function App() {
   }, [displayedProgram, showComparison, zoom, rowHeight, viewMode]);
   const searchIndex=useMemo(()=>program?buildSearchIndex(program,deviceComments,comparisonDisplay):[],[program,deviceComments,comparisonDisplay]);
   const searchResults=useMemo(()=>searchInstructions(searchIndex,searchQuery,searchMode),[searchIndex,searchQuery,searchMode]);
+  const searchHeadings=useMemo(()=>searchResults.map(result=>({heading:(comparison?(result.side==='source'?'比較元':'比較先')+' · ':'')+'STEP '+(result.instruction.step||'—')+' · '+[result.instruction.op,...result.instruction.operands].join(' ')})),[searchResults,comparison]);
   useEffect(()=>{
     setSearchCurrent(searchResults.length?0:-1);
     const hit=searchResults[0];
@@ -210,7 +227,7 @@ function App() {
     const observer=new ResizeObserver(()=>setViewport({top:element.scrollTop,height:element.clientHeight}));
     observer.observe(element);
     return()=>observer.disconnect();
-  }, [showComparison]);
+  }, [showComparison,keyenceProgram]);
   function fitToWidth() {
     if(!program)return false;
     const element=showComparison?comparisonWidth.current:scroll.current;
@@ -303,17 +320,19 @@ function App() {
     setSearchCurrent(next);
     const hit=searchResults[next];navigateInstruction(hit.instruction.id,hit.side);
   }
+  if(keyenceProgram)return <KeyenceViewer palette={ladderPalette} changePalette={value=>changeLadderPalette(value as LadderPalette)} program={keyenceProgram} names={programNames} choose={chooseProgram} busy={busy} progress={progress} error={error} dark={theme==='dark'} toggleTheme={toggleTheme} openFiles={()=>openSelection('open-csv')} openFolder={()=>openSelection('open-folder')} drop={files=>{void load(files);}}/>;
   return <div class="app" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (e.dataTransfer?.files.length) void load(Array.from(e.dataTransfer.files)); }}>
-    <header><div class="brand"><img class="brand-icon" src={iconUrl} alt=""/><div><strong>Ladder Viewer</strong></div></div><div class="program-selection">{programs.length > 1 && <><label for="program-select">プログラム</label><select id="program-select" aria-label="プログラム" value={program?.name ?? ''} disabled={busy} onChange={e=>{const next=programs.find(p=>p.name===e.currentTarget.value);if(next)showProgram(next);}}>{programs.map(p=><option key={p.name} value={p.name}>{p.name}{p.comparison ? ` · ${p.comparison.sourceName}` : ''}</option>)}</select><span class="program-count">{programs.length}本</span></>}<span>{program ? <><b>{program.name}</b><span class="muted">　{comparison ? (comparison.differentRows ? `${comparison.differentRows}行相違` : '比較元・比較先 一致') : program.cpu}</span></> : ''}</span></div><div class="toolbar"><button class="theme-toggle" aria-pressed={theme === 'dark'} onClick={toggleTheme}>{theme === 'dark' ? <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1" stroke="currentColor" stroke-width="2"/></svg> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" fill="currentColor"/></svg>}{theme === 'dark' ? 'ライトモード' : 'ダークモード'}</button><button onClick={() => nativeCsv?.postMessage({ type: 'show-about', dark: theme === 'dark' })}>バージョン情報</button><button onClick={() => openSelection('open-csv')} disabled={busy}>＋ CSVを開く</button><button class="primary" onClick={() => openSelection('open-folder')} disabled={busy}>フォルダーを開く</button></div></header>
-    <div class="subbar">{program&&<SearchBar comparison={!!comparison} query={searchQuery} mode={searchMode} results={searchResults} current={searchCurrent} onQuery={setSearchQuery} onMode={setSearchMode} onMove={moveSearch} onClear={()=>setSearchQuery('')}/>}<div>{comparison && <label class="view-mode">表示<select aria-label="比較の表示" value={comparisonDisplay} disabled={busy} onChange={e=>changeComparisonDisplay(e.currentTarget.value as ComparisonDisplay)}><option value="both">左右比較</option><option value="source">比較元のみ</option><option value="target">比較先のみ</option></select></label>}{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<label class="ladder-palette">ラダー配色<select aria-label={`ラダー配色（${theme === 'dark' ? 'ダーク' : 'ライト'}モード）`} title={`${theme === 'dark' ? 'ダーク' : 'ライト'}モード用の配色`} value={ladderPalette} onChange={e => changeLadderPalette(e.currentTarget.value as LadderPalette)}>{ladderPalettes.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label><label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={e => changeViewMode(e.currentTarget.value as LadderViewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label><button onClick={fitToWidth}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(showComparison ? .25 : .5, +(z - .1).toFixed(2)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
+    <ViewerHeader programNames={programNames} currentName={program?.name??''} description={program?(comparison?(comparison.differentRows?`${comparison.differentRows}行相違`:'比較元・比較先 一致'):program.cpu):''}
+      busy={busy} dark={theme==='dark'} onChoose={chooseProgram} onToggleTheme={toggleTheme} onAbout={()=>nativeCsv?.postMessage({type:'show-about',dark:theme==='dark'})} onOpenFiles={()=>openSelection('open-csv')} onOpenFolder={()=>openSelection('open-folder')}/>
+    <div class="subbar">{program&&<SearchBar query={searchQuery} mode={searchMode} results={searchHeadings} current={searchCurrent} onQuery={setSearchQuery} onMode={setSearchMode} onMove={moveSearch} onClear={()=>setSearchQuery('')}/>}<div>{comparison && <label class="view-mode">表示<select aria-label="比較の表示" value={comparisonDisplay} disabled={busy} onChange={e=>changeComparisonDisplay(e.currentTarget.value as ComparisonDisplay)}><option value="both">左右比較</option><option value="source">比較元のみ</option><option value="target">比較先のみ</option></select></label>}{commentCount > 0 && <label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={e=>setShowComments(e.currentTarget.checked)}/>コメント</label>}<label class="ladder-palette">ラダー配色<select aria-label={`ラダー配色（${theme === 'dark' ? 'ダーク' : 'ライト'}モード）`} title={`${theme === 'dark' ? 'ダーク' : 'ライト'}モード用の配色`} value={ladderPalette} onChange={e => changeLadderPalette(e.currentTarget.value as LadderPalette)}>{ladderPalettes.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}</select></label><label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={e => changeViewMode(e.currentTarget.value as LadderViewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label><button onClick={fitToWidth}>幅に合わせる</button><button aria-label="縮小" onClick={() => setZoom(z => Math.max(showComparison ? .25 : .5, +(z - .1).toFixed(2)))}>−</button><button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button><button aria-label="拡大" onClick={() => setZoom(z => Math.min(1.5, +(z + .1).toFixed(1)))}>＋</button></div></div>
     {error && <div class="error" role="alert">{error}</div>}
     <div class={`workspace ${showComparison?'comparison-workspace':''}`}><div ref={comparisonWidth} class="comparison-host" hidden={!showComparison}>{showComparison && program && <ComparisonView key={program.name} program={program} navigationTarget={comparisonNavigation} viewMode={viewMode} zoom={zoom} rowHeight={rowHeight} selected={selected?.id??''} choose={(i,side)=>{setSelected(i);setSelectedSide(side);}} comments={deviceComments} showComments={showComments}/>}</div>{!showComparison && <><aside class="navigation"><div class="panel-title">回路一覧 <span>{displayedProgram?.networks.length ?? 0}</span></div><div class="nav-list" ref={navigation}>{displayedProgram?.networks.map((n, index) => <button class={`nav-item ${active === n.id ? 'active' : ''}`} onClick={() => jump(n.id)} key={n.id} data-network-id={n.id}><span class="number">{String(index + 1).padStart(3, '0')}</span><div><strong>{n.title || `STEP ${n.step}`}</strong><small>{n.actions[0]?.instruction.op} {n.actions[0]?.instruction.operands.join(' ') || ''}{n.warnings.length ? ' ⚠' : ''}</small></div></button>)}</div></aside>
     <main ref={scroll} class="diagram" onScroll={e => setViewport({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })} aria-label="ラダー表示">
       {busy && <div class="loading" role="status">{progress || 'CSVを解析しています…'}</div>}
-      {!program && !busy ? <div class="empty"><span class="empty-mark">─┤ ├─</span><p>CSVをドロップするか、「CSVを開く」「フォルダーを開く」で選択してください。</p><button class="primary" onClick={() => openSelection('open-csv')}>CSVを開く</button></div> : comparison && displayedProgram?.networks.length===0 ? <div class="empty">この側に回路はありません。</div> : <div style={{ height: total ? total.top + total.height + 8 : 0, minWidth: Math.max(0, ...layouts.map(l => l.width + 24)), position: 'relative' }}>{visible.map(l => <section key={l.n.id} data-network-id={l.n.id} class="network" style={{ position: 'absolute', top: l.top, left: 12, width: l.width }}><NetworkDrawing network={l.n} viewMode={viewMode} selected={selected?.id ?? ''} choose={chooseDisplayedInstruction} navigate={id=>navigateInstruction(id,comparisonDisplay==='target'?'target':'source')} zoom={zoom} rowHeight={rowHeight} comments={deviceComments} showComments={showComments}/></section>)}</div>}
+      {!program && !busy ? <div class="empty"><span class="empty-mark">─┤ ├─</span><p>CSV/MNMをドロップするか、「ファイルを開く」「フォルダーを開く」で選択してください。</p><button class="primary" onClick={() => openSelection('open-csv')}>ファイルを開く</button></div> : comparison && displayedProgram?.networks.length===0 ? <div class="empty">この側に回路はありません。</div> : <div style={{ height: total ? total.top + total.height + 8 : 0, minWidth: Math.max(0, ...layouts.map(l => l.width + 24)), position: 'relative' }}>{visible.map(l => <section key={l.n.id} data-network-id={l.n.id} class="network" style={{ position: 'absolute', top: l.top, left: 12, width: l.width }}><NetworkDrawing network={l.n} viewMode={viewMode} selected={selected?.id ?? ''} choose={chooseDisplayedInstruction} navigate={id=>navigateInstruction(id,comparisonDisplay==='target'?'target':'source')} zoom={zoom} rowHeight={rowHeight} comments={deviceComments} showComments={showComments}/></section>)}</div>}
     </main></>}
     <aside class="details"><div class="panel-title">命令の詳細</div>{selected ? <div class="detail-content"><span class="eyebrow">{comparison ? `${selectedSide==='source'?'比較元':'比較先'} · ` : ''}STEP {selected.step || '—'}</span><h2>{selected.op}</h2><dl>{selected.difference && <><dt class={`difference-label diff-${selected.difference.kind}`}>{differenceLabels[selected.difference.kind]}</dt><dd>{selectedSide==='source'?'比較先':'比較元'}: {selected.difference.otherText || 'なし'}<br/>STEP {selected.difference.otherStep || '—'}</dd></>}{selected.controlFlow && <><dt>制御</dt><dd>{selected.controlFlow.label}{selected.controlFlow.targetStep!==undefined && <><br/>{selected.controlFlow.targetId?<button type="button" class="step-link" onClick={()=>navigateInstruction(selected.controlFlow!.targetId!,selectedSide)}>STEP {selected.controlFlow.targetStep||'—'}</button>:<>対応STEP {selected.controlFlow.targetStep}</>}</>}</dd></>}<dt>オペランド</dt><dd>{selected.operands.length ? selected.operands.map((o, index) => <div class={`operand ${selected.difference?.operandChanges.includes(index)?'changed-operand':''}`}><span>{index + 1}</span><div><code><AddressText text={o}/></code>{deviceComment(o,deviceComments) && <div class="operand-comment">{deviceComment(o,deviceComments)}</div>}</div></div>) : 'なし'}</dd>{selected.inlineST&&<><dt>インラインST</dt><dd><pre class="detail-st-code">{selected.inlineST.text}</pre></dd></>}<dt>元ファイル</dt><dd>{selectedProgram?.name}<br/>{comparison && <>{selectedSide==='source'?comparison.sourceProject:comparison.targetProject}<br/></>}CSV {selected.sourceRow}行</dd></dl></div> : <div class="detail-placeholder">命令を選択してください。</div>}</aside></div>
-    <footer><span class="status-dot"/>{busy ? '解析中' : displayedProgram ? `${programs.length}プログラム · ${showComparison && comparison ? `元 ${displayedProgram.instructions.length.toLocaleString()} / 先 ${comparison.target.instructions.length.toLocaleString()}` : displayedProgram.instructions.length.toLocaleString()} 命令 · ${displayedProgram.networks.length} 回路${commentCount ? ` · コメント ${commentCount.toLocaleString()}件` : ''}` : 'CSVを選択してください'}</footer>
+    <footer><span class="status-dot"/>{busy ? '解析中' : displayedProgram ? `${programNames.length}プログラム · ${showComparison && comparison ? `元 ${displayedProgram.instructions.length.toLocaleString()} / 先 ${comparison.target.instructions.length.toLocaleString()}` : displayedProgram.instructions.length.toLocaleString()} 命令 · ${displayedProgram.networks.length} 回路${commentCount ? ` · コメント ${commentCount.toLocaleString()}件` : ''}` : 'CSV/MNMを選択してください'}</footer>
   </div>;
 }
 render(<App/>, document.getElementById('app')!);

@@ -221,4 +221,61 @@ if (OperatingSystem.IsWindows())
     var result = CsvFileSelection.ReadSelected(new[] { program });
     Check(result.Files.Count == 2 && result.Warnings.Count == 0, "comma-separated comment.csv is automatically detected beside the program");
 }
+{
+    var folder = Folder("keyence-selected");
+    var mnm = Write(folder, "Synthetic.MnM", "DEVICE:99\n;MODULE:Synthetic\nLD CR1234\nOUT MR20\nEND\nENDH\n", new UnicodeEncoding(false, true));
+    Write(folder, "comment.csv", CommentCsv);
+    var result = CsvFileSelection.ReadSelected(new[] { mnm });
+    Check(result.Files.Count == 1 && result.Files[0].Name == "Synthetic.MnM",
+        "selecting MNM alone does not auto-load a Mitsubishi comment.csv");
+    Check(Convert.FromBase64String(result.Files[0].Base64).SequenceEqual(File.ReadAllBytes(mnm)),
+        "MNM bytes reach the dedicated parser unchanged");
+    var csv = Write(folder, "Synthetic.csv", ProgramCsv);
+    var mixed = CsvFileSelection.ReadPaths(new[] { mnm, csv });
+    Check(mixed.Files.Count == 3, "mixed CSV and MNM selection retains both programs and CSV comments");
+    var nested = Folder("keyence-folder/nested");
+    Write(nested, "Synthetic.MNM", "DEVICE:99\nEND\nENDH\n");
+    Check(CsvFileSelection.ReadFolder(Path.GetDirectoryName(nested)!).Files.Count == 1,
+        "folder reading includes uppercase MNM files in subfolders");
+}
+{
+    const string KeyenceComments = ",,コメント1,コメント2\nMR20,,架空のキーエンスコメント,\n";
+    const string KeyenceProgram = "DEVICE:99\n;MODULE:Synthetic\nLD CR1234\nOUT MR20\nEND\nENDH\n";
+    var a = Folder("keyence-comments-a"); var b = Folder("keyence-comments-b");
+    var first = Write(a, "Synthetic.MnM", KeyenceProgram, new UnicodeEncoding(false, true));
+    var second = Write(b, "Synthetic.MNM", KeyenceProgram);
+    var commentA = Write(a, "CoMmEnT.CsV", KeyenceComments, new UnicodeEncoding(false, true));
+    Write(b, "comment.csv", KeyenceComments);
+    var single = CsvFileSelection.ReadSelected(new[] { first });
+    Check(single.Files.Count == 2 && single.Files.Any(file => file.Name == "CoMmEnT.CsV"),
+        "MNM automatically loads the same-folder Keyence comment.csv by its header");
+    Check(Convert.FromBase64String(single.Files.Single(file => file.Name == "CoMmEnT.CsV").Base64).SequenceEqual(File.ReadAllBytes(commentA)),
+        "automatic Keyence comment bytes retain Unicode encoding unchanged");
+    var multiple = CsvFileSelection.ReadSelected(new[] { first, second });
+    Check(multiple.Files.Count == 4 && multiple.Files.GroupBy(file => file.Folder).All(group => group.Count() == 2) && multiple.Warnings.Count == 0,
+        "MNM files in multiple folders retain only their own Keyence comment tables");
+    var program = Write(a, "Synthetic.csv", ProgramCsv);
+    var csvOnly = CsvFileSelection.ReadSelected(new[] { program });
+    Check(csvOnly.Files.Count == 1, "CSV does not automatically load a Keyence comment.csv");
+    var mixed = CsvFileSelection.ReadSelected(new[] { first, program });
+    Check(mixed.Files.Count == 3 && mixed.Warnings.Count == 0,
+        "mixed programs choose an automatic comment table by manufacturer header");
+}
+{
+    const string KeyenceComments = ",,コメント1,コメント2\nMR20,,架空のコメント,\n";
+    var a = Folder("cross-format-explicit-mnm");
+    var mnm = Write(a, "Synthetic.mnm", "DEVICE:99\nEND\nENDH\n");
+    var explicitMitsubishi = Write(a, "chosen-mitsubishi.csv", CommentCsv);
+    Write(a, "comment.csv", KeyenceComments);
+    var mnmResult = CsvFileSelection.ReadSelected(new[] { mnm, explicitMitsubishi });
+    Check(mnmResult.Files.Count == 3 && mnmResult.Warnings.Count == 0,
+        "explicit Mitsubishi comments do not suppress automatic Keyence comments for MNM");
+    var b = Folder("cross-format-explicit-csv");
+    var csv = Write(b, "Synthetic.csv", ProgramCsv);
+    var explicitKeyence = Write(b, "chosen-keyence.csv", KeyenceComments);
+    Write(b, "comment.csv", CommentCsv);
+    var csvResult = CsvFileSelection.ReadSelected(new[] { csv, explicitKeyence });
+    Check(csvResult.Files.Count == 3 && csvResult.Warnings.Count == 0,
+        "explicit Keyence comments do not suppress automatic Mitsubishi comments for CSV");
+}
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

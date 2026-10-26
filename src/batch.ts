@@ -1,48 +1,76 @@
 import {csvRows} from './gxFormat';
+import {programFormat} from './programFormat';
+import {parseKeyenceMnm} from './keyence/parser';
+import type {KeyenceProgram} from './keyence/model';
+import {isKeyenceCommentCsv,parseKeyenceComments,type KeyenceDeviceComments} from './keyence/comments';
 import { isComparisonHeader, parseComparison } from './comparison';
 import type { DeviceComments } from './comments';
 import { decodeCsv, parseProgram, type Program } from './model';
 
 export interface CsvInput { name: string; bytes: ArrayBuffer; folder?: string; }
-export interface BatchResult { programs: Program[]; comments: string[]; commentsByProgram: Record<string, DeviceComments>; errors: { name: string; message: string }[]; }
+export interface BatchResult { programs: Program[]; keyencePrograms:KeyenceProgram[]; comments: string[]; commentsByProgram: Record<string, DeviceComments>; errors: { name: string; message: string }[]; }
 
 export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total: number, name: string) => void): BatchResult {
-  const result: BatchResult = { programs: [], comments: [], commentsByProgram: Object.create(null), errors: [] };
+  const result: BatchResult = { programs: [], keyencePrograms:[], comments: [], commentsByProgram: Object.create(null), errors: [] };
   const folderOf = (file: CsvInput) => file.folder ?? file.name.replaceAll('\\', '/').split('/').slice(0, -1).join('/').toLowerCase();
   const tables = new Map<string, DeviceComments>();
+  const keyenceTables = new Map<string, KeyenceDeviceComments>();
   const programFolders = new Map<Program, string>();
-  const namedTables = new Set(files.filter(file => /^comment\.csv$/i.test(file.name.split(/[\\/]/).at(-1)!)).map(folderOf));
+  const isNamedTable = (file:CsvInput) => /^comment\.csv$/i.test(file.name.split(/[\\/]/).at(-1)!);
+  type Prepared =
+    | {file:CsvInput;kind:'keyence'}
+    | {file:CsvInput;kind:'keyence-comments';comments:KeyenceDeviceComments}
+    | {file:CsvInput;kind:'mitsubishi-comments';comments:DeviceComments}
+    | {file:CsvInput;kind:'mitsubishi';text:string;comparison:boolean}
+    | {file:CsvInput;kind:'error';message:string};
   const ordered = [...files].sort((a, b) => a.name.localeCompare(b.name, 'ja', { numeric: true }));
-  for (const [index, file] of ordered.entries()) {
+  // Classify comment tables before parsing programs, regardless of filename order.
+  const prepared:Prepared[] = ordered.map<Prepared>(file => {
     try {
-      const text = decodeCsv(file.bytes);
-      const headers = csvRows(text,10).data;
-      if (headers.some(row => row[0] === 'デバイス名' && row.length > 1 && !row.includes('命令'))) {
-        const parsed = csvRows(text);
-        if (parsed.errors.length) throw new Error(parsed.errors[0].message);
-        result.comments.push(file.name);
-        if (namedTables.has(folderOf(file)) && !/^comment\.csv$/i.test(file.name.split(/[\\/]/).at(-1)!)) {
-          progress?.(index + 1, ordered.length, file.name);
-          continue;
+      const format=programFormat(file.name);
+      if(!format)throw new Error('対応形式は三菱CSV・キーエンスMNMです。');
+      if(format==='keyence')return {file,kind:'keyence'};
+      if(isKeyenceCommentCsv(file.bytes))return {file,kind:'keyence-comments',comments:parseKeyenceComments(file.bytes)};
+      const text=decodeCsv(file.bytes),headers=csvRows(text,10).data;
+      if(headers.some(row=>row[0]==='デバイス名'&&row.length>1&&!row.includes('命令'))){
+        const parsed=csvRows(text);
+        if(parsed.errors.length)throw new Error(parsed.errors[0].message);
+        const head=parsed.data.findIndex(row=>row[0]==='デバイス名');
+        const japanese=parsed.data[head].findIndex(column=>/Japanese|日本語/.test(column));
+        const column=japanese>0?japanese:1,comments:DeviceComments=Object.create(null);
+        for(const row of parsed.data.slice(head+1)){
+          const device=row[0]?.trim().toUpperCase(),comment=row[column]?.trim();
+          if(device&&comment)comments[device]=comment;
         }
-        const comments = tables.get(folderOf(file)) ?? Object.create(null) as DeviceComments;
-        tables.set(folderOf(file), comments);
-        const head = parsed.data.findIndex(row => row[0] === 'デバイス名');
-        const japanese = parsed.data[head].findIndex(column => /Japanese|日本語/.test(column));
-        const column = japanese > 0 ? japanese : 1;
-        for (const row of parsed.data.slice(head + 1)) {
-          const device = row[0]?.trim().toUpperCase(), comment = row[column]?.trim();
-          if (device && comment) comments[device] = comment;
-        }
-      } else {
-        const program = headers.some(isComparisonHeader) ? parseComparison(text, file.name) : parseProgram(text, file.name);
-        result.programs.push(program);
-        programFolders.set(program, folderOf(file));
+        return {file,kind:'mitsubishi-comments',comments};
       }
-    } catch (error) {
-      result.errors.push({ name: file.name, message: error instanceof Error ? error.message : String(error) });
+      return {file,kind:'mitsubishi',text,comparison:headers.some(isComparisonHeader)};
+    }catch(error){return {file,kind:'error',message:error instanceof Error?error.message:String(error)};}
+  });
+  const namedTables=new Set(prepared.filter(item=>item.kind==='mitsubishi-comments'&&isNamedTable(item.file)).map(item=>folderOf(item.file)));
+  const namedKeyenceTables=new Set(prepared.filter(item=>item.kind==='keyence-comments'&&isNamedTable(item.file)).map(item=>folderOf(item.file)));
+  for(const item of prepared){
+    const folder=folderOf(item.file);
+    if(item.kind==='keyence-comments'){
+      if(namedKeyenceTables.has(folder)&&!isNamedTable(item.file))continue;
+      keyenceTables.set(folder,Object.assign(keyenceTables.get(folder)??Object.create(null),item.comments));
+    }else if(item.kind==='mitsubishi-comments'){
+      if(namedTables.has(folder)&&!isNamedTable(item.file))continue;
+      tables.set(folder,Object.assign(tables.get(folder)??Object.create(null),item.comments));
     }
-    progress?.(index + 1, ordered.length, file.name);
+  }
+  for(const [index,item] of prepared.entries()){
+    const {file}=item;
+    try{
+      if(item.kind==='error')throw new Error(item.message);
+      if(item.kind==='keyence')result.keyencePrograms.push(parseKeyenceMnm(file.bytes,file.name,keyenceTables.get(folderOf(file))));
+      else if(item.kind==='keyence-comments'||item.kind==='mitsubishi-comments')result.comments.push(file.name);
+      else{
+        const program=item.comparison?parseComparison(item.text,file.name):parseProgram(item.text,file.name);
+        result.programs.push(program);programFolders.set(program,folderOf(file));
+      }
+    }catch(error){result.errors.push({name:file.name,message:error instanceof Error?error.message:String(error)});}
+    progress?.(index+1,ordered.length,file.name);
   }
   for (const program of result.programs) result.commentsByProgram[program.name] = tables.get(programFolders.get(program)!) ?? Object.create(null);
   return result;
