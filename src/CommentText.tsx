@@ -1,4 +1,4 @@
-import { commentLines } from './comments';
+import { commentLines } from './textLayout';
 export function CommentText({ text, x, y, width, centered = false }: { text: string; x: number; y: number; width: number; centered?: boolean }) {
   if (!text) return null;
   const lines = commentLines(text, Math.max(4, Math.floor(width / 5.5)));

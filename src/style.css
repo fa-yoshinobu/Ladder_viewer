@@ -216,3 +216,43 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .fb-binding-input{text-anchor:end}
 
 .inline-st-notes{align-items:stretch}
+
+
+/* KEYENCE keeps its own SVG, logic and layout; stroke correction and palette are shared. */
+.kv-diagram{position:relative;flex:1;min-width:0;overflow:auto;overflow-anchor:none;padding:0 12px;background:var(--ld-bg)}
+.kv-canvas{position:relative;width:100%}
+.kv-network{position:absolute;left:0;right:0}
+.kv-ladder{display:block;overflow:hidden;background:var(--ld-bg);font:14px var(--ui-font);color:var(--ld-text)}
+.kv-line,.kv-box,.kv-rail{fill:none;stroke:var(--ld-line);stroke-width:var(--drawing-stroke,1px);vector-effect:none;stroke-linecap:butt;stroke-linejoin:miter;shape-rendering:geometricPrecision}
+.kv-curve{shape-rendering:geometricPrecision}
+.kv-rail{stroke-width:var(--drawing-rail,2px)}
+.kv-box{fill:var(--ld-box)}
+.kv-address,.kv-command{fill:var(--ld-text);pointer-events:none}
+.kv-comment{fill:var(--ld-comment);font:12px "Yu Gothic UI","Meiryo",sans-serif;pointer-events:none}
+.kv-source-line{fill:var(--ld-step);font-size:10px}
+.kv-symbol{cursor:pointer}
+.kv-statement-background{fill:var(--ld-title-bg);stroke:var(--ld-title-border);stroke-width:1;vector-effect:non-scaling-stroke}
+.kv-statement{fill:var(--ld-title-text);font:14px "MS UI Gothic","Yu Gothic UI",sans-serif}
+.kv-warning{fill:var(--ld-warning);font:12px var(--ui-font)}
+.kv-loading{position:sticky;top:0;z-index:3;background:var(--primary);color:var(--primary-on);padding:8px}
+.kv-context-menu{position:fixed;z-index:10;min-width:140px;padding:4px;background:var(--surface);border:1px solid var(--border-strong);box-shadow:0 4px 16px #0003;border-radius:6px}
+.kv-context-menu button{width:100%;border:0;text-align:left}
+
+/* Shared selection decoration stays clear of electrical boundaries. */
+.ladder-selection-bg{fill:transparent;pointer-events:none}
+.ladder-selection-bg.selected,.ladder-selection-bg.hovered{fill:var(--ld-hover-fill)}
+.ladder-selection-bg.diff-changed{fill:var(--ld-changed-fill)}
+.ladder-selection-bg.diff-added{fill:var(--ld-added-fill)}
+.ladder-selection-bg.diff-removed{fill:var(--ld-removed-fill)}
+.ladder-selection-bg.diff-step{fill:var(--ld-step-fill)}
+.ladder-selection-frame{fill:none!important;stroke:transparent;stroke-width:1;vector-effect:non-scaling-stroke;pointer-events:none}
+.ladder-selection-frame.hovered{stroke:var(--ld-hover-stroke)}
+.ladder-selection-frame.diff-changed{stroke:var(--ld-changed-stroke)}
+.ladder-selection-frame.diff-added{stroke:var(--ld-added-stroke)}
+.ladder-selection-frame.diff-removed{stroke:var(--ld-removed-stroke)}
+.ladder-selection-frame.diff-step{stroke:var(--ld-step-stroke)}
+.symbol .ladder-selection-frame.selected,.kv-symbol .ladder-selection-frame.selected{stroke:var(--ld-chosen);stroke-width:2}
+.ladder-hit{fill:transparent;stroke:none;pointer-events:all}
+.symbol:focus,.kv-symbol:focus,.symbol:focus-visible,.kv-symbol:focus-visible{outline:none;box-shadow:none}
+.symbol:focus-visible .ladder-selection-frame,.kv-symbol:focus-visible .ladder-selection-frame{stroke:var(--ld-chosen);stroke-width:2;stroke-dasharray:3 2}
+.symbol:focus-visible .hit:not(.ladder-selection-frame){stroke:var(--ld-chosen);stroke-width:2;stroke-dasharray:3 2}

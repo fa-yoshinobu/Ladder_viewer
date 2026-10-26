@@ -1,0 +1,10 @@
+export const CELL=74;
+export const ROW=56;
+export const COMMENT_ROW=72;
+export const COLUMNS=12;
+export const LEFT_GUTTER=82;
+export const GRID_WIDTH=COLUMNS*CELL;
+export const LADDER_WIDTH=LEFT_GUTTER+GRID_WIDTH+16;
+export const BASELINE=28;
+export const PAGE_GAP=22;
+export const SCROLLBAR_HEIGHT=16;

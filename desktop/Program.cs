@@ -122,7 +122,7 @@ internal sealed class ViewerWindow : Form
         catch (JsonException) { return; }
         if (selectionBusy)
         {
-            Reply(new { type = "csv-selection", token, status = "error", error = "CSVファイルの選択または読込み中です。" });
+            Reply(new { type = "csv-selection", token, status = "error", error = "プログラムファイルの選択または読込み中です。" });
             return;
         }
         selectionBusy = true;
@@ -140,7 +140,7 @@ internal sealed class ViewerWindow : Form
             {
                 using var dialog = new FolderBrowserDialog
                 {
-                    Description = "CSVを読み込むフォルダーを選択",
+                    Description = "CSV/MNMを読み込むフォルダーを選択",
                     UseDescriptionForTitle = true,
                     ShowNewFolderButton = false,
                     Multiselect = true
@@ -157,8 +157,8 @@ internal sealed class ViewerWindow : Form
             {
                 using var dialog = new OpenFileDialog
                 {
-                    Title = "CSVファイルを開く",
-                    Filter = "CSVファイル (*.csv)|*.csv",
+                    Title = "プログラムファイルを開く",
+                    Filter = "プログラムファイル (*.csv;*.mnm)|*.csv;*.mnm|三菱 CSV (*.csv)|*.csv|キーエンス MNM (*.mnm)|*.mnm",
                     Multiselect = true,
                     RestoreDirectory = true,
                     CheckFileExists = true,

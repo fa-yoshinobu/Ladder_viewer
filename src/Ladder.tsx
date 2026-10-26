@@ -6,6 +6,8 @@ import { instructionCopyText } from './instructionCopy';
 import { isComparisonCondition, isInlineLogic } from './instructions';
 import { isControlMarker } from './controlFlow';
 import { CommentText } from './CommentText';
+import {LadderGlyph,SelectionRect} from './LadderPrimitives';
+import {continuationText} from './continuation';
 import { deviceComment, type DeviceComments } from './comments';
 import { strokeCoordinates, type StrokeCoordinates } from './drawing';
 import { CELL, BASELINE, LEFT_GUTTER, displayGrid, networkSize, drawingPages, isCoil, drawingMetrics, noteLayout, NOTE_LINE_HEIGHT, inlineSTLines, inlineSTHeight, type GridSymbol, type LadderViewMode } from './layout';
@@ -22,7 +24,12 @@ function instructionMenu(event: MouseEvent, instruction: Instruction, comments: 
   choose(instruction);
   nativeCsvBridge()?.postMessage({ type: 'instruction-menu', text: instructionCopyText(instruction, comments) });
 }
-function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comments, showComments }: { s: GridSymbol; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; c: StrokeCoordinates; rowHeight: number; baseline: number; comments: DeviceComments; showComments: boolean }) {
+function symbolBounds(s:GridSymbol,rowHeight:number,baseline:number){
+ const x=s.col*CELL,y=s.row*rowHeight+baseline,w=s.span*CELL,i=s.instruction;
+ return {x:x+(i.inlineST?6:1),y:i.inlineST?y-11:s.row*rowHeight+4,width:w-(i.inlineST?12:2),
+  height:s.fb?s.fb.rows*rowHeight-8:i.inlineST?inlineSTHeight(i,s.span):i.pins?i.pins.length*22+54+baseline-BASELINE:rowHeight-8};
+}
+function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, baseline, comments, showComments }: { s: GridSymbol; selected: string; hovered:boolean;hover:(id:string)=>void; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; c: StrokeCoordinates; rowHeight: number; baseline: number; comments: DeviceComments; showComments: boolean }) {
   const i = s.instruction;
   const x = s.col * CELL, y = s.row * rowHeight + baseline, w = s.span * CELL, cx = x + CELL / 2;
   const X = c.x, Y = c.y;
@@ -35,17 +42,16 @@ function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comment
   const special = s.contact && (isInlineLogic(i.op) || i.op === 'PHASE');
   const centered = (s.contact && !comparison && i.op !== 'PHASE') || coil;
   const command = comparison ? i.op.replace(/^(LD|AND|OR)/, '') : i.op;
-  const radius = Math.round(7 * c.scale) / c.scale;
   const labels = i.operands.map(operand => ({ operand, text: deviceComment(operand, comments) })).filter(item => item.text);
   const description = labels.length > 1 ? labels.map(item => `${item.operand}: ${item.text}`).join(' / ') : labels[0]?.text ?? '';
   const flow=i.controlFlow;
   const flowArrow=flow?.kind==='jump'?'→ ':flow?.kind==='return'?'↩ ':flow?.kind==='exit'?'↪ ':flow?.kind==='loop'&&/^END/.test(i.op)?'↶ ':'';
   const scopeTarget=flow?.kind==='boundary'||(flow?.kind==='loop'&&!/^END/.test(i.op))||(flow?.kind==='branch'&&!/^(THEN|CASETHEN|WHILEDO|FORDO)$/.test(i.op));
   return <g data-instruction-id={i.id} class={`symbol ${i.difference?'diff-'+i.difference.kind:''} ${selected === i.id ? 'chosen' : ''}`} role="button" tabIndex={0}
-    aria-label={`${i.op} ${i.operands.join(' ')}`} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose)}
+    aria-label={`${i.op} ${i.operands.join(' ')}`} onMouseEnter={()=>hover(i.id)} onMouseLeave={()=>hover('')} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose)}
     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i); } }}>
     <title>{`${i.op} ${i.operands.join(' ')} / CSV ${i.sourceRow}行\n${i.note}${i.difference ? '\n'+differenceLabels[i.difference.kind]+' / 相手側: '+(i.difference.otherText||'なし') : ''}`}</title>
-    <rect class="hit" x={x + (i.inlineST?6:1)} y={i.inlineST?y-11:s.row * rowHeight + 4} width={w - (i.inlineST?12:2)} height={s.fb?s.fb.rows*rowHeight-8:i.inlineST?inlineSTHeight(i,s.span):i.pins ? i.pins.length * 22 + 54 + baseline - BASELINE : rowHeight - 8} rx={2}/>
+    <SelectionRect phase="frame" className="hit" selected={selected===i.id} hovered={hovered} difference={i.difference?.kind} {...symbolBounds(s,rowHeight,baseline)}/>
     {i.op === 'NOP' ? null : marker ? <>
       <rect class={`command-outline flow-marker ${i.controlFlow?.kind==='loop'?'flow-loop':''}`} x={X(x+6)} y={Y(y-12)} width={X(x+w-6)-X(x+6)} height={Y(y+12)-Y(y-12)}/>
       <text class="command-text" x={x+14} y={y+4}><tspan class={i.difference?.opChanged?'diff-value':''}>{i.op}</tspan>{i.operands.map((operand,index)=><>{' '}<Operand instruction={i} index={index}/></>)}</text>
@@ -80,28 +86,19 @@ function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comment
         <text class="fb-value" x={x + w - 20} y={y + 24 + index * 22}>{pin.operands.map((operand, index) => <>{index ? ' ' : ''}<AddressText text={operand} svg/></>)}</text>
       </g>)}
     </> : s.contact && !comparison && !special ? <>
-      {line(c, x, y, cx - 7, y,inputClass)}{line(c, cx + 7, y, x + CELL, y,outputClass)}
-      <path class="contact" d={`M${X(cx - 7)},${Y(y - 7)}V${Y(y + 7)} M${X(cx + 7)},${Y(y - 7)}V${Y(y + 7)}`}/>
-      {inverse && <path class="contact" d={`M${X(cx - 10)},${Y(y + 7)}L${X(cx + 10)},${Y(y - 7)}`}/>}
-      {pulse !== 0 && <path class="contact" d={`M${X(cx)},${Y(y - pulse * 6)}V${Y(y + pulse * 7)} M${X(cx - 4)},${Y(y + pulse * 3)}L${X(cx)},${Y(y + pulse * 7)}L${X(cx + 4)},${Y(y + pulse * 3)}`}/>}
+      <LadderGlyph kind="contact" x={x} y={y} width={CELL} c={c} negated={inverse} pulse={pulse<0?'rise':pulse>0?'fall':null} inputClass={inputClass} outputClass={outputClass}/>
       <text class="device" x={cx} y={y - 15}>{i.operands.map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>
     </> : coil ? <>
-      <line class={inputClass} x1={X(x)} y1={Y(y)} x2={X(cx) - radius} y2={Y(y)}/>
-      <line class={outputClass} x1={X(cx) + radius} y1={Y(y)} x2={X(x + CELL)} y2={Y(y)}/>
-      <circle class="contact coil" cx={X(cx)} cy={Y(y)} r={radius}/>
+      <LadderGlyph kind="coil" x={x} y={y} width={CELL} c={c} inputClass={inputClass} outputClass={outputClass}/>
       <text class="device" x={cx} y={y - 15}>{i.operands.map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>
       {i.op === 'OUTH' && <text class="operator" x={cx} y={y + 4}>H</text>}
     </> : i.op === 'INV' ? <>
-      {line(c, x, y, cx, y,inputClass)}{line(c,cx,y,x+CELL,y,outputClass)}<path class="contact inv-mark" d={`M${X(cx - 10)},${Y(y + 7)}L${X(cx + 10)},${Y(y - 7)}`}/>
+      <LadderGlyph kind="invert" x={x} y={y} width={CELL} c={c} inputClass={inputClass} outputClass={outputClass}/>
     </> : isInlineLogic(i.op) ? <>
-      {line(c, x, y, cx, y,inputClass)}{line(c,cx,y,x+CELL,y,outputClass)}
-      <path class="contact" d={`M${X(cx)},${Y(y)}V${Y(y + (i.op.endsWith('P') ? -7 : 7))} M${X(cx - 4)},${Y(y + (i.op.endsWith('P') ? -3 : 3))}L${X(cx)},${Y(y + (i.op.endsWith('P') ? -7 : 7))}L${X(cx + 4)},${Y(y + (i.op.endsWith('P') ? -3 : 3))}`}/>
+      <LadderGlyph kind="pulse" x={x} y={y} width={CELL} c={c} pulse={i.op.endsWith('P')?'rise':'fall'} inputClass={inputClass} outputClass={outputClass}/>
       {(i.op === 'EGP' || i.op === 'EGF') && <text class="device" x={cx} y={y - 15}>{i.operands.map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>}
     </> : <>
-      {line(c, x, y, x + 6, y,inputClass)}{line(c, x + w - 6, y, x + w, y,outputClass)}
-      {comparison
-        ? <path class="command-outline" d={`M${X(x + 12)},${Y(y - 10)}H${X(x + 6)}V${Y(y + 10)}H${X(x + 12)} M${X(x + w - 12)},${Y(y - 10)}H${X(x + w - 6)}V${Y(y + 10)}H${X(x + w - 12)}`}/>
-        : <rect class="command-outline" x={X(x + 6)} y={Y(y - 11)} width={X(x + w - 6) - X(x + 6)} height={Y(y + 11) - Y(y - 11)}/>}
+      <LadderGlyph kind={comparison?'comparison':'command'} x={x} y={y} width={w} c={c} inputClass={inputClass} outputClass={outputClass}/>
       <text class="command-text" x={x + 14} y={y + 4}><tspan class={i.difference?.opChanged?'diff-value':''}>{command}</tspan>{i.operands.map((operand,index) => <>{' '}<Operand instruction={i} index={index}/></>)}</text>
     </>}
     {showComments && !s.fb && !i.inlineST && !i.pins && !marker && <CommentText text={description} x={centered ? cx : x + 14} y={y + 20} width={centered ? CELL - 4 : w - 28} centered={centered}/>}
@@ -111,6 +108,7 @@ function Symbol({ s, selected, choose, navigate, c, rowHeight, baseline, comment
 export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, comments, showComments, viewMode='wrap' }: { network: Network; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; zoom: number; rowHeight: number; comments: DeviceComments; showComments: boolean; viewMode?:LadderViewMode }) {
   const root = useRef<SVGSVGElement>(null);
   const [raster, setRaster] = useState({ x: 0, y: 0, ratio: 1 });
+  const [hovered,setHovered]=useState('');
   function updateRaster() {
     if (!root.current) return;
     const rect = root.current.getBoundingClientRect();
@@ -166,8 +164,9 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
         </> : line(rail,0,0,0,g.rows*rowHeight,'rail left-rail'))}
         {outputs.map(s => line(endStroke, scrolling ? (s.col + s.span) * CELL : width, s.row * rowHeight + baseline, width + 8, s.row * rowHeight + baseline, 'wire'))}
         <g clip-path={`url(#${clip})`}><g transform={`translate(${-left} 0)`}>
+          <g pointer-events="none">{g.symbols.map(s=><SelectionRect key={s.instruction.id} phase="background" selected={selected===s.instruction.id} hovered={hovered===s.instruction.id} difference={s.instruction.difference?.kind} {...symbolBounds(s,rowHeight,baseline)}/>)}</g>
           {g.wires.map(w => line(c, w.x1 * CELL, w.y1 * rowHeight + baseline, w.x2 * CELL, w.y2 * rowHeight + baseline,w.difference?`wire wire-${w.difference}`:'wire'))}
-          {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} choose={choose} navigate={navigate} c={c} rowHeight={rowHeight} baseline={baseline} comments={comments} showComments={showComments}/>)}
+          {g.symbols.map(s => <Symbol key={s.instruction.id} s={s} selected={selected} hovered={hovered===s.instruction.id} hover={setHovered} choose={choose} navigate={navigate} c={c} rowHeight={rowHeight} baseline={baseline} comments={comments} showComments={showComments}/>)}
         </g></g>
         {notes.filter(note=>note.pointer?page===0:note.col*CELL>=left&&note.col*CELL<left+width).map(note=><foreignObject key={note.owner.id} data-note-instruction-ids={note.instructions.map(i=>i.id).join(' ')} x={note.pointer?-LEFT_GUTTER+6:note.col*CELL-left+6} y={note.row*rowHeight+metrics.padding+note.top} width={note.pointer?LEFT_GUTTER-28:note.owner.inlineST?note.span*CELL-12:Math.min(3*CELL,note.span*CELL-12)} height={note.lines.length*NOTE_LINE_HEIGHT}>
           <div class={`network-statements network-notes instruction-notes ${note.owner.inlineST?'inline-st-notes':''}`}>{note.lines.map((text,index)=><div key={index} class="network-title network-note" title={text}>{text}</div>)}</div>
@@ -175,7 +174,7 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
         {g.symbols.filter(s => s.col * CELL >= left && s.col * CELL < left + width)
           .filter((s, index, all) => all.findIndex(other => other.row === s.row) === index)
           .map(s => <text class={`step-label ${s.instruction.difference?.kind==='step'?'step-difference':''}`} x={-9} y={s.row * rowHeight + baseline + 4}>{network.pointer && page === 0 && s.row === (network.rowAlignment?.[pointerRow] ?? pointerRow) ? network.pointer.step : s.instruction.step}</text>)}
-        {!scrolling && g.pages > 1 && <text class="continuation" x={8} y={g.rows * rowHeight + 15}>{page + 1} / {g.pages} 段{page + 1 < g.pages ? '　→ 次段へ接続' : ''}{page > 0 ? '　（前段からの続き）' : ''}</text>}
+        {!scrolling && g.pages > 1 && <text class="continuation" x={8} y={g.rows * rowHeight + 15}>{continuationText(page,g.pages)}</text>}
       </g>;
     })}
   </svg>;

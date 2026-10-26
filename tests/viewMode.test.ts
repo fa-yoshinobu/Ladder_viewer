@@ -4,6 +4,7 @@ import { parseProgram, type Network } from '../src/model.ts';
 import { parseComparison } from '../src/comparison.ts';
 import { CELL, COLUMNS, GRID_WIDTH, LADDER_WIDTH, LEFT_GUTTER, PAGE_GAP, ROW, SCROLLBAR_HEIGHT, displayGrid, drawingPages, gridLayout, networkSize } from '../src/layout.ts';
 import { NetworkDrawing, drawingHeight } from '../src/NetworkDrawing.tsx';
+import {HorizontalScroll} from '../src/HorizontalScroll.tsx';
 
 const normal=(commands:string[])=>parseProgram([
  'ステップ番号\t命令\tI/O(デバイス)',
@@ -14,7 +15,11 @@ const comparison=(source:string[],target:string[])=>parseComparison([
  ['行','ステップ','照合元','ステップ','照合先','照合結果'],
  ...Array.from({length:Math.max(source.length,target.length)},(_,i)=>[String(i+1),source[i]?String(i):'',source[i]??'',target[i]?String(i):'',target[i]??'','不一致'])
 ].map(row=>row.map(value=>'"'+value.replaceAll('"','""')+'"').join('\t')).join('\n'),'synthetic-comparison.csv');
-const drawing=(network:Network,viewMode:'wrap'|'scroll',zoom=1,scrollContainer=true)=>NetworkDrawing({network,viewMode,zoom,rowHeight:ROW,selected:'',choose:()=>{},comments:{},showComments:true,scrollContainer});
+const drawing=(network:Network,viewMode:'wrap'|'scroll',zoom=1,scrollContainer=true)=>{
+ const vnode=NetworkDrawing({network,viewMode,zoom,rowHeight:ROW,selected:'',choose:()=>{},comments:{},showComments:true,scrollContainer});
+ assert.equal(vnode.type,HorizontalScroll);
+ return HorizontalScroll(vnode.props as Parameters<typeof HorizontalScroll>[0]);
+};
 
 test('short circuits keep exactly the same dimensions and unwrapped container in either mode',()=>{
  const n=normal(['LD X0','OUT Y0']);

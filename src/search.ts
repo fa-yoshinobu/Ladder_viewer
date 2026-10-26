@@ -1,3 +1,4 @@
+import {normalizeSearchText as normalize,searchTextMatches} from './searchText';
 import type { Instruction, Program } from './model';
 import { addressParts } from './address';
 import { deviceComment, type DeviceComments } from './comments';
@@ -9,7 +10,7 @@ export interface SearchEntry {
   fields: string[];
 }
 
-const normalize = (text: string) => text.normalize('NFKC').toLowerCase().replace(/\s+/g, ' ').trim();
+
 
 export function buildSearchIndex(
   program: Program,
@@ -47,9 +48,6 @@ export function buildSearchIndex(
 }
 
 export function searchInstructions(index: SearchEntry[], query: string, mode: SearchMode): SearchEntry[] {
-  const normalized = normalize(query);
-  if (!normalized) return [];
-  if (mode === 'exact') return index.filter(entry => entry.fields.includes(normalized));
-  const terms = normalized.split(' ');
-  return index.filter(entry => terms.every(term => entry.fields.some(field => field.includes(term))));
+  const needle=normalize(query);
+  return index.filter(entry => searchTextMatches(entry.fields,needle,mode));
 }

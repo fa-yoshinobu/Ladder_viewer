@@ -2,6 +2,7 @@ import type { Instruction, Network } from './model';
 import type { DeviceComments } from './comments';
 import { gridLayout, displayGrid, networkSize, SCROLLBAR_HEIGHT, COLUMNS, PAGE_GAP, drawingMetrics, type LadderViewMode } from './layout';
 import { Ladder } from './Ladder';
+import { HorizontalScroll } from './HorizontalScroll';
 import { MasterControlScope } from './MasterControlScope';
 import { ControlFlowScope } from './ControlFlowScope';
 
@@ -16,9 +17,8 @@ export function NetworkDrawing({network,zoom,rowHeight,selected,choose,navigate,
   {network.warnings.map(w=><div class="warning">⚠ {w}</div>)}
   <Ladder network={network} selected={selected} choose={choose} navigate={navigate} zoom={zoom} rowHeight={rowHeight} comments={comments} showComments={showComments} viewMode={viewMode}/>
  </>;
- const drawing=scrollContainer&&viewMode==='scroll'&&gridLayout(network).pages>1
-  ?<div class="network-scroll" role="region" aria-label={`回路 ${network.step} 横スクロール`} tabIndex={0} style={{width:networkSize(network,rowHeight).width*zoom,height:drawingHeight(network,rowHeight,zoom,viewMode)}}><div style={{width}}>{content}</div></div>
-  :content;
+ const drawing=<HorizontalScroll enabled={scrollContainer&&viewMode==='scroll'&&gridLayout(network).pages>1}
+  width={networkSize(network,rowHeight).width*zoom} contentWidth={width} height={drawingHeight(network,rowHeight,zoom,viewMode)} label={`回路 ${network.step} 横スクロール`}>{content}</HorizontalScroll>;
  if(!showMasterScope||(!network.masterControlRanges?.length&&!network.controlRanges?.length))return drawing;
  const outerWidth=scrollContainer?networkSize(network,rowHeight).width*zoom:width;
  const height=drawingHeight(network,rowHeight,zoom,viewMode,scrollContainer);

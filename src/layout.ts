@@ -1,22 +1,16 @@
+import {placeSymbolColumn} from './ladderGeometry';
+import {CELL,ROW,COLUMNS,GRID_WIDTH,LEFT_GUTTER,LADDER_WIDTH,BASELINE,PAGE_GAP} from './ladderMetrics';
+export {CELL,ROW,COMMENT_ROW,COLUMNS,GRID_WIDTH,LEFT_GUTTER,LADDER_WIDTH,BASELINE,PAGE_GAP,SCROLLBAR_HEIGHT} from './ladderMetrics';
 import type { Instruction, Logic, Network } from './model';
 import type {FunctionBlock,FunctionPort} from './functionBlocks';
 import { isComparisonCondition } from './instructions';
 import { isControlMarker, isMemoryControl } from './controlFlow';
-export const CELL = 74;
-export const ROW = 56;
-export const COLUMNS = 12;
 export const isCoil = (i:Instruction) => /^(OUT|OUTH)$/.test(i.op) && i.operands.length===1;
-export const GRID_WIDTH = COLUMNS * CELL;
-export const LEFT_GUTTER = 82;
-export const LADDER_WIDTH = LEFT_GUTTER + GRID_WIDTH + 16;
 export function fitLadderZoom(viewportWidth:number,comparison:boolean):number {
  const availableWidth=comparison?(viewportWidth-170)/2:viewportWidth;
  return Math.max(comparison ? .25 : .5,Math.min(1.5,Math.floor((availableWidth-24)/LADDER_WIDTH*100)/100));
 }
-export const BASELINE = 28;
-export const PAGE_GAP = 22;
 export type LadderViewMode = 'wrap' | 'scroll';
-export const SCROLLBAR_HEIGHT = 16;
 export interface GridSymbol { instruction: Instruction; col: number; row: number; span: number; contact: boolean; value?:string; valueEnd?:boolean; fb?:{model:FunctionBlock;rows:number;ports:{port:FunctionPort;row:number;input:boolean}[]}; inputDifference?:'added'|'removed'; outputDifference?:'added'|'removed'; }
 export interface GridWire { x1: number; y1: number; x2: number; y2: number; difference?:'added'|'removed'; }
 export interface GridLayout { symbols: GridSymbol[]; wires: GridWire[]; rows: number; pages: number; width: number; height: number; }
@@ -75,7 +69,7 @@ export function gridLayout(n: Network): GridLayout {
   let end:End;
   if(e.kind==='contact') {
    const span=size(e).width;
-   const start=Math.floor(x/COLUMNS)===Math.floor((x+span-1)/COLUMNS)?x:Math.ceil(x/COLUMNS)*COLUMNS;
+   const start=placeSymbolColumn(x,span,COLUMNS);
    line(x,y,start,y);symbols.push({instruction:e.instruction,col:start,row:y,span,contact:true}); end={col:start+span,row:y,bottom:y};
   } else if(e.kind==='and') {
    const a=place(e.children[0],x,y); const b=place(e.children[1],a.col,y); route(a,a.col,y); end={...b,bottom:Math.max(a.bottom,b.bottom)};

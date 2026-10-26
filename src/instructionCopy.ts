@@ -1,17 +1,12 @@
-import type { Instruction } from './model';
-import { isPointerDefinition } from './instructions';
-import { deviceComment, type DeviceComments } from './comments';
+import type {Instruction} from './model';
+import {isPointerDefinition} from './instructions';
+import {deviceComment,type DeviceComments} from './comments';
+import {formatInstructionCopy} from './textCopy';
 
-export function instructionCopyText(instruction: Instruction, comments: DeviceComments): string {
-  const lines = [[instruction.op, ...instruction.operands].join(' ')];
-  const addresses = isPointerDefinition(instruction.op) ? [instruction.op, ...instruction.operands] : instruction.operands;
-  for (const address of addresses) {
-    const comment = deviceComment(address, comments);
-    if (comment) lines.push(`${address}: ${comment}`);
-  }
-  if (instruction.piStatement) lines.push(instruction.piStatement);
-  if (instruction.note) lines.push(instruction.note);
-  if (instruction.inlineST) lines.push(instruction.inlineST.text);
-  for (const pin of instruction.pins ?? []) lines.push(instructionCopyText(pin, comments));
-  return lines.join('\n').replace(/\r\n?|\n/g, '\r\n');
+export function instructionCopyText(instruction:Instruction,comments:DeviceComments):string {
+ const command=[instruction.op,...instruction.operands].join(' ');
+ const addresses=isPointerDefinition(instruction.op)?[instruction.op,...instruction.operands]:instruction.operands;
+ const labels=addresses.map(address=>({address,comment:deviceComment(address,comments)}));
+ const extras=[instruction.piStatement,instruction.note,instruction.inlineST?.text,...(instruction.pins??[]).map(pin=>instructionCopyText(pin,comments))].filter((text):text is string=>!!text);
+ return formatInstructionCopy(command,labels,extras);
 }

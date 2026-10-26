@@ -9,7 +9,7 @@
     <AssemblyName>LadderViewer</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>Ladder Viewer</Product>
-    <Version>0.4.5</Version>
+    <Version>0.5.0</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
@@ -33,9 +33,9 @@
   <Target Name="ZipWebAssets" BeforeTargets="PrepareResources">
     <Error Condition="!Exists('$(MSBuildProjectDirectory)/../dist/index.html')" Text="Run npm run build before publishing the Windows app." />
     <ItemGroup>
-      <InputCsv Include="$(MSBuildProjectDirectory)/../dist/**/*.csv" />
+      <InputCsv Include="$(MSBuildProjectDirectory)/../dist/**/*.csv;$(MSBuildProjectDirectory)/../dist/**/*.mnm" />
     </ItemGroup>
-    <Error Condition="'@(InputCsv)' != ''" Text="Input CSV files must not be embedded. Remove CSV files from dist before publishing." />
+    <Error Condition="'@(InputCsv)' != ''" Text="Input CSV/MNM files must not be embedded. Remove input files from dist before publishing." />
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <ZipDirectory SourceDirectory="$(MSBuildProjectDirectory)/../dist" DestinationFile="$(IntermediateOutputPath)web.zip" Overwrite="true" />
   </Target>
