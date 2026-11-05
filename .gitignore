@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.env
+.env.*
+!.env.example
+/artifacts/
+/public/
+*.csv
+
+*.[mM][nN][mM]
+__pycache__/
+*.pyc
