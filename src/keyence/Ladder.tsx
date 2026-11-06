@@ -11,10 +11,23 @@ import type {KeyenceInstruction} from './model';
 import {keyenceOutputStyle} from './outputStyle';
 import {KeyenceNativeSymbol} from './nativeSymbols';
 import {keyenceSymbolDifferenceKind} from './logic';
+import type {KeyenceNetwork} from './logic';
 import {KeyenceStructuredText} from './StructuredTextDrawing';
 
-export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{drawing:KeyenceDrawing;zoom:number;selected:string;
- onSelect:(instruction:KeyenceInstruction)=>void;onContextMenu:(event:MouseEvent,instruction:KeyenceInstruction)=>void}) {
+export function KeyenceScriptToggle({script,left,y,onToggle}:{script?:KeyenceNetwork['script'];left:number;y:number;onToggle?:(id:string)=>void}){
+ if(!script)return null;
+ const x=left-24,label=script.expanded?'スクリプトを折りたたむ':'スクリプトを展開';
+ return <g class="kv-script-toggle kv-st-code" role="button" tabindex={onToggle?0:-1} aria-expanded={script.expanded} aria-label={label} aria-disabled={!onToggle}
+  style={{cursor:'pointer'}} onClick={event=>{event.stopPropagation();onToggle?.(script.id);}}
+  onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();if(!event.repeat)onToggle?.(script.id);}}}>
+  <title>{label}</title>
+  <rect class="kv-st-hit" x={x} y={y-9} width={18} height={18} rx={2}/>
+  <path class="command-outline" d={`M${x+4},${y}H${x+14}${script.expanded?'':` M${x+9},${y-5}V${y+5}`}`} pointer-events="none"/>
+ </g>;
+}
+
+export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu,onToggleScript}:{drawing:KeyenceDrawing;zoom:number;selected:string;
+ onSelect:(instruction:KeyenceInstruction)=>void;onContextMenu:(event:MouseEvent,instruction:KeyenceInstruction)=>void;onToggleScript?:(id:string)=>void}) {
  const root=useRef<SVGSVGElement>(null);
  const [raster,setRaster]=useState({x:0,y:0,ratio:1});
  const [hovered,setHovered]=useState('');
@@ -47,7 +60,8 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
   const coordinates=isRail?rail:c;
   return <line x1={coordinates.x(x1)} y1={coordinates.y(y1)} x2={coordinates.x(x2)} y2={coordinates.y(y2)} class={isRail?'kv-rail':`kv-line${difference?' wire wire-'+difference:''}`}/>;
  };
- const differenceOf=(symbol:KeyenceSymbol)=>keyenceSymbolDifferenceKind(symbol.instruction);
+ const hiddenScriptDifference=(symbol:KeyenceSymbol)=>!!symbol.instruction.st?.legacyScript&&!!drawing.network.script?.hiddenDifference&&!drawing.network.script.expanded;
+ const differenceOf=(symbol:KeyenceSymbol)=>hiddenScriptDifference(symbol)?'changed':keyenceSymbolDifferenceKind(symbol.instruction);
  const label=(symbol:KeyenceSymbol)=>{
   if(symbol.kind==='contact'||symbol.kind==='coil')return <tspan class={symbol.instruction.difference?.kind==='changed'&&symbol.instruction.difference.operandChanges.includes(0)?'diff-value':''}><AddressText text={symbol.label} svg maxLength={11}/></tspan>;
   const difference=symbol.instruction.difference;if(difference?.kind!=='changed')return symbol.label;
@@ -84,24 +98,28 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
  };
  const symbolKey=(symbol:KeyenceSymbol,index:number)=>symbol.instruction.id+'-'+index;
  const rails=drawing.rails??[{x:drawing.left,top:drawing.railTop,bottom:drawing.railBottom},{x:drawing.right,top:drawing.railTop,bottom:drawing.railBottom}];
+ const scriptY=drawing.headerHeight+drawing.baseline,range=drawing.network.scriptRange;
+ const rangeLeft=drawing.left-4,rangeRight=drawing.right+4,rangeTop=range?.start?1:0,rangeBottom=drawing.height-(range?.end?1:0);
  return <svg ref={root} class={'kv-ladder'+(drawing.network.disabled?' kv-disabled':'')} aria-label={`キーエンス ${drawing.network.disabled?'無効':''}回路 元ファイル${drawing.network.instructions[0].sourceLine}行`} width={drawing.width*zoom} height={drawing.height*zoom} viewBox={`0 0 ${drawing.width} ${drawing.height}`} style={{'--drawing-stroke':`${c.width}px`,'--drawing-rail':`${rail.width}px`}}>
+  {range&&<rect class="kv-script-range-background" x={rangeLeft} y={rangeTop} width={rangeRight-rangeLeft} height={rangeBottom-rangeTop} pointer-events="none"/>}
   {drawing.statementLines.map((text,index)=><g key={index}><rect class="kv-statement-background" x={drawing.left} y={index*18} width={drawing.right-drawing.left} height={18}/><text class="kv-statement" x={drawing.left+7} y={index*18+14}>{text}</text></g>)}
   {drawing.network.warnings.map((warning,index)=><text key={warning} class="kv-warning" x={drawing.left+7} y={drawing.statementLines.length*18+index*22+16}>{warning}</text>)}
   {/* Highlight fills stay behind every wire, including branches crossing another symbol's hit area. */}
   <g pointer-events="none">
-   {drawing.symbols.map((symbol,index)=><SelectionRect key={symbolKey(symbol,index)} phase="background" selected={keyenceSymbolOwns(symbol,selected)} hovered={symbolKey(symbol,index)===hovered} difference={symbol.kind==='st-box'&&differenceOf(symbol)==='changed'?undefined:differenceOf(symbol)} {...hitBounds(symbol)}/>)}
+   {drawing.symbols.map((symbol,index)=><SelectionRect key={symbolKey(symbol,index)} phase="background" selected={keyenceSymbolOwns(symbol,selected)} hovered={symbolKey(symbol,index)===hovered} difference={symbol.kind==='st-box'&&differenceOf(symbol)==='changed'&&!hiddenScriptDifference(symbol)?undefined:differenceOf(symbol)} {...hitBounds(symbol)}/>)}
   </g>
   {rails.map((segment,index)=><g key={index}>{line(segment.x,segment.top,segment.x,segment.bottom,true)}</g>)}
   {drawing.wires.map((wire,index)=><g key={index}>{line(wire.x1,wire.y1,wire.x2,wire.y2,false,wire.difference)}</g>)}
   {(drawing.continuationLabels??[]).map((label,index)=><text key={index} class="continuation" x={label.x} y={label.y}>{label.text}</text>)}
-  {Array.from(drawing.symbols.reduce((rows,symbol)=>rows.set(symbol.y,Math.min(rows.get(symbol.y)??Infinity,symbol.instruction.sourceLine)),new Map<number,number>()).entries()).map(([y,sourceLine])=><text key={y} class="step-label" x={drawing.left-9} y={y+4} text-anchor="end" onContextMenu={e=>blockRangeMenu(e,blockRangeText([drawing.network]))}>{sourceLine}</text>)}
+  {Array.from(drawing.symbols.reduce((rows,symbol)=>rows.set(symbol.y,Math.min(rows.get(symbol.y)??Infinity,symbol.instruction.sourceLine)),new Map<number,number>()).entries()).map(([y,sourceLine])=><text key={y} class="step-label" x={drawing.left-(drawing.network.script&&y===scriptY?32:9)} y={y+4} text-anchor="end" onContextMenu={e=>blockRangeMenu(e,blockRangeText([drawing.network]))}>{sourceLine}</text>)}
+  <KeyenceScriptToggle script={drawing.network.script} left={drawing.left} y={scriptY} onToggle={onToggleScript}/>
   {/* Match Mitsubishi: paint each glyph after its hit target and selection frame so its leads stay visible. */}
   {drawing.symbols.map((symbol,index)=><g key={symbolKey(symbol,index)} class={`kv-symbol${keyenceSymbolOwns(symbol,selected)?' selected':''}`}
    role="button" tabindex={0} aria-label={`${symbol.instruction.opcode} ${symbol.instruction.operands.join(' ')} ${symbol.comment}`}
    onMouseEnter={()=>setHovered(symbolKey(symbol,index))} onMouseLeave={()=>setHovered('')}
    onClick={()=>onSelect(symbol.instruction)} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();onSelect(symbol.instruction);}}}
    onContextMenu={event=>onContextMenu(event,symbol.instruction)}>
-   <title>{`元ファイル ${symbol.instruction.sourceLine}行\n${symbol.instruction.opcode} ${symbol.instruction.operands.join(' ')}${symbol.comment?'\n'+symbol.comment:''}`}</title>
+   <title>{`元ファイル ${symbol.instruction.sourceLine}行\n${symbol.instruction.opcode} ${symbol.instruction.operands.join(' ')}${symbol.comment?'\n'+symbol.comment:''}${hiddenScriptDifference(symbol)?'\n展開命令に差分があります':''}`}</title>
    <SelectionRect phase="frame" selected={keyenceSymbolOwns(symbol,selected)} hovered={symbolKey(symbol,index)===hovered} className="kv-hit" difference={differenceOf(symbol)} {...hitBounds(symbol)}/>
    <g pointer-events="none">
     {glyph(symbol)}
@@ -110,5 +128,9 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu}:{dr
      width={symbol.width-(centeredComment(symbol)?4:28)} centered={centeredComment(symbol)}/>}
    </g>
   </g>)}
+  {range&&<g class="kv-script-range" data-script-range={range.id} data-range-start={range.start} data-range-end={range.end} role="img" aria-label={`ST展開範囲${range.start?' 開始':''}${range.end?' 終了':''}`} pointer-events="none">
+   <path d={`M${rangeLeft},${rangeTop}V${rangeBottom} M${rangeRight},${rangeTop}V${rangeBottom}${range.start?` M${rangeLeft},${rangeTop}H${rangeRight}`:''}${range.end?` M${rangeLeft},${rangeBottom}H${rangeRight}`:''}`}/>
+   {range.start&&<text x={drawing.left-8} y={13} text-anchor="end">ST</text>}
+  </g>}
  </svg>;
 }

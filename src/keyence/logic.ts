@@ -1,4 +1,4 @@
-import type {KeyenceInstruction,KeyenceProgram} from './model';
+import type {KeyenceInstruction,KeyenceProgram,KeyenceScriptDisplay} from './model';
 
 export type KeyenceExpression =
  | {kind:'contact';instruction:KeyenceInstruction;negated:boolean;pulse:'rise'|'fall'|null;comparison:string|null}
@@ -13,6 +13,8 @@ export interface KeyenceAction {
 export interface KeyenceNetwork {
  id:string;statement:string;instructions:KeyenceInstruction[];actions:KeyenceAction[];
  condition:KeyenceExpression|null;warnings:string[];disabled?:boolean;
+ script?:KeyenceScriptDisplay;
+ scriptRange?:{id:string;start:boolean;end:boolean};
 }
 type ContactSpec={join:'load'|'and'|'or';negated:boolean;pulse:'rise'|'fall'|null;comparison:string|null};
 const contactOps:Record<string,[ContactSpec['join'],boolean,ContactSpec['pulse']]> = {

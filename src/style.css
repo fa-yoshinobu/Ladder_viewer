@@ -250,6 +250,11 @@ dd{margin:0;font-size:14px;line-height:1.7;white-space:pre-wrap;overflow-wrap:an
 .kv-st-code{cursor:text}
 .kv-st-code.selected .kv-st-hit,.kv-st-code:focus-visible .kv-st-hit{stroke:var(--ld-chosen);stroke-width:2}
 .kv-st-code:focus{outline:none}
+.kv-script-range,.kv-script-range-background{color:#7956ad}
+:root[data-theme=dark] .kv-script-range,:root[data-theme=dark] .kv-script-range-background{color:#c6a2f2}
+.kv-script-range-background{fill:currentColor;opacity:.09}
+.kv-script-range path{fill:none;stroke:currentColor;stroke-width:1.5;vector-effect:non-scaling-stroke}
+.kv-script-range text{fill:currentColor;font:700 10px var(--ui-font)}
 .kv-disabled .kv-line,.kv-disabled .wire,.kv-disabled .contact,.kv-disabled .command-outline{stroke-dasharray:4 3;opacity:.55}
 .kv-disabled text{opacity:.65}
 

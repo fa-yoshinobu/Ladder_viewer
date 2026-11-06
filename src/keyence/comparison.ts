@@ -17,7 +17,7 @@ export function compareKeyencePrograms(sourceInput:KeyenceProgram,targetInput:Ke
   return n.instructions.map(i=>({id:i.id,opcode:i.opcode,operands:i.operands,line:i.sourceLine,contactKey:conditions.has(i.id)?keyenceContactKey(i.opcode,i.operands):undefined,
    role:actions.has(i.id)?'action' as const:conditions.has(i.id)?'condition' as const:'structure' as const,
    family:i.opcode==='ANL'||i.opcode==='ORL'?'block-join':i.opcode,
-   annotation:JSON.stringify([i.statement,keyenceInstructionComment(i,p),i.st?.lines.map(line=>line.text),!!i.disabled])}));
+   annotation:JSON.stringify([i.statement,keyenceInstructionComment(i,p),i.st?.lines.map(line=>line.text),!!i.disabled,i.macro])}));
  });
  const sources=new Map(source.instructions.map(i=>[i.id,i])),targets=new Map(target.instructions.map(i=>[i.id,i])),changes:KeyenceChange[]=[];
  alignInstructions(describe(a,source),describe(b,target)).forEach((pair,index)=>{
@@ -52,7 +52,8 @@ function alignRows(drawings:[KeyenceDrawing[],KeyenceDrawing[]],branchesAligned=
   let removed=0,added=0;while(index<chunks.length&&(chunks[index].added||chunks[index].removed)){if(chunks[index].removed)removed+=chunks[index].count;else added+=chunks[index].count;index++;}index--;
   for(let n=0;n<removed;n++)positions[0].push(slot+n);for(let n=0;n<added;n++)positions[1].push(slot+n);slot+=Math.max(removed,added);
  }
- const rowHeight=Math.max(...drawings.flat().map(d=>d.rowHeight)),headers=Array<number>(slot).fill(0),tops:number[]=[];
+ const baseline=Math.max(...drawings.flat().map(d=>d.baseline));
+ const rowHeight=Math.max(...drawings.flat().map(d=>d.rowHeight+baseline-d.baseline)),headers=Array<number>(slot).fill(0),tops:number[]=[];
  // A statement between two circuits also needs space on the opposite, merged circuit.
  rows.forEach((side,index)=>side.forEach((r,row)=>{if(r.row===0){const at=positions[index][row];headers[at]=Math.max(headers[at],r.drawing.headerHeight);}}));
  let top=0;for(const header of headers){top+=header;tops.push(top);top+=rowHeight;}
@@ -62,9 +63,9 @@ function alignRows(drawings:[KeyenceDrawing[],KeyenceDrawing[]],branchesAligned=
    const slots=positions[index].slice(rowIndex,rowIndex+d.rows);rowIndex+=d.rows;
    const start=end,headerHeight=tops[slots[0]]-start;
    end=tops[slots.at(-1)!]+rowHeight;
-   const y=(value:number)=>{const row=Math.round((value-d.headerHeight-d.baseline)/d.rowHeight);return tops[slots[row]]+d.baseline-start;};
-   return {...d,rowHeight,headerHeight,rows:slots.at(-1)!-slots[0]+1,height:end-start,railTop:headerHeight,railBottom:end-start,
-    symbols:d.symbols.map(s=>({...s,y:y(s.y),ports:s.ports?.map(p=>({...p,y:y(p.y)}))})),wires:d.wires.map(w=>({...w,y1:y(w.y1),y2:y(w.y2)}))};
+   const y=(value:number)=>{const row=Math.round((value-d.headerHeight-d.baseline)/d.rowHeight);return tops[slots[row]]+baseline-start;};
+   return {...d,baseline,rowHeight,headerHeight,rows:slots.at(-1)!-slots[0]+1,height:end-start,railTop:headerHeight,railBottom:end-start,
+    symbols:d.symbols.map(s=>({...s,y:y(s.y),...(s.blockRows?{height:s.blockRows*rowHeight-8}:{}),ports:s.ports?.map(p=>({...p,y:y(p.y)}))})),wires:d.wires.map(w=>({...w,y1:y(w.y1),y2:y(w.y2)}))};
   });
  }) as [KeyenceDrawing[],KeyenceDrawing[]];
  return result;

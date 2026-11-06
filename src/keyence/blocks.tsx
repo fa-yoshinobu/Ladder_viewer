@@ -3,6 +3,7 @@ import type {KeyenceSymbol} from './layout';
 import {keyenceBlockGeometry,keyenceStBoxGeometry} from './blockGeometry';
 import {keyenceStChangedLines,ST_ROW_HEIGHT} from './structuredText';
 import {highlightStRows} from '../stSyntax';
+import {highlightKeyenceScriptRows} from './scriptSyntax';
 
 export function KeyenceBlock({symbol,c}:{symbol:KeyenceSymbol;c:StrokeCoordinates}){
  const {x,y,width,instruction}=symbol,X=c.x,Y=c.y,fb=instruction.fb!,g=keyenceBlockGeometry(fb);
@@ -30,7 +31,7 @@ export function KeyenceBlock({symbol,c}:{symbol:KeyenceSymbol;c:StrokeCoordinate
 export function KeyenceStBox({symbol,c}:{symbol:KeyenceSymbol;c:StrokeCoordinates}){
  const {x,y,width,instruction}=symbol,g=keyenceStBoxGeometry(instruction),X=c.x,Y=c.y;
  const changed=keyenceStChangedLines(instruction),difference=instruction.difference?.kind;
- const colored=highlightStRows(g.rows);
+ const colored=instruction.st?.legacyScript?highlightKeyenceScriptRows(g.rows):highlightStRows(g.rows);
  return <g class="kv-st-box">
   <line class={symbol.inputDifference?'wire wire-'+symbol.inputDifference:'wire'} x1={X(x)} y1={Y(y)} x2={X(x+6)} y2={Y(y)}/>
   <line class={symbol.outputDifference?'wire wire-'+symbol.outputDifference:'wire'} x1={X(x+width-6)} y1={Y(y)} x2={X(x+width)} y2={Y(y)}/>

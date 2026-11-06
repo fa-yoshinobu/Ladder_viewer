@@ -2,6 +2,7 @@ import type {StrokeCoordinates} from '../drawing';
 import {LadderGlyph} from '../LadderPrimitives';
 import type {KeyenceSymbol} from './layout';
 import {keyenceOutputStyle,keyenceBoxColumnSpans} from './outputStyle';
+import {keyenceMacroGeometry} from './macroGeometry';
 
 // KEYENCE's operand positions and pulse marks are local to these symbols.
 export function KeyenceNativeSymbol({symbol,c}:{symbol:KeyenceSymbol;c:StrokeCoordinates}) {
@@ -15,6 +16,27 @@ export function KeyenceNativeSymbol({symbol,c}:{symbol:KeyenceSymbol;c:StrokeCoo
  const path=(d:string,className='command-outline')=><path class={className} d={d}/>;
  const pulse=(at:number,direction=-1)=>path(`M${X(at)},${Y(y-direction*6)}V${Y(y+direction*7)} M${X(at-3)},${Y(y+direction*3)}L${X(at)},${Y(y+direction*7)}L${X(at+3)},${Y(y+direction*3)}`,'contact kv-execution-pulse');
  const execution=style.pulse?pulse(x+3):null;
+ if(kind==='command'&&style.body==='MCALL'&&(style.operands?.length??0)>1){
+  const {spans,parameters,comment,annotationLines,annotationY}=keyenceMacroGeometry(instruction,symbol.showComments),unit=width/spans.reduce((a,b)=>a+b,0);
+  const starts=spans.map((_,index)=>x+spans.slice(0,index).reduce((a,b)=>a+b,0)*unit);
+  return <g class="kv-native-box kv-native-macro">
+   {wire(x,y,x+6,y,symbol.inputDifference)}{wire(x+width-6,y,x+width,y,symbol.outputDifference)}
+   <rect class="command-outline" x={X(x+6)} y={Y(y-21)} width={X(x+width-6)-X(x+6)} height={Y(y+17)-Y(y-21)}/>
+   {starts.slice(1).map(at=>wire(at,y-21,at,y+17))}
+   <text class="operator" x={x+12} y={y-23} style={{textAnchor:'start'}}>{part(style.body)}{' '}{part(instruction.operands[0],0)}</text>
+   {parameters.map((parameter,index)=><g key={index}>
+    <text class="device kv-macro-parameter" x={starts[index]+spans[index]*unit/2} y={y-6}>{parameter.name}</text>
+    <text class="device kv-native-operand" x={starts[index]+spans[index]*unit/2} y={y+9}>{part(parameter.value,parameter.operandIndex)}</text>
+    {parameter.commentLines.length>0&&<text class="device-comment" x={starts[index]+6} y={y+27}>
+     <title>{parameter.comment}</title>{parameter.commentLines.map((line,row)=><tspan key={row} x={starts[index]+6} dy={row?12:0}>{line}</tspan>)}
+    </text>}
+   </g>)}
+   {annotationLines.length>0&&<text class="device-comment" x={x+6} y={y+annotationY}>
+    <title>{comment}</title>{annotationLines.map((line,row)=><tspan key={row} x={x+6} dy={row?12:0}>{line}</tspan>)}
+   </text>}
+   {execution}
+  </g>;
+ }
  if(kind==='command'&&style.operands){
   const spans=keyenceBoxColumnSpans(style),unit=width/spans.reduce((a,b)=>a+b,0),columns=spans.length;
   const starts=spans.map((_,index)=>x+spans.slice(0,index).reduce((a,b)=>a+b,0)*unit);

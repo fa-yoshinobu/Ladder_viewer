@@ -2,6 +2,7 @@ import {csvRows} from './gxFormat';
 import {programFormat} from './programFormat';
 import {parseKeyenceMnm} from './keyence/parser';
 import type {KeyenceProgram} from './keyence/model';
+import {linkKeyenceMacros} from './keyence/macros';
 import {isKeyenceCommentCsv,parseKeyenceComments,type KeyenceDeviceComments} from './keyence/comments';
 import { isComparisonHeader, parseComparison } from './comparison';
 import type { DeviceComments } from './comments';
@@ -16,6 +17,7 @@ export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total
   const tables = new Map<string, DeviceComments>();
   const keyenceTables = new Map<string, KeyenceDeviceComments>();
   const programFolders = new Map<Program, string>();
+  const keyenceFolders = new Map<string, KeyenceProgram[]>();
   const isNamedTable = (file:CsvInput) => /^comment\.csv$/i.test(file.name.split(/[\\/]/).at(-1)!);
   type Prepared =
     | {file:CsvInput;kind:'keyence'}
@@ -63,7 +65,11 @@ export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total
     const {file}=item;
     try{
       if(item.kind==='error')throw new Error(item.message);
-      if(item.kind==='keyence'){const program=parseKeyenceMnm(file.bytes,file.name,keyenceTables.get(folderOf(file)));if(file.relativePath!==undefined)program.relativePath=file.relativePath;result.keyencePrograms.push(program);}
+      if(item.kind==='keyence'){
+        const folder=folderOf(file),program=parseKeyenceMnm(file.bytes,file.name,keyenceTables.get(folder));
+        if(file.relativePath!==undefined)program.relativePath=file.relativePath;result.keyencePrograms.push(program);
+        const programs=keyenceFolders.get(folder)??[];programs.push(program);keyenceFolders.set(folder,programs);
+      }
       else if(item.kind==='keyence-comments'||item.kind==='mitsubishi-comments')result.comments.push(file.name);
       else{
         const program=item.comparison?parseComparison(item.text,file.name):parseProgram(item.text,file.name);
@@ -73,5 +79,6 @@ export function parseCsvBatch(files: CsvInput[], progress?: (done: number, total
     progress?.(index+1,ordered.length,file.name);
   }
   for (const program of result.programs) result.commentsByProgram[program.name] = tables.get(programFolders.get(program)!) ?? Object.create(null);
+  for (const programs of keyenceFolders.values()) linkKeyenceMacros(programs);
   return result;
 }

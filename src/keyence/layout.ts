@@ -7,6 +7,7 @@ import {continuationText} from '../continuation';
 import {placeSymbolColumn} from '../ladderGeometry';
 import {layoutBranches,type BranchRow,type BranchRowHints} from '../branchAlignment';
 import {keyenceBlockGeometry,keyenceStBoxGeometry} from './blockGeometry';
+import {keyenceMacroGeometry} from './macroGeometry';
 import {keyenceStLayout,ST_ROW_HEIGHT,ST_HEADER_HEIGHT,type KeyenceStRow} from './structuredText';
 
 export {KEYENCE_CELL,KEYENCE_LEFT,KEYENCE_COLUMNS};
@@ -14,7 +15,7 @@ export interface KeyenceWire {x1:number;y1:number;x2:number;y2:number;difference
 export interface KeyenceSymbol {
  instruction:KeyenceInstruction;x:number;y:number;width:number;
  kind:'contact'|'comparison'|'inline'|KeyenceOutputStyle['kind'];negated:boolean;pulse:'rise'|'fall'|null;
- label:string;comment:string;commentLines:string[];blockRows?:number;
+ label:string;comment:string;commentLines:string[];blockRows?:number;showComments?:boolean;
  operation?:'rise'|'fall'|'invert';ports?:{name:string;y:number;difference?:'added'|'removed'}[];height?:number;controlLevel?:number;
  inputDifference?:'added'|'removed';outputDifference?:'added'|'removed';condition?:boolean;
 }
@@ -156,8 +157,9 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
  const statementWidth=wrap?Math.min(KEYENCE_COLUMNS*KEYENCE_CELL,right-KEYENCE_LEFT):right-KEYENCE_LEFT;
  const statementLines=[...(network.disabled?['無効回路']:[]),...network.statement?wrapKeyenceText(network.statement,Math.max(20,Math.floor(statementWidth/7))):[]];
  const headerHeight=statementLines.length*18+network.warnings.length*22;
- const hasComments=program.instructions.some(instruction=>!!instruction.comment)||Object.keys(program.deviceComments).length>0;
- const baseline=Math.max(BASELINE,...network.instructions.filter(instruction=>instruction.fb).map(instruction=>4-keyenceBlockGeometry(instruction.fb!).top));
+ const hasComments=program.instructions.some(instruction=>!!instruction.comment||!!instruction.macro?.comment||instruction.macro?.parameters.some(parameter=>!!parameter.comment))||Object.keys(program.deviceComments).length>0;
+ const baseline=Math.max(BASELINE,...network.instructions.filter(instruction=>instruction.fb).map(instruction=>4-keyenceBlockGeometry(instruction.fb!).top),
+  ...network.instructions.filter(instruction=>instruction.macro).map(instruction=>4-keyenceMacroGeometry(instruction,showComments).top));
  const rowHeight=(showComments&&hasComments?COMMENT_ROW:ROW)+baseline-BASELINE,top=headerHeight+baseline;
  const symbols:KeyenceSymbol[]=[],wires:KeyenceWire[]=[];
  const branches:BranchRow[]=[];
@@ -175,10 +177,11 @@ export function layoutKeyenceNetwork(network:KeyenceNetwork,program:KeyenceProgr
  const symbol=(instruction:KeyenceInstruction,column:number,row:number,span:number,kind:KeyenceSymbol['kind'],label:string,negated=false,pulse:KeyenceSymbol['pulse']=null)=>{
   const comment=keyenceInstructionComment(instruction,program);
   const commentLines=showComments&&comment?wrapKeyenceText(comment,Math.max(8,Math.floor((span*KEYENCE_CELL-12)/6))):[];
-  const result:KeyenceSymbol={instruction,x:x(column),y:y(row),width:span*KEYENCE_CELL,kind,negated,pulse,label,comment,
+  const result:KeyenceSymbol={instruction,x:x(column),y:y(row),width:span*KEYENCE_CELL,kind,negated,pulse,label,comment,showComments,
    commentLines:commentLines.length>2?[commentLines[0],commentLines[1].slice(0,-1)+'…']:commentLines};
   if(instruction.fb)result.blockRows=Math.ceil((baseline+keyenceBlockGeometry(instruction.fb).bottom+(commentLines.length?Math.min(2,commentLines.length)*12+12:0)+4)/rowHeight);
   if(kind==='st-box')result.blockRows=Math.ceil((baseline+keyenceStBoxGeometry(instruction).bottom+4)/rowHeight);
+  if(instruction.macro)result.blockRows=Math.ceil((baseline+keyenceMacroGeometry(instruction,showComments).bottom+4)/rowHeight);
   if(result.blockRows)result.height=result.blockRows*rowHeight-8;
   symbols.push(result);return result;
  };
@@ -392,4 +395,4 @@ export function keyenceViewDrawing(base:KeyenceDrawing,mode:'wrap'|'scroll'):Key
   symbols,wires,rails,continuationLabels,railTop:headerHeight,railBottom:height};
 }
 
-export const keyenceSymbolOwns=(symbol:KeyenceSymbol,id:string)=>symbol.instruction.id===id;
+export const keyenceSymbolOwns=(symbol:KeyenceSymbol,id:string)=>symbol.instruction.id===id||!!(symbol.instruction.script&&!symbol.instruction.script.expanded&&symbol.instruction.script.instructionIds.includes(id));

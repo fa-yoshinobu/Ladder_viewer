@@ -2,6 +2,7 @@ import type {KeyenceInstruction,KeyenceProgram} from './model';
 import type {KeyenceDeviceComments} from './comments';
 import {decodeKeyenceText} from './encoding';
 import {keyenceKvxFunction} from './kvxFunctions';
+import {linkKeyenceMacros} from './macros';
 
 // Quoted strings may contain semicolons; only an unquoted semicolon starts a comment.
 function instructionParts(line:string):{tokens:string[];comment:string} {
@@ -75,5 +76,6 @@ export function parseKeyenceMnm(bytes:ArrayBuffer,name:string,externalComments:K
    pins:i.operands.slice(start).map((value,index)=>({name:'引数'+(index+1),value,operandIndex:index+start}))};
   if(program.deviceCode==='60')i.fb=keyenceKvxFunction(i.opcode,i.fb);
  }
+ linkKeyenceMacros([program]);
  return program;
 }

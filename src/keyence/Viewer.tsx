@@ -3,7 +3,7 @@ import {normalizeSearchText as normalize,searchTextMatches} from '../searchText'
 import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
 import type {KeyenceInstruction,KeyenceProgram} from './model';
 import {nativeCsvBridge} from '../nativeCsv';
-import {buildKeyenceNetworks} from './logic';
+import {keyenceScriptNetworks,keyenceScriptRegions,keyenceVisibleInstructions} from './scriptDisplay';
 import {keyenceInstructionComment,layoutKeyenceNetwork,keyenceViewDrawing,keyenceSymbolOwns} from './layout';
 import {LADDER_WIDTH,SCROLLBAR_HEIGHT} from '../ladderMetrics';
 import {HorizontalScroll} from '../HorizontalScroll';
@@ -21,6 +21,7 @@ interface Props {
  onCompare?:()=>void;choose:(name:string)=>void;openFiles:()=>void;openFolder:()=>void;toggleTheme:()=>void;drop:(files:File[])=>void;
 }
 const clampZoom=(value:number)=>Math.min(1.5,Math.max(.5,value));
+const noExpandedScripts=new Set<string>();
 export function KeyenceViewer({program,names,busy,progress,error,dark,palette,changePalette,choose,openFiles,openFolder,toggleTheme,drop,onCompare}:Props) {
  const viewport=useRef<HTMLDivElement>(null),viewAnchor=useRef<number|null>(null);
  const [showComments,setShowComments]=useState(true),[zoom,setZoom]=useState(1);
@@ -30,8 +31,11 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
  const [viewMode,setViewMode]=useState<'wrap'|'scroll'>('wrap');
  const [searchMode,setSearchMode]=useState<'partial'|'exact'>('partial');
  const [pendingTarget,setPendingTarget]=useState<KeyenceInstruction|null>(null);
+ const [scriptExpansion,setScriptExpansion]=useState(()=>({program,ids:new Set<string>()})),[scriptTarget,setScriptTarget]=useState<KeyenceInstruction|null>(null);
+ const expandedScripts=scriptExpansion.program===program?scriptExpansion.ids:noExpandedScripts;
+ const setExpandedScripts=(update:(old:Set<string>)=>Set<string>)=>setScriptExpansion(old=>({program,ids:update(old.program===program?old.ids:noExpandedScripts)}));
  const [menu,setMenu]=useState<{x:number;y:number;instruction:KeyenceInstruction}|null>(null),[copyError,setCopyError]=useState('');
- const networks=useMemo(()=>buildKeyenceNetworks(program),[program]);
+ const networks=useMemo(()=>keyenceScriptNetworks(program,expandedScripts),[program,expandedScripts]);
  const hasComments=useMemo(()=>Object.keys(program.deviceComments).length>0||program.instructions.some(instruction=>!!instruction.comment),[program]);
  const baseDrawings=useMemo(()=>networks.map(network=>layoutKeyenceNetwork(network,program,showComments)),[networks,program,showComments]);
  const drawings=useMemo(()=>baseDrawings.map(drawing=>keyenceViewDrawing(drawing,viewMode)),[baseDrawings,viewMode]);
@@ -54,13 +58,14 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
   for(let index=low;index<offsets.length&&offsets[index]<end;index++)indices.push(index);
   return indices;
  },[dimensions,scrollTop,size.height]);
- const instruction=useMemo(()=>program.instructions.find(item=>item.id===selected),[program,selected]);
- const instructionNetworks=useMemo(()=>new Map(networks.flatMap((network,index)=>network.instructions.map(item=>[item.id,index] as const))),[networks]);
+ const instruction=useMemo(()=>networks.flatMap(n=>n.instructions).find(item=>item.id===selected)??program.instructions.find(item=>item.id===selected),[program,networks,selected]);
+ const instructionNetworks=useMemo(()=>new Map(networks.flatMap((network,index)=>keyenceVisibleInstructions(network,program).map(item=>[item.id,index] as const))),[networks,program]);
  const searchEntries=useMemo(()=>{
 
   return program.instructions.map(item=>({item,fields:[item.opcode,...item.operands,[item.opcode,...item.operands].join(' '),
    keyenceInstructionCopyText(item,program),String(item.sourceLine),`元ファイル ${item.sourceLine}行`,`行 ${item.sourceLine}`,item.comment,item.statement,
    keyenceInstructionComment(item,program),...item.operands.map(address=>keyenceDeviceComment(address,program.deviceComments)),
+   ...item.macro?.parameters.flatMap(parameter=>[parameter.name,parameter.comment])??[],
    ...item.st?.lines.flatMap(line=>[line.text,String(line.sourceLine),`元ファイル ${line.sourceLine}行`,`行 ${line.sourceLine}`])??[]].map(normalize).filter(Boolean)}));
  },[program]);
  const matches=useMemo(()=>{
@@ -70,6 +75,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
  const searchResults=useMemo(()=>matches.map(item=>({heading:`元ファイル ${item.sourceLine}行 · ${[item.opcode,...item.operands].join(' ')}`})),[matches]);
  const fit=()=>{const width=viewport.current?.clientWidth??size.width;setZoom(clampZoom(Math.floor((width-24)/LADDER_WIDTH*100)/100));};
  useEffect(()=>{
+  setScriptTarget(null);
   setSelected(program.instructions[0]?.id??'');setSelectedNetwork(networks[0]?.id??'');setScrollTop(0);setMenu(null);setPendingTarget(null);
   if(viewport.current)viewport.current.scrollTop=0;
  },[program]);
@@ -111,6 +117,10 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
   setPendingTarget(null);
  },[pendingTarget,visible,drawings,zoom]);
  const moveTo=(index:number,item?:KeyenceInstruction)=>{
+  const script=networks[index].script;
+  if(item&&script&&!script.expanded&&script.instructionIds.includes(item.id)){
+   setExpandedScripts(old=>new Set([...old,script.id]));setScriptTarget(item);return;
+  }
   setSelectedNetwork(networks[index].id);
   if(item){
    setSelected(item.id);setPendingTarget(item);
@@ -123,6 +133,18 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
    const target=dimensions.offsets[index]+(stLine?Math.max(0,(ST_HEADER_HEIGHT+Math.max(0,stRow)*ST_ROW_HEIGHT)*zoom-60):symbol?Math.max(0,symbol.y*zoom-60):0);
    element.scrollTop=Math.max(0,Math.min(target,element.scrollHeight-element.clientHeight));setScrollTop(element.scrollTop);
   }
+ };
+ useLayoutEffect(()=>{
+  if(!scriptTarget)return;
+  const index=instructionNetworks.get(scriptTarget.id);
+  if(index!==undefined){setScriptTarget(null);moveTo(index,scriptTarget);}
+ },[scriptTarget,networks]);
+ const toggleScript=(id:string)=>{
+  const index=networks.findIndex(n=>n.script?.id===id),top=index>=0?dimensions.offsets[index]:0;
+  const instructionId=networks[index]?.instructions[0]?.id;
+  setExpandedScripts(old=>{const next=new Set(old);if(next.has(id))next.delete(id);else next.add(id);return next;});
+  if(instructionId){setSelected(instructionId);setSelectedNetwork(instructionId);}
+  if(viewport.current){viewport.current.scrollTop=Math.min(viewport.current.scrollTop,top);setScrollTop(viewport.current.scrollTop);}
  };
  const select=(item:KeyenceInstruction)=>{setSelected(item.id);const index=instructionNetworks.get(item.id);if(index!==undefined)setSelectedNetwork(networks[index].id);};
  const searchMove=(direction:number)=>{
@@ -165,7 +187,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
    onAbout={()=>nativeCsvBridge()?.postMessage({type:'show-about',dark})} onOpenFiles={openFiles} onOpenFolder={openFolder}/>
   <div class="subbar"><SearchBar query={query} mode={searchMode} results={searchResults} current={searchIndex} onQuery={setQuery} onMode={setSearchMode} onMove={searchMove} onClear={()=>setQuery('')} placeholder="デバイス・命令・コメント・元ファイル行"/>
    <div>{hasComments&&<label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={event=>setShowComments(event.currentTarget.checked)}/>コメント</label>}
-    {program.instructions.some(i=>i.st)&&<StColorToggle/>}
+    {(program.instructions.some(i=>i.st)||keyenceScriptRegions(program).length>0)&&<StColorToggle/>}
     <label class="ladder-palette">ラダー配色<select aria-label={`ラダー配色（${dark?'ダーク':'ライト'}モード）`} title={`${dark?'ダーク':'ライト'}モード用の配色`} value={palette} onChange={event=>changePalette(event.currentTarget.value)}>{[{value:'standard',label:'標準'},{value:'contrast',label:'高コントラスト'},{value:'soft',label:'目にやさしい'},{value:'cud',label:'色覚配慮（CUD）'},{value:'blue',label:'ブルー'}].map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
     <label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={event=>changeViewMode(event.currentTarget.value as typeof viewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label>
     <button onClick={fit}>幅に合わせる</button><button aria-label="縮小" onClick={()=>setZoom(value=>clampZoom(+(value-.1).toFixed(2)))}>−</button><button onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button aria-label="拡大" onClick={()=>setZoom(value=>clampZoom(+(value+.1).toFixed(1)))}>＋</button>
@@ -176,7 +198,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
    <aside class="navigation"><div class="panel-title">回路一覧<span>{networks.length}</span></div><div class="nav-list">{networks.map((network,index)=><button key={network.id} class={`nav-item${network.id===selectedNetwork?' active':''}`} onClick={()=>moveTo(index,network.instructions[0])} onContextMenu={e=>blockRangeMenu(e,blockRangeText([network]))}><span class="number">{String(index+1).padStart(3,'0')}</span><div><strong>{network.statement.split('\n')[0]||`元ファイル ${network.instructions[0].sourceLine}行`}</strong><small>{network.actions.map(action=>[action.instruction.opcode,...action.instruction.operands].join(' ')).join(' / ')}</small></div></button>)}</div></aside>
    <div ref={viewport} class="kv-diagram" onScroll={event=>{setScrollTop(event.currentTarget.scrollTop);setMenu(null);}}>
     {busy&&<div class="kv-loading" role="status">{progress}</div>}
-    <div class="kv-canvas" style={{height:dimensions.total,minWidth:LADDER_WIDTH*zoom}}>{visible.map(index=><section key={networks[index].id} class="kv-network" data-network={networks[index].id} style={{top:dimensions.offsets[index],height:dimensions.heights[index]}}><HorizontalScroll enabled={scrolling[index]} width={LADDER_WIDTH*zoom} contentWidth={drawings[index].width*zoom} height={dimensions.heights[index]} label={`回路 元ファイル ${networks[index].instructions[0].sourceLine}行 横スクロール`}><KeyenceLadder drawing={drawings[index]} zoom={zoom} selected={selected} onSelect={select} onContextMenu={contextMenu}/></HorizontalScroll></section>)}</div>
+    <div class="kv-canvas" style={{height:dimensions.total,minWidth:LADDER_WIDTH*zoom}}>{visible.map(index=><section key={networks[index].id} class="kv-network" data-network={networks[index].id} style={{top:dimensions.offsets[index],height:dimensions.heights[index]}}><HorizontalScroll enabled={scrolling[index]} width={LADDER_WIDTH*zoom} contentWidth={drawings[index].width*zoom} height={dimensions.heights[index]} label={`回路 元ファイル ${networks[index].instructions[0].sourceLine}行 横スクロール`}><KeyenceLadder drawing={drawings[index]} zoom={zoom} selected={selected} onSelect={select} onContextMenu={contextMenu} onToggleScript={toggleScript}/></HorizontalScroll></section>)}</div>
    </div>
    <aside class="details"><div class="panel-title">命令の詳細</div>{instruction&&<div class="detail-content"><div class="eyebrow">元ファイル {instruction.sourceLine}行</div><h2>{instruction.opcode}</h2><dl>{instruction.operands.length>0&&<><dt>オペランド</dt><dd>{instruction.operands.map((operand,index)=><div key={index} class="operand"><span>{index+1}</span><code>{operand}</code></div>)}</dd></>}{keyenceInstructionComment(instruction,program)&&<><dt>コメント</dt><dd>{keyenceInstructionComment(instruction,program)}</dd></>}<dt>元ファイル</dt><dd>{program.name}</dd></dl></div>}</aside>
   </div>

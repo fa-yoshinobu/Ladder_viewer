@@ -4,14 +4,20 @@ import {CELL} from '../ladderMetrics';
 export interface KeyenceOutputStyle {
  kind:'coil'|'command'|'keep'|'timer'|'counter'|'labeled-coil'|'calculation'|'application'|'fb'|'bit-coil'|'jump'|'stage'|'wait'|'multi-input'|'st-box';
  body:string;above:string;below?:string;bodyOperand?:number;aboveOperand?:number;belowOperand?:number;
- columns?:number;operands?:string[];operatorColumn?:boolean;pulse?:boolean;negated?:boolean;
+ columns?:number;operands?:string[];operatorColumn?:boolean;pulse?:boolean;negated?:boolean;macroParameters?:{name:string;comment:string}[];
 }
 // The native labels use 10.5px Consolas; allow 6px per half-width character.
 const nativeTextWidth=(text:string)=>Array.from(text).reduce((width,c)=>width+(/[^\x00-\xff\uFF61-\uFF9F]/.test(c)?12:6),0);
 export const keyenceTextColumns=(body:string,...fields:string[])=>Math.max(1,Math.ceil(Math.max(nativeTextWidth(body)+24,...fields.map(text=>nativeTextWidth(text)+8))/CELL));
 export function keyenceBoxColumnSpans(style:KeyenceOutputStyle):number[] {
  const fit=(text:string)=>Math.max(1,Math.ceil((nativeTextWidth(text)+12)/CELL));
- if(style.body==='MCALL')return [fit(style.body),Math.max(2,fit(style.operands?.[0]??''))];
+ if(style.body==='MCALL'){
+  if((style.operands?.length??0)<=1)return [fit(style.body),Math.max(2,fit(style.operands?.[0]??''))];
+  const spans=style.operands!.slice(1).map((operand,index)=>Math.max(fit(operand),fit(style.macroParameters?.[index]?.name||'P'+index)));
+  const header=Math.max(3,Math.ceil((nativeTextWidth('MCALL '+style.operands![0])+24)/CELL));
+  spans[spans.length-1]+=Math.max(0,header-spans.reduce((a,b)=>a+b,0));
+  return spans;
+ }
  const spans=Array<number>(style.columns??1).fill(1),offset=style.operatorColumn?1:0;
  spans[0]=fit(style.body);
  for(const [index,operand] of (style.operands??[]).entries()){
@@ -24,7 +30,7 @@ type NativeKind='calculation'|'application'|'command';
 // Only instruction names and native symbol families are catalogued; program data stays in the input file.
 const nativeGroups:[NativeKind,number,number,string][]=[
  ['application',0,1,'AJST ARES BCNT BCNT.D EXT EXT.D EXT.L EXT.S'],
- ['application',1,1,'ALT WTIME'],
+ ['application',1,1,'ALT LOGD LOGE WTIME'],
  ['application',2,1,'AVG AVG.D AVG.DF AVG.F AVG.L AVG.S BSUM DCNT DCNT.D MAX MAX.D MAX.DF MAX.F MAX.L MAX.S MIN MIN.D MIN.DF MIN.F MIN.L MIN.S SEG SEG.D SER SER.D WSUM WSUM.D WSUM.DF WSUM.F WSUM.L WSUM.S ZRES'],
  ['command',0,1,'BREAK END ENDH MC MCR NEXT RET RETI RETURN RFSFRC STE'],
  ['command',1,1,'ADRDEC ADRINC AWHIDE AWSHOW CJ FOR FOR.D FRSET GOTO LABEL NCJ RND SBN SCJ STP ZPOP.L ZPOP.S ZPUSH.L ZPUSH.S'],
@@ -57,6 +63,7 @@ export function keyenceOutputStyle(instruction:KeyenceInstruction):KeyenceOutput
  const fields={above:operands[0]??'',aboveOperand:0,below:operands[1]??'',belowOperand:1};
  if(instruction.fb)return {...style,kind:'fb'};
  if(instruction.st&&opcode==='BOX_ST')return {...style,kind:'st-box'};
+ if(opcode==='MCALL'&&operands.length>1)return {...native,kind:'command',columns:operands.length-1,operands,macroParameters:instruction.macro?.parameters};
  if((opcode==='OUT'||opcode==='OUB')&&operands.length===1)return {...native,kind:'coil',body:operands[0],bodyOperand:0,negated:opcode==='OUB'};
  if(opcode==='KEEP'&&operands.length===1)return {...native,kind:'keep',above:operands[0],aboveOperand:0};
  if((opcode==='UDT'||opcode==='UDC')&&operands.length===2)return {...native,kind:'multi-input',body:opcode+' '+operands[0],bodyOperand:0,above:operands[1],aboveOperand:1};

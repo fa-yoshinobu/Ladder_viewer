@@ -14,9 +14,11 @@ import {differenceLabels} from './model';
 import {SearchBar} from './SearchBar';
 import {LADDER_WIDTH} from './ladderMetrics';
 import {StColorToggle} from './StColorToggle';
+import {keyenceScriptRegions} from './keyence/scriptDisplay';
 interface Props {dark:boolean;palette:string;changePalette:(value:string)=>void;toggleTheme:()=>void;back:()=>void;initial?:NativeCsvSelection['comparison'];}
 interface SideInput {batch:BatchResult|null;busy:boolean;error:string;progress:string;}
 const blank=():SideInput=>({batch:null,busy:false,error:'',progress:''});
+const noExpandedScripts=new Set<string>();
 export function DirectComparisonWorkspace({dark,palette,changePalette,toggleTheme,back,initial}:Props){
  const [showUnchanged,setShowUnchanged]=useState(true),[overview,setOverview]=useState<Record<string,boolean>>({}),[indexing,setIndexing]=useState(false),[dragSide,setDragSide]=useState<CompareSide|null>(null);
  const overviewToken=useRef(0),lastCompared=useRef<DirectPair|null>(null),submittedPair=useRef<DirectPair|null>(null);
@@ -25,6 +27,9 @@ export function DirectComparisonWorkspace({dark,palette,changePalette,toggleThem
  const [display,setDisplay]=useState<'both'|'source'|'target'>('both'),[comments,setComments]=useState(true),[zoom,setZoom]=useState(.5),[viewMode,setViewMode]=useState<'wrap'|'scroll'>('wrap');
  const [query,setQuery]=useState(''),[searchMode,setSearchMode]=useState<'partial'|'exact'>('partial'),[current,setCurrent]=useState(-1);
  const [selected,setSelected]=useState<DirectSelection|null>(null),[navigation,setNavigation]=useState<DirectNavigation|null>(null),[menu,setMenu]=useState<{x:number;y:number;selection:DirectSelection}|null>(null);
+ const [scriptExpansion,setScriptExpansion]=useState<{result:DirectResult|null;ids:Set<string>}>(()=>({result:null,ids:new Set()}));
+ const expandedScripts=scriptExpansion.result===result?scriptExpansion.ids:noExpandedScripts;
+ const setExpandedScripts=(update:(old:Set<string>)=>Set<string>)=>setScriptExpansion(old=>({result,ids:update(old.result===result?old.ids:noExpandedScripts)}));
  const worker=useRef<Worker|null>(null),sequence=useRef(Date.now()),loads=useRef(new Map<number,CompareSide>()),comparisonToken=useRef(0),width=useRef<HTMLDivElement>(null),displayRef=useRef(display);displayRef.current=display;
  const bridge=nativeCsvBridge(),busy=source.busy||target.busy;
  const setSide=(side:CompareSide,update:(old:SideInput)=>SideInput)=>(side==='source'?setSource:setTarget)(update);
@@ -32,7 +37,12 @@ export function DirectComparisonWorkspace({dark,palette,changePalette,toggleThem
  const pairs=useMemo(()=>pairDirectPrograms(inputs.source,inputs.target).map(pair=>!pair.source&&source.batch?.errors.length?{...pair,error:'比較元に読込みエラーがあるため、比較先のみと判定できません。'}:!pair.target&&target.batch?.errors.length?{...pair,error:'比較先に読込みエラーがあるため、比較元のみと判定できません。'}:pair),[inputs,source.batch,target.batch]);
  const listedPairs=useMemo(()=>showUnchanged?pairs:pairs.filter(p=>overview[p.id]!==true),[pairs,showUnchanged,overview]);
  const pair=listedPairs.find(pair=>pair.id===pairId)??listedPairs[0];
- const blocks=useMemo(()=>!result?[]:result.format==='mitsubishi'?mitsubishiCompareDrawing(result.program,result.sourceComments,result.targetComments,comments,zoom,viewMode,display):keyenceCompareDrawing(result.comparison,comments,zoom,viewMode,display),[result,comments,zoom,viewMode,display]);
+ const toggleScript=(id:string)=>setExpandedScripts(old=>{const next=new Set(old);if(next.has(id))next.delete(id);else next.add(id);return next;});
+ const blocks=useMemo(()=>!result?[]:result.format==='mitsubishi'?mitsubishiCompareDrawing(result.program,result.sourceComments,result.targetComments,comments,zoom,viewMode,display):keyenceCompareDrawing(result.comparison,comments,zoom,viewMode,display,expandedScripts,toggleScript),[result,comments,zoom,viewMode,display,expandedScripts]);
+ const revealScript=(id:string,side:CompareSide)=>{
+  const script=blocks.flatMap(b=>b[side]).find(c=>c.script&&!c.script.expanded&&c.script.instructionIds.includes(id))?.script;
+  if(script)setExpandedScripts(old=>new Set([...old,script.id]));
+ };
  const searchEntries=useMemo(()=>{
   if(!result)return [];
   if(result.format==='mitsubishi')return ([['source',result.program,result.sourceComments],['target',result.program.comparison!.target,result.targetComments]] as const).flatMap(([side,p,table])=>p.instructions.map(i=>({side,instruction:projectMitsubishiInstruction(i,table)})));
@@ -40,7 +50,7 @@ export function DirectComparisonWorkspace({dark,palette,changePalette,toggleThem
  },[result]);
  const matches=useMemo(()=>{const needle=normalizeSearchText(query);return searchEntries.filter(entry=>(display==='both'||entry.side===display)&&searchTextMatches([entry.instruction.op,...entry.instruction.operands,[entry.instruction.op,...entry.instruction.operands].join(' '),entry.instruction.line,entry.instruction.comment,entry.instruction.statement].map(normalizeSearchText),needle,searchMode));},[searchEntries,query,searchMode,display]);
  const headings=useMemo(()=>matches.map(m=>({heading:`${m.side==='source'?'比較元':'比較先'} · ${m.instruction.line} · ${[m.instruction.op,...m.instruction.operands].join(' ')}`})),[matches]);
- const navigate=(index:number)=>{const hit=matches[index];if(!hit)return;setCurrent(index);setNavigation({id:hit.instruction.id,side:hit.side,request:++sequence.current});};
+ const navigate=(index:number)=>{const hit=matches[index];if(!hit)return;revealScript(hit.instruction.id,hit.side);setCurrent(index);setNavigation({id:hit.instruction.id,side:hit.side,request:++sequence.current});};
  useEffect(()=>{setCurrent(matches.length?0:-1);if(matches.length)navigate(0);},[matches]);
  const fit=()=>{if(!width.current)return;const count=displayRef.current==='both'?2:1;const available=(width.current.clientWidth-170)/count;setZoom(Math.max(count===2?.25:.5,Math.min(1.5,Math.floor((available-24)/LADDER_WIDTH*100)/100)));};
  useLayoutEffect(fit,[display,result]);
@@ -102,7 +112,7 @@ export function DirectComparisonWorkspace({dark,palette,changePalette,toggleThem
  }
  const context=(event:MouseEvent,selection:DirectSelection)=>{event.preventDefault();event.stopPropagation();setSelected(selection);if(bridge){bridge.postMessage({type:'instruction-menu',text:selection.instruction.copyText});return;}setMenu({x:Math.min(event.clientX,window.innerWidth-150),y:Math.min(event.clientY,window.innerHeight-70),selection});};
  const choose=(selection:DirectSelection)=>{setSelected(selection);setMenu(null);};
- const navigateTo=(id:string,side:CompareSide)=>setNavigation({id,side,request:++sequence.current});
+ const navigateTo=(id:string,side:CompareSide)=>{revealScript(id,side);setNavigation({id,side,request:++sequence.current});};
  const sides={source,target},count=blocks.reduce((sum,b)=>sum+b.changes.length,0);
  const instruction=selected?.instruction;
  const status=(side:SideInput)=>side.busy?'loading':side.error?'error':side.batch?'ready':'empty';
@@ -113,7 +123,7 @@ export function DirectComparisonWorkspace({dark,palette,changePalette,toggleThem
     <label class="comment-toggle"><input type="checkbox" aria-label="差分なしも表示" checked={showUnchanged} disabled={indexing} onChange={e=>setShowUnchanged(e.currentTarget.checked)}/>差分なしも表示</label>
     <label class="view-mode">表示<select aria-label="比較の表示" value={display} onChange={e=>setDisplay(e.currentTarget.value as typeof display)}><option value="both">左右比較</option><option value="source">比較元のみ</option><option value="target">比較先のみ</option></select></label>
     <label class="comment-toggle"><input type="checkbox" checked={comments} onChange={e=>setComments(e.currentTarget.checked)}/>コメント</label>
-    {result?.format==='keyence'&&[...result.comparison.source.instructions,...result.comparison.target.instructions].some(i=>i.st)&&<StColorToggle/>}
+    {result?.format==='keyence'&&([result.comparison.source,result.comparison.target].some(p=>keyenceScriptRegions(p).length>0)||[...result.comparison.source.instructions,...result.comparison.target.instructions].some(i=>i.st))&&<StColorToggle/>}
     <label class="ladder-palette">ラダー配色<select aria-label="ラダー配色" value={palette} onChange={e=>changePalette(e.currentTarget.value)}>{[{value:'standard',label:'標準'},{value:'contrast',label:'高コントラスト'},{value:'soft',label:'目にやさしい'},{value:'cud',label:'色覚配慮（CUD）'},{value:'blue',label:'ブルー'}].map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></label>
     <label class="view-mode">長い回路<select aria-label="長い回路の表示" value={viewMode} onChange={e=>setViewMode(e.currentTarget.value as typeof viewMode)}><option value="wrap">折り返し</option><option value="scroll">横スクロール</option></select></label>
     <button onClick={fit}>幅に合わせる</button><button aria-label="縮小" onClick={()=>setZoom(z=>Math.max(display==='both'?.25:.5,+(z-.1).toFixed(2)))}>−</button><button onClick={()=>setZoom(1)}>{Math.round(zoom*100)}%</button><button aria-label="拡大" onClick={()=>setZoom(z=>Math.min(1.5,+(z+.1).toFixed(2)))}>＋</button>

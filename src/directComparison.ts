@@ -43,7 +43,7 @@ export function unchangedDirectPair(pair:DirectPair):boolean {
    if(input.program.comparison)return null;
    return JSON.stringify(input.program.networks.map(n=>n.instructions.map(i=>[i.op,i.operands,i.statement,i.piStatement??'',i.note,i.inlineST?.text??'',i.operands.map(v=>deviceComment(v,input.comments))])));
   }
-  return JSON.stringify(buildKeyenceNetworks(input.program).map(n=>n.instructions.map(i=>[i.opcode,i.operands,i.statement,keyenceInstructionComment(i,input.program)])));
+  return JSON.stringify(buildKeyenceNetworks(input.program).map(n=>n.instructions.map(i=>[i.opcode,i.operands,i.statement,keyenceInstructionComment(i,input.program),i.macro])));
  };
  const left=fingerprint(source),right=fingerprint(target);return left!==null&&right!==null&&left===right;
 }
