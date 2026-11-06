@@ -8,16 +8,18 @@ Extract the ZIP file, then run `LadderViewer.exe`.
 Requirements: Windows x64, .NET 10 Desktop Runtime and Microsoft Edge WebView2 Runtime.
 
 ## Changes
+### Added
+- Expand and collapse legacy KEYENCE scripts using the [+] and [-] controls when the MNM contains both the original source and compiled instructions.
+- Mark expanded script ranges with a subtle purple background, outline and ST label.
+- Synchronize expansion for matching scripts in comparisons and reveal compiled instructions when navigating search results.
+
 ### Fixed
-- Remove unnecessary gaps above outputs and between wrapped pages while preserving branch connections.
-- Align matching comparison branches without shifting unrelated contacts, comparison instructions or reset outputs.
-- Preserve natural wire spans and difference colors when viewing either comparison side on its own.
-- Improve KEYENCE instruction parsing, native symbols, operand placement and control boundaries.
-- Use compact widths for short KEYENCE instructions and expand only fields that require more space.
+- Preserve source text, copy behavior and differences while scripts are collapsed, including differences in compiled instructions.
+- Render KEYENCE LOGD and LOGE with their native symbols and show MCALL arguments in separate columns.
+- Resolve macro parameter labels from unambiguous definitions in the same folder and align comparison symbols with different heights.
 
 ### Maintenance
-- Separate desktop source files from generated files; completed Windows builds are in `artifacts/release/`.
-- Consolidate regression tests and use synthetic test data.
+- Add regression coverage using independently created dummy programs.
 
 <!-- virustotal:start -->
 {{VIRUSTOTAL_CONTENT}}
