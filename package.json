@@ -9,14 +9,14 @@
     "windows:build": "npm run build && dotnet publish src-desktop/LadderViewer.csproj -c Release -r win-x64 --self-contained false -o artifacts/release"
   },
   "dependencies": {
-    "preact": "^10.27.0",
-    "papaparse": "^5.5.3",
-    "diff": "^8.0.2"
+    "diff": "^9.0.0",
+    "papaparse": "^5.7.0",
+    "preact": "^11.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
-    "vite": "^7.1.0",
-    "tsx": "^4.20.0",
-    "@types/papaparse": "^5.3.16"
+    "@types/papaparse": "^5.5.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
   }
 }

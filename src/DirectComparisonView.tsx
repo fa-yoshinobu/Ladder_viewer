@@ -7,7 +7,7 @@ import {LADDER_WIDTH} from './ladderMetrics';
 import type {DirectBlock,DirectCircuit,DirectInstruction,DirectNavigation,DirectSelection} from './directDrawing';
 interface Props {blocks:DirectBlock[];zoom:number;display:'both'|'source'|'target';sourceName:string;targetName:string;selected:DirectSelection|null;choose:(selection:DirectSelection)=>void;context:(event:MouseEvent,selection:DirectSelection)=>void;navigation:DirectNavigation|null;navigate:(id:string,side:CompareSide)=>void;drop:(side:CompareSide,transfer:DataTransfer)=>void;drag:(side:CompareSide|null)=>void;}
 export function DirectComparisonView({blocks:input,zoom,display,sourceName,targetName,selected,choose,context,navigation,navigate,drop,drag}:Props){
- const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null),lastJump=useRef(-1),handled=useRef<number>();
+ const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null),lastJump=useRef(-1),handled=useRef<number|undefined>(undefined);
  const pending=useRef<{side:CompareSide;circuit:DirectCircuit;id:string}|null>(null);
  const [viewport,setViewport]=useState({top:0,height:800}),[active,setActive]=useState(0),[current,setCurrent]=useState(-1);
  const sides:CompareSide[]=display==='both'?['source','target']:[display];
