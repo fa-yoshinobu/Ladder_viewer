@@ -1,8 +1,9 @@
 import {blockRangeMenu,blockRangeText} from './blockRangeCopy';
-import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { useContext, useLayoutEffect, useRef, useState } from 'preact/hooks';
+import {CommentListContext,showInstructionMenu} from './CommentList';
+import {commentListRequest,type CommentListData} from './commentListData';
 import { differenceLabels, symbolDifferenceKind, type Instruction, type Network } from './model';
 import { AddressText } from './AddressText';
-import { nativeCsvBridge } from './nativeCsv';
 import { instructionCopyText } from './instructionCopy';
 import { isComparisonCondition, isInlineLogic } from './instructions';
 import { isControlMarker } from './controlFlow';
@@ -19,11 +20,11 @@ const line = (c: StrokeCoordinates, x1: number, y1: number, x2: number, y2: numb
 function Operand({instruction,index,maxLength}:{instruction:Instruction;index:number;maxLength?:number}) {
  return <tspan class={instruction.difference?.operandChanges.includes(index)?'diff-value':''}><AddressText text={instruction.operands[index]} svg maxLength={maxLength}/></tspan>;
 }
-function instructionMenu(event: MouseEvent, instruction: Instruction, comments: DeviceComments, choose: (i: Instruction) => void) {
+function instructionMenu(event: MouseEvent, instruction: Instruction, comments: DeviceComments, choose: (i: Instruction) => void,commentList?:CommentListData) {
   event.preventDefault();
   event.stopPropagation();
   choose(instruction);
-  nativeCsvBridge()?.postMessage({ type: 'instruction-menu', text: instructionCopyText(instruction, comments) });
+  showInstructionMenu(event,instructionCopyText(instruction, comments),commentListRequest(commentList,instruction.operands,document.documentElement.dataset.theme==='dark'));
 }
 function symbolBounds(s:GridSymbol,rowHeight:number,baseline:number){
  const x=s.col*CELL,y=s.row*rowHeight+baseline,w=s.span*CELL,i=s.instruction;
@@ -31,6 +32,7 @@ function symbolBounds(s:GridSymbol,rowHeight:number,baseline:number){
   height:s.fb?s.fb.rows*rowHeight-8:i.inlineST?inlineSTHeight(i,s.span):i.pins?i.pins.length*22+54+baseline-BASELINE:rowHeight-8};
 }
 function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, baseline, comments, showComments }: { s: GridSymbol; selected: string; hovered:boolean;hover:(id:string)=>void; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; c: StrokeCoordinates; rowHeight: number; baseline: number; comments: DeviceComments; showComments: boolean }) {
+  const commentList=useContext(CommentListContext);
   const i = s.instruction;
   const differenceKind=symbolDifferenceKind(i);
   const x = s.col * CELL, y = s.row * rowHeight + baseline, w = s.span * CELL, cx = x + CELL / 2;
@@ -50,7 +52,7 @@ function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, b
   const flowArrow=flow?.kind==='jump'?'→ ':flow?.kind==='return'?'↩ ':flow?.kind==='exit'?'↪ ':flow?.kind==='loop'&&/^END/.test(i.op)?'↶ ':'';
   const scopeTarget=flow?.kind==='boundary'||(flow?.kind==='loop'&&!/^END/.test(i.op))||(flow?.kind==='branch'&&!/^(THEN|CASETHEN|WHILEDO|FORDO)$/.test(i.op));
   return <g data-instruction-id={i.id} class={`symbol ${differenceKind?'diff-'+differenceKind:''} ${selected === i.id ? 'chosen' : ''}`} role="button" tabIndex={0}
-    aria-label={`${i.op} ${i.operands.join(' ')}`} onMouseEnter={()=>hover(i.id)} onMouseLeave={()=>hover('')} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose)}
+    aria-label={`${i.op} ${i.operands.join(' ')}`} onMouseEnter={()=>hover(i.id)} onMouseLeave={()=>hover('')} onClick={() => choose(i)} onContextMenu={event => instructionMenu(event, i, comments, choose,commentList)}
     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(i); } }}>
     <title>{`${i.op} ${i.operands.join(' ')} / CSV ${i.sourceRow}行\n${i.note}${i.difference ? '\n'+differenceLabels[i.difference.kind]+' / 相手側: '+(i.difference.otherText||'なし') : ''}`}</title>
     <SelectionRect phase="frame" className="hit" selected={selected===i.id} hovered={hovered} difference={differenceKind} {...symbolBounds(s,rowHeight,baseline)}/>
@@ -63,7 +65,7 @@ function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, b
       <text class="fb-title" x={x+w/2} y={y-5} text-anchor="middle">{s.fb.model.instance} ({s.fb.model.name})</text>
       {line(c,x,rowHeight-8,x+w,rowHeight-8)}
       {s.fb.ports.map(({port,row,input})=><g key={`${input}-${port.definition.id}`} data-instruction-id={port.definition.id} class={`symbol ${selected===port.definition.id?'chosen':''}`} role="button" tabIndex={0}
-        onClick={event=>{event.stopPropagation();choose(port.definition);}} onContextMenu={event=>instructionMenu(event,port.definition,comments,choose)}
+        onClick={event=>{event.stopPropagation();choose(port.definition);}} onContextMenu={event=>instructionMenu(event,port.definition,comments,choose,commentList)}
         onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();choose(port.definition);}}}>
         <title>{port.definition.op}</title>
         <rect class="hit" x={input?x+1:x+w/2} y={row*rowHeight+4} width={w/2-2} height={rowHeight-8}/>
@@ -82,7 +84,7 @@ function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, b
       {line(c, x, y, x + 10, y,inputClass)}{line(c, x + w - 10, y, x + w, y,outputClass)}
       <rect class="fb-outline" x={X(x + 10)} y={Y(y - 22)} width={X(x + w - 10) - X(x + 10)} height={Y(y + i.pins.length * 22 + 30) - Y(y - 22)}/>
       <text class="fb-title" x={x + 20} y={y - 6}>{i.op.slice(7)}</text>
-      {i.pins.map((pin, index) => <g key={pin.id} onContextMenu={event => instructionMenu(event, pin, comments, choose)} onClick={event => { event.stopPropagation(); choose(pin); }}>
+      {i.pins.map((pin, index) => <g key={pin.id} onContextMenu={event => instructionMenu(event, pin, comments, choose,commentList)} onClick={event => { event.stopPropagation(); choose(pin); }}>
         <title>{pin.op + ' ' + pin.operands.join(' ')}</title>
         <text class="fb-pin" x={x + 20} y={y + 24 + index * 22}>{pin.op}</text>
         <text class="fb-value" x={x + w - 20} y={y + 24 + index * 22}>{pin.operands.map((operand, index) => <>{index ? ' ' : ''}<AddressText text={operand} svg/></>)}</text>
@@ -108,6 +110,7 @@ function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, b
 }
 
 export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, comments, showComments, viewMode='wrap' }: { network: Network; selected: string; choose: (i: Instruction) => void; navigate?: (instructionId: string) => void; zoom: number; rowHeight: number; comments: DeviceComments; showComments: boolean; viewMode?:LadderViewMode }) {
+  const commentList=useContext(CommentListContext);
   const root = useRef<SVGSVGElement>(null);
   const [raster, setRaster] = useState({ x: 0, y: 0, ratio: 1 });
   const [hovered,setHovered]=useState('');
@@ -138,7 +141,7 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
   const rootRail = strokeCoordinates(zoom, raster.ratio, raster.x, raster.y, 2);
   return <svg ref={root} width={dimensions.width * zoom} height={dimensions.height * zoom} viewBox={`0 0 ${dimensions.width} ${dimensions.height}`}
     style={{ '--drawing-stroke': `${rootStroke.width}px`, '--drawing-rail': `${rootRail.width}px` }} aria-label={`回路 ステップ${network.step}`}>
-    {master && <g class={`symbol ${master.difference ? 'diff-' + master.difference.kind : ''} ${selected === master.id ? 'chosen' : ''}`} role="button" tabIndex={0} aria-label={`MC ${master.operands.join(' ')}`} onClick={() => choose(master)} onContextMenu={event => instructionMenu(event, master, comments, choose)} onKeyDown={event => { if(event.key === 'Enter' || event.key === ' ') {event.preventDefault();choose(master);} }}>
+    {master && <g class={`symbol ${master.difference ? 'diff-' + master.difference.kind : ''} ${selected === master.id ? 'chosen' : ''}`} role="button" tabIndex={0} aria-label={`MC ${master.operands.join(' ')}`} onClick={() => choose(master)} onContextMenu={event => instructionMenu(event, master, comments, choose,commentList)} onKeyDown={event => { if(event.key === 'Enter' || event.key === ' ') {event.preventDefault();choose(master);} }}>
       <title>{`MC ${master.operands.join(' ')}`}</title>
       <rect class="hit" x={2} y={masterY + 4} width={LEFT_GUTTER + CELL * 2 - 4} height={rowHeight - 8}/>
       <text class="step-label" x={LEFT_GUTTER - 10} y={masterY + baseline + 4}><Operand instruction={master} index={0}/></text>
@@ -147,7 +150,7 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
       {line(rootStroke, LEFT_GUTTER - 6, masterY + baseline - 9, LEFT_GUTTER + 6, masterY + baseline - 9)}
       {line(rootStroke, LEFT_GUTTER - 6, masterY + baseline + 9, LEFT_GUTTER + 6, masterY + baseline + 9)}
     </g>}
-    {network.pointer && <g data-instruction-id={network.pointer.id} class={`symbol ${network.pointer.difference?'diff-'+network.pointer.difference.kind:''} ${selected === network.pointer.id ? 'chosen' : ''}`} transform={`translate(0 ${pointerY})`} role="button" tabIndex={0} aria-label={network.pointer.op} onContextMenu={event => instructionMenu(event, network.pointer!, comments, choose)} onClick={() => choose(network.pointer!)} onKeyDown={e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(network.pointer!); } }}>
+    {network.pointer && <g data-instruction-id={network.pointer.id} class={`symbol ${network.pointer.difference?'diff-'+network.pointer.difference.kind:''} ${selected === network.pointer.id ? 'chosen' : ''}`} transform={`translate(0 ${pointerY})`} role="button" tabIndex={0} aria-label={network.pointer.op} onContextMenu={event => instructionMenu(event, network.pointer!, comments, choose,commentList)} onClick={() => choose(network.pointer!)} onKeyDown={e => { if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); choose(network.pointer!); } }}>
       <rect class="hit" x={2} y={4} width={LEFT_GUTTER - 27} height={rowHeight - 8}/>
       <text class="pointer-label" x={6} y={baseline + 4}>{network.pointer.op}</text>
       {showComments && <CommentText text={deviceComment(network.pointer.op, comments)} x={6} y={baseline + 20} width={LEFT_GUTTER - 28}/>}

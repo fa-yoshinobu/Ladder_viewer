@@ -9,17 +9,14 @@ Requirements: Windows x64, .NET 10 Desktop Runtime and Microsoft Edge WebView2 R
 
 ## Changes
 ### Added
-- Expand and collapse legacy KEYENCE scripts using the [+] and [-] controls when the MNM contains both the original source and compiled instructions.
-- Mark expanded script ranges with a subtle purple background, outline and ST label.
-- Synchronize expansion for matching scripts in comparisons and reveal compiled instructions when navigating search results.
+- Open device comments in a separate window from the toolbar or a contact/coil's context menu.
+- Select and reveal the chosen device with surrounding addresses in the comment list, including each side of Mitsubishi and KEYENCE comparisons.
+- Copy selected rows or the entire comment list as two spreadsheet columns: address and comment.
+- Filter the comment list by address or comment text.
 
 ### Fixed
-- Preserve source text, copy behavior and differences while scripts are collapsed, including differences in compiled instructions.
-- Render KEYENCE LOGD and LOGE with their native symbols and show MCALL arguments in separate columns.
-- Resolve macro parameter labels from unambiguous definitions in the same folder and align comparison symbols with different heights.
-
-### Maintenance
-- Add regression coverage using independently created dummy programs.
+- Restore circuit positions and dimensions after the Preact update so ladder networks do not overlap.
+- Keep hexadecimal device addresses in address order and preserve multiline comments when copying blocks.
 
 <!-- virustotal:start -->
 {{VIRUSTOTAL_CONTENT}}

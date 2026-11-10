@@ -1,6 +1,8 @@
 import {blockRangeMenu,blockRangeText,comparisonRangeText} from './blockRangeCopy';
 import {DifferenceToolbar} from './DifferenceToolbar';
 import {Fragment} from 'preact';
+import {CommentListContext} from './CommentList';
+import {mitsubishiCommentList} from './commentListData';
 import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
 import {differenceLabels,type ComparisonChange,type Instruction,type Program,type Network} from './model';
 import type {DeviceComments} from './comments';
@@ -31,6 +33,7 @@ export function differenceSummary(changes:ComparisonChange[]):string {
 
 export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,targetComments=comments,showComments,viewMode='wrap',navigationTarget}:{program:Program;zoom:number;rowHeight:number;selected:string;choose:(instruction:Instruction|null,side:CompareSide)=>void;comments:DeviceComments;targetComments?:DeviceComments;showComments:boolean;viewMode?:LadderViewMode;navigationTarget?:{instructionId:string;side:CompareSide;request:number}}) {
  const comparison=program.comparison!;
+ const commentLists=useMemo(()=>({source:mitsubishiCommentList(program,comments,'比較元 · '+comparison.sourceName),target:mitsubishiCommentList(comparison.target,targetComments,'比較先 · '+comparison.targetName)}),[program,comments,targetComments]);
  const sourceScroll=useRef<HTMLDivElement>(null),targetScroll=useRef<HTMLDivElement>(null);
  const handledNavigation=useRef<number|undefined>(undefined);
  const pendingHorizontal=useRef<{program:Program;network:Network;instructionId:string;side:CompareSide}|null>(null);
@@ -176,7 +179,7 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
     options={differenceBlocks.map(index=>{const block=blocks[index],n=block.source[0]??block.target[0];return {index,label:String(index+1).padStart(3,'0')+' '+(n.title||n.pointer?.op||`STEP ${n.step}`).split('\n')[0]+' · '+differenceSummary(block.changes)};})}
     extra={comparison.shiftedSteps>0&&<span class="shifted-steps">ステップ移動 {comparison.shiftedSteps}行（差分対象外）</span>}/>
    {!!previewChanges.length&&<div class="diff-preview">{previewChanges.map(change=><Fragment key={change.alignmentRow}><div class={`diff-${change.kind}`}><b>比較元 · STEP {change.sourceStep||'—'}</b><code>{change.sourceText||'（なし）'}</code></div><div class={`diff-${change.kind}`}><b>比較先 · STEP {change.targetStep||'—'}</b><code>{change.targetText||'（なし）'}</code></div></Fragment>)}</div>}
-   <div class="compare-columns">{(['source','target'] as const).map(side=><section class="compare-column" key={side}>
+   <div class="compare-columns">{(['source','target'] as const).map(side=><CommentListContext.Provider key={side} value={commentLists[side]}><section class="compare-column">
     <div class="compare-heading"><strong>{side==='source'?'比較元':'比較先'}</strong><span>{side==='source'?comparison.sourceProject:comparison.targetProject}</span><b>{side==='source'?comparison.sourceName:comparison.targetName}</b></div>
     <div class="diagram compare-scroll" role="region" tabIndex={0} ref={side==='source'?sourceScroll:targetScroll} aria-label={`${side==='source'?'比較元':'比較先'}ラダー表示`} onScroll={e=>scroll(side,e.currentTarget)}>
      <div style={{height:total?total.top+total.height+8:0,minWidth:width+24,position:'relative'}}>{visible.map(block=><div class={`comparison-block ${block.changes.length?'has-differences':''}`} key={block.top} style={{position:'absolute',top:block.top,left:12,width,minHeight:block.height}}>
@@ -186,7 +189,7 @@ export function ComparisonView({program,zoom,rowHeight,selected,choose,comments,
       {block.scopes[side].map(scope=><div key={scope.network.id} style={{position:'absolute',top:scope.top,left:0,width,height:scope.height,pointerEvents:'none'}}>{!!scope.ranges.length&&<MasterControlScope network={scope.network} ranges={scope.ranges} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}{!!scope.controls.length&&<ControlFlowScope network={scope.network} ranges={scope.controls} continuationOnly={scope.continuationOnly} zoom={zoom} rowHeight={rowHeight} viewMode={viewMode} width={width} height={scope.height} prefix={scope.prefix}/>}</div>)}
      </div>)}</div>
     </div>
-   </section>)}</div>
+   </section></CommentListContext.Provider>)}</div>
   </div>
  </div>;
 }

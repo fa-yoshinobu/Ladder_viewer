@@ -2,7 +2,7 @@ import Papa from 'papaparse';
 import {decodeKeyenceText} from './encoding';
 
 export type KeyenceDeviceComments=Record<string,string>;
-function addressKey(address:string):string {
+export function keyenceCommentAddress(address:string):string {
  const key=address.trim().toUpperCase();
  const match=/^((?:B|W))([0-9A-F]+)$/.exec(key)??/^(MR|LR|CR|DM|EM|FM|CM|TM|R|T|C)([0-9]+)$/.exec(key);
  return match?match[1]+match[2].replace(/^0+(?=.)/,''):key;
@@ -28,13 +28,13 @@ export function parseKeyenceComments(bytes:ArrayBuffer):KeyenceDeviceComments {
  const comments:KeyenceDeviceComments=Object.create(null);
  for(const row of data.slice(1)){
   const address=row[0]?.trim(),comment=row[2]?.trim();
-  if(address&&comment)comments[addressKey(address)]=comment;
+  if(address&&comment)comments[keyenceCommentAddress(address)]=comment;
  }
  return comments;
 }
 export function keyenceDeviceComment(address:string,comments:KeyenceDeviceComments):string {
  const exact=address.trim().toUpperCase();
  if(Object.hasOwn(comments,exact))return comments[exact];
- const key=addressKey(exact);
+ const key=keyenceCommentAddress(exact);
  return Object.hasOwn(comments,key)?comments[key]:'';
 }

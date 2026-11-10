@@ -1,4 +1,6 @@
 import {blockRangeMenu,blockRangeText} from '../blockRangeCopy';
+import {openCommentList} from '../CommentList';
+import {keyenceCommentList,commentListRequest} from '../commentListData';
 import {normalizeSearchText as normalize,searchTextMatches} from '../searchText';
 import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'preact/hooks';
 import type {KeyenceInstruction,KeyenceProgram} from './model';
@@ -35,6 +37,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
  const expandedScripts=scriptExpansion.program===program?scriptExpansion.ids:noExpandedScripts;
  const setExpandedScripts=(update:(old:Set<string>)=>Set<string>)=>setScriptExpansion(old=>({program,ids:update(old.program===program?old.ids:noExpandedScripts)}));
  const [menu,setMenu]=useState<{x:number;y:number;instruction:KeyenceInstruction}|null>(null),[copyError,setCopyError]=useState('');
+ const commentList=useMemo(()=>keyenceCommentList(program),[program]);
  const networks=useMemo(()=>keyenceScriptNetworks(program,expandedScripts),[program,expandedScripts]);
  const hasComments=useMemo(()=>Object.keys(program.deviceComments).length>0||program.instructions.some(instruction=>!!instruction.comment),[program]);
  const baseDrawings=useMemo(()=>networks.map(network=>layoutKeyenceNetwork(network,program,showComments)),[networks,program,showComments]);
@@ -174,7 +177,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
  const contextMenu=(event:MouseEvent,item:KeyenceInstruction)=>{
   event.preventDefault();event.stopPropagation();select(item);setCopyError('');
   const bridge=nativeCsvBridge();
-  if(bridge){bridge.postMessage({type:'instruction-menu',text:copyText(item)});return;}
+  if(bridge){bridge.postMessage({type:'instruction-menu',text:copyText(item),commentList:commentListRequest(commentList,item.operands,dark)});return;}
   setMenu({x:Math.min(event.clientX,window.innerWidth-150),y:Math.min(event.clientY,window.innerHeight-60),instruction:item});
  };
  const copy=async(item:KeyenceInstruction)=>{
@@ -183,7 +186,7 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
   catch{setCopyError('コピーできませんでした。');}
  };
  return <div class="app keyence-app" onDragOver={event=>event.preventDefault()} onDrop={event=>{event.preventDefault();if(event.dataTransfer?.files.length)drop(Array.from(event.dataTransfer.files));}}>
-  <ViewerHeader onCompare={onCompare} programNames={names} currentName={program.name} description={program.deviceCode==='60'?'KEYENCE KV-X':'KEYENCE'} busy={busy} dark={dark} onChoose={choose} onToggleTheme={toggleTheme}
+  <ViewerHeader onComments={()=>openCommentList(commentListRequest(commentList,instruction?.operands,dark)!)} onCompare={onCompare} programNames={names} currentName={program.name} description={program.deviceCode==='60'?'KEYENCE KV-X':'KEYENCE'} busy={busy} dark={dark} onChoose={choose} onToggleTheme={toggleTheme}
    onAbout={()=>nativeCsvBridge()?.postMessage({type:'show-about',dark})} onOpenFiles={openFiles} onOpenFolder={openFolder}/>
   <div class="subbar"><SearchBar query={query} mode={searchMode} results={searchResults} current={searchIndex} onQuery={setQuery} onMode={setSearchMode} onMove={searchMove} onClear={()=>setQuery('')} placeholder="デバイス・命令・コメント・元ファイル行"/>
    <div>{hasComments&&<label class="comment-toggle"><input type="checkbox" checked={showComments} onChange={event=>setShowComments(event.currentTarget.checked)}/>コメント</label>}
@@ -203,6 +206,6 @@ export function KeyenceViewer({program,names,busy,progress,error,dark,palette,ch
    <aside class="details"><div class="panel-title">命令の詳細</div>{instruction&&<div class="detail-content"><div class="eyebrow">元ファイル {instruction.sourceLine}行</div><h2>{instruction.opcode}</h2><dl>{instruction.operands.length>0&&<><dt>オペランド</dt><dd>{instruction.operands.map((operand,index)=><div key={index} class="operand"><span>{index+1}</span><code>{operand}</code></div>)}</dd></>}{keyenceInstructionComment(instruction,program)&&<><dt>コメント</dt><dd>{keyenceInstructionComment(instruction,program)}</dd></>}<dt>元ファイル</dt><dd>{program.name}</dd></dl></div>}</aside>
   </div>
   <footer><span class="status-dot"/>{program.moduleName||program.name} · {program.instructions.length} 命令 · {networks.length} 回路{Object.keys(program.deviceComments).length>0&&` · コメント ${Object.keys(program.deviceComments).length}件`}</footer>
-  {menu&&<div class="kv-context-menu" role="menu" style={{left:menu.x,top:menu.y}} onPointerDown={event=>event.stopPropagation()}><button role="menuitem" onClick={()=>void copy(menu.instruction)}>コピー</button></div>}
+  {menu&&<div class="kv-context-menu" role="menu" style={{left:menu.x,top:menu.y}} onPointerDown={event=>event.stopPropagation()}><button role="menuitem" onClick={()=>void copy(menu.instruction)}>コピー</button><button role="menuitem" onClick={()=>{openCommentList(commentListRequest(commentList,menu.instruction.operands,dark)!);setMenu(null);}}>コメントリスト</button></div>}
  </div>;
 }

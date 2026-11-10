@@ -24,6 +24,9 @@ internal sealed class ViewerWindow : Form
     private bool selectionBusy;
     private readonly ContextMenuStrip instructionMenu = new();
     private string instructionText = "";
+    private CommentListRequest? instructionComments;
+    private readonly ToolStripMenuItem commentListMenu = new("コメントリスト");
+    private CommentListWindow? commentListWindow;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private string[] startupPaths;
@@ -39,6 +42,8 @@ internal sealed class ViewerWindow : Form
         Controls.Add(view);
         Shown += InitializeView;
         instructionMenu.Items.Add("コピー", null, (_, _) => CopyInstruction());
+        commentListMenu.Click += (_, _) => { if (instructionComments is { } comments) ShowCommentList(comments); };
+        instructionMenu.Items.Add(commentListMenu);
         Disposed += (_, _) => instructionMenu.Dispose();
     }
 
@@ -105,10 +110,17 @@ internal sealed class ViewerWindow : Form
                 var content = text.GetString();
                 if (string.IsNullOrWhiteSpace(content) || content.Length > 1_000_000) return;
                 instructionText = content;
+                instructionComments = ReadCommentList(root);
+                commentListMenu.Visible = instructionComments is not null;
                 instructionMenu.Show(Cursor.Position);
                 return;
             }
             action = type.GetString()!;
+            if (action == "show-comment-list")
+            {
+                if (ReadCommentList(root) is { } comments) ShowCommentList(comments);
+                return;
+            }
             if (action == "show-about")
             {
                 using var dialog = new AboutWindow(root.TryGetProperty("dark", out var dark) && dark.ValueKind == JsonValueKind.True);
@@ -194,6 +206,23 @@ internal sealed class ViewerWindow : Form
             Reply(new { type = "csv-selection", token, status = "error", error = error.Message });
         }
         finally { selectionBusy = false; }
+    }
+
+    private static CommentListRequest? ReadCommentList(JsonElement root)
+    {
+        if (!root.TryGetProperty("commentList", out var value) || value.ValueKind != JsonValueKind.Object) return null;
+        var data = value.Deserialize<CommentListRequest>(JsonOptions);
+        if (data?.Title is null || data.SelectedAddress is null || data.Entries is null || data.Entries.Length > 200_000
+            || data.Entries.Any(row => row is null || string.IsNullOrWhiteSpace(row.Address) || row.Comment is null)) return null;
+        return data;
+    }
+
+    private void ShowCommentList(CommentListRequest comments)
+    {
+        if (commentListWindow is null || commentListWindow.IsDisposed) commentListWindow = new CommentListWindow();
+        if (!commentListWindow.Visible) commentListWindow.Show(this);
+        commentListWindow.SetComments(comments);
+        commentListWindow.Activate();
     }
 
     private void CopyInstruction()

@@ -1,4 +1,5 @@
 import type { CsvInput } from './batch';
+import type {CommentListRequest} from './commentListData';
 
 export interface NativeCsvSelection {
   type: 'csv-selection';
@@ -12,7 +13,7 @@ export interface NativeCsvSelection {
 
 export interface NativeCsvBridge {
   postMessageWithAdditionalObjects?(message:{type:'read-dropped';token:number},files:File[]):void;
-  postMessage(message: { type: 'open-csv' | 'open-folder' | 'open-startup'; token: number } | { type: 'instruction-menu'; text: string } | { type: 'show-about'; dark?: boolean }): void;
+  postMessage(message: { type: 'open-csv' | 'open-folder' | 'open-startup'; token: number } | { type: 'instruction-menu'; text: string; commentList?:CommentListRequest } | {type:'show-comment-list';commentList:CommentListRequest} | { type: 'show-about'; dark?: boolean }): void;
   addEventListener(type: 'message', listener: (event: MessageEvent<NativeCsvSelection>) => void): void;
   removeEventListener(type: 'message', listener: (event: MessageEvent<NativeCsvSelection>) => void): void;
 }
