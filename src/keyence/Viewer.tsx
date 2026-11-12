@@ -29,6 +29,8 @@ import { StColorToggle } from '../StColorToggle';
 import { ViewerToolbar } from '../ViewerToolbar';
 import { useZoom } from '../useZoom';
 import { fitZoom } from '../zoom';
+import { VirtualNetworkList } from '../VirtualNetworkList';
+import { visibleRange } from '../visibleRange';
 
 interface Props {
   program: KeyenceProgram;
@@ -125,21 +127,16 @@ export function KeyenceViewer({
     return { offsets, heights, total: total + 8 };
   }, [drawings, zoom, scrolling]);
   const visible = useMemo(() => {
-    // Binary search keeps navigation near the end from leaving blank areas.
     const { offsets, heights } = dimensions;
-    let low = 0,
-      high = offsets.length;
     const start = Math.max(0, scrollTop - size.height),
       end = scrollTop + size.height * 2;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (offsets[mid] + heights[mid] < start) low = mid + 1;
-      else high = mid;
-    }
-    const indices: number[] = [];
-    for (let index = low; index < offsets.length && offsets[index] < end; index++)
-      indices.push(index);
-    return indices;
+    const [first, last] = visibleRange(
+      offsets.length,
+      (index) => ({ top: offsets[index], height: heights[index] }),
+      start,
+      end,
+    );
+    return Array.from({ length: last - first }, (_, index) => first + index);
   }, [dimensions, scrollTop, size.height]);
   const instruction = useMemo(
     () =>
@@ -461,10 +458,13 @@ export function KeyenceViewer({
           <div class="panel-title">
             回路一覧<span>{networks.length}</span>
           </div>
-          <div class="nav-list">
-            {networks.map((network, index) => (
+          <VirtualNetworkList
+            items={networks}
+            active={selectedNetwork}
+            renderItem={(network, index) => (
               <button
                 key={network.id}
+                data-network-id={network.id}
                 class={`nav-item${network.id === selectedNetwork ? ' active' : ''}`}
                 onClick={() => moveTo(index, network.instructions[0])}
                 onContextMenu={(e) => blockRangeMenu(e, blockRangeText([network]))}
@@ -484,8 +484,8 @@ export function KeyenceViewer({
                   </small>
                 </div>
               </button>
-            ))}
-          </div>
+            )}
+          />
         </aside>
         <div
           ref={viewport}

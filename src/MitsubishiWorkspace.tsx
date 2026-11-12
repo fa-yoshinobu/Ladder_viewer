@@ -12,6 +12,7 @@ import { SearchBar } from './SearchBar';
 import type { useViewerWorkspace } from './useViewerWorkspace';
 import { ViewerHeader } from './ViewerHeader';
 import { ViewerToolbar } from './ViewerToolbar';
+import { VirtualNetworkList } from './VirtualNetworkList';
 export function MitsubishiWorkspace({
   commentList,
   load,
@@ -56,7 +57,6 @@ export function MitsubishiWorkspace({
   setSelectedSide,
   deviceComments,
   displayedProgram,
-  navigation,
   active,
   jump,
   scroll,
@@ -188,8 +188,10 @@ export function MitsubishiWorkspace({
                 <div class="panel-title">
                   回路一覧 <span>{displayedProgram?.networks.length ?? 0}</span>
                 </div>
-                <div class="nav-list" ref={navigation}>
-                  {displayedProgram?.networks.map((n, index) => (
+                <VirtualNetworkList
+                  items={displayedProgram?.networks ?? []}
+                  active={active}
+                  renderItem={(n, index) => (
                     <button
                       class={`nav-item ${active === n.id ? 'active' : ''}`}
                       onClick={() => jump(n.id)}
@@ -207,8 +209,8 @@ export function MitsubishiWorkspace({
                         </small>
                       </div>
                     </button>
-                  ))}
-                </div>
+                  )}
+                />
               </aside>
               <main
                 ref={scroll}

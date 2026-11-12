@@ -8,6 +8,7 @@ import { type Instruction, type Program } from './model';
 import { drawingHeight, instructionDrawingOffset } from './NetworkDrawing';
 import { buildSearchIndex, searchInstructions, type SearchMode } from './search';
 import { useZoom } from './useZoom';
+import { visibleRange } from './visibleRange';
 export function useMitsubishiNavigation(
   program: Program | null,
   keyenceProgram: KeyenceProgram | null,
@@ -38,7 +39,6 @@ export function useMitsubishiNavigation(
   const viewAnchor = useRef<string | null>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 800 });
   const scroll = useRef<HTMLDivElement>(null);
-  const navigation = useRef<HTMLDivElement>(null);
   function resetKeyence() {
     pendingFit.current = false;
     pendingInstruction.current = null;
@@ -60,7 +60,6 @@ export function useMitsubishiNavigation(
     const element = scroll.current;
     element?.scrollTo(0, 0);
     setViewport({ top: element?.scrollTop ?? 0, height: element?.clientHeight ?? 800 });
-    navigation.current?.scrollTo(0, 0);
   }
   const commentCount = useMemo(() => Object.keys(deviceComments).length, [deviceComments]);
   const rowHeight = showComments && commentCount ? 72 : ROW;
@@ -122,9 +121,13 @@ export function useMitsubishiNavigation(
   });
   const selectedProgram = selectedSide === 'target' && comparison ? comparison.target : program;
   const total = layouts.at(-1);
-  const visible = layouts.filter(
-    (l) => l.top + l.height > viewport.top - 400 && l.top < viewport.top + viewport.height + 400,
+  const [firstVisible, endVisible] = visibleRange(
+    layouts.length,
+    (index) => layouts[index],
+    viewport.top - 400,
+    viewport.top + viewport.height + 400,
   );
+  const visible = layouts.slice(firstVisible, endVisible);
   useLayoutEffect(() => {
     const anchor = viewAnchor.current;
     viewAnchor.current = null;
@@ -199,7 +202,6 @@ export function useMitsubishiNavigation(
     const element = scroll.current;
     element?.scrollTo(0, 0);
     setViewport({ top: element?.scrollTop ?? 0, height: element?.clientHeight ?? viewport.height });
-    navigation.current?.scrollTo(0, 0);
   }
   function chooseDisplayedInstruction(instruction: Instruction) {
     setSelected(instruction);
@@ -256,9 +258,6 @@ export function useMitsubishiNavigation(
     setActive(layout.n.id);
     setSelected(instruction);
     setSelectedSide(side);
-    navigation.current
-      ?.querySelector(`[data-network-id="${CSS.escape(layout.n.id)}"]`)
-      ?.scrollIntoView({ block: 'nearest' });
   }
   function moveSearch(delta: number) {
     if (!searchResults.length) return;
@@ -295,7 +294,6 @@ export function useMitsubishiNavigation(
     viewMode,
     setViewport,
     scroll,
-    navigation,
     commentCount,
     rowHeight,
     comparison,
