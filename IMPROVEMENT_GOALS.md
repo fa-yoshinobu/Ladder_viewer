@@ -27,7 +27,7 @@ dotnet run --project tests/desktop/Check.csproj
 | G4 | 入力サイズに上限を設ける | 高 | ローカル検証済み |
 | G5 | 文書を実態に合わせる | 中 | ローカル検証済み |
 | G6 | UI検証スクリプトをリポジトリのテストにする | 中 | ローカル検証済み |
-| G7 | バージョンを一元管理する | 中 | 未着手 |
+| G7 | バージョンを一元管理する | 中 | ローカル検証済み |
 | G8 | 形式判定・文字コード判定の重複をなくす | 中 | 未着手 |
 | G9 | 大きなプログラムでも操作が重くならない | 中 | 未着手 |
 | G10 | 古い画面データを自動で片付ける | 中 | 未着手 |
@@ -185,11 +185,13 @@ dotnet run --project tests/desktop/Check.csproj
 **対象**: `package.json`、`src-desktop/LadderViewer.csproj`、`build-viewer.cmd`、`docs/BUILD.md`
 
 **完了条件**
-- [ ] `package.json` の `version` を唯一の定義とし、csprojはそこから読む（または `npm run windows:build` が `-p:Version` を渡す）。
-- [ ] `package.json` の `name` が `ladder-viewer` になっている。
-- [ ] BUILDのリリース手順に、バージョンを上げる場所が1か所だけ書かれている。
+- [x] `package.json` の `version` を唯一の定義とし、csprojはそこから読む（または `npm run windows:build` が `-p:Version` を渡す）。
+- [x] `package.json` の `name` が `ladder-viewer` になっている。
+- [x] BUILDのリリース手順に、バージョンを上げる場所が1か所だけ書かれている。
 
 **検証**: `package.json` のバージョンを仮に変えて `npm run windows:build` し、EXEの製品バージョンが一致する。
+
+**確認結果**: package.jsonだけを一時的に0.6.98へ変更してnpm run windows:buildを実行し、EXEの製品バージョンが0.6.98になることを確認。package.jsonを元のバイト列へ戻し、再ビルドしたEXEも0.6.7へ復元。共通検証成功（TypeScript 365件、C# 63件、reparse関連1グループは環境理由でスキップ）。build-viewer.cmdは同じnpmスクリプトを呼ぶため変更不要。
 
 **対象外**: 自動バージョン採番。
 

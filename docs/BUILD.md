@@ -52,14 +52,14 @@ LadderViewer.exe --compare "比較元.mnm" "比較先.mnm"
 
 ## GitHub Releases
 
-[Release Windows](../.github/workflows/release.yml) は `v0.6.0` のようなバージョンタグをpushすると実行されます。タグを付ける前に、リリースする変更をGitHubへ反映してください。以下は0.6.0をリリースする場合の例です。
+[Release Windows](../.github/workflows/release.yml) は `v0.6.0` のようなバージョンタグをpushすると実行されます。バージョンは`package.json`の`version`だけを更新し、`npm install --package-lock-only --ignore-scripts`でロックファイルへ同期してください。Windows版はこの値を読み、ローカルの`build-viewer.cmd`でもCIでも同じ番号になります。タグはこの値と一致させます。不一致の場合は公開前にCIが失敗します。タグを付ける前に、リリースする変更をGitHubへ反映してください。以下は0.6.0をリリースする場合の例です。
 
 ```powershell
 git tag v0.6.0
 git push origin v0.6.0
 ```
 
-テスト、内部画面のビルド、Windows版の発行が成功すると、GitHub Releaseを作成してEXEだけを格納した `LadderViewer-win-x64.zip` とSHA-256チェックサムを添付します。EXEのバージョンはタグの番号に合わせます。既存のReleaseや添付ファイルは上書きしません。
+テスト、内部画面のビルド、Windows版の発行が成功すると、GitHub Releaseを作成してEXEだけを格納した `LadderViewer-win-x64.zip` とSHA-256チェックサムを添付します。既存のReleaseや添付ファイルは上書きしません。
 
 公開前に [CHANGELOG.md](../CHANGELOG.md) へ今回のバージョンと変更内容を追記し、[.github/release-notes.md](../.github/release-notes.md) のChanges欄も更新してください。リリースノートとVirusTotalのスキャン結果は英語で記載します。その他の文書は日本語のままで構いません。
 

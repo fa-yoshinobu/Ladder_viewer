@@ -9,7 +9,7 @@
     <AssemblyName>LadderViewer</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>Ladder Viewer</Product>
-    <Version>0.6.7</Version>
+    <Version>$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('$(MSBuildProjectDirectory)/../package.json')), '&quot;version&quot;\s*:\s*&quot;([^&quot;]+)&quot;').Groups[1].Value)</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
