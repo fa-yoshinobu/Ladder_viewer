@@ -35,6 +35,45 @@ string Folder(string name) { var path = Path.Combine(root, name); Directory.Crea
 string Write(string folder, string name, string text, Encoding? encoding = null) { var path = Path.Combine(folder, name); File.WriteAllText(path, text, encoding ?? new UTF8Encoding(false)); return path; }
 
 {
+    var cacheRoot = Folder("asset-cache");
+    MemoryStream Archive(string text)
+    {
+        var stream = new MemoryStream();
+        using (var zip = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+        using (var writer = new StreamWriter(zip.CreateEntry("index.html").Open())) writer.Write(text);
+        stream.Position = 0;
+        return stream;
+    }
+    var dummy = Path.Combine(cacheRoot, "0000000000000000");
+    Directory.CreateDirectory(dummy);
+    File.WriteAllText(Path.Combine(dummy, "old.html"), "synthetic");
+    using var firstArchive = Archive("synthetic first");
+    using (var guarded = WebAssetCache.Open(firstArchive, cacheRoot, preserveUnleasedVersions: true))
+        Check(Directory.Exists(dummy), "unleased legacy assets retained while another viewer runs");
+    firstArchive.Position = 0;
+    using var first = WebAssetCache.Open(firstArchive, cacheRoot);
+    Check(!Directory.Exists(dummy), "old asset hash removed");
+    var file = Path.Combine(first.AssetsPath, "index.html");
+    var timestamp = new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    File.SetLastWriteTimeUtc(file, timestamp);
+    firstArchive.Position = 0;
+    using (var same = WebAssetCache.Open(firstArchive, cacheRoot))
+        Check(File.GetLastWriteTimeUtc(file) == timestamp, "complete asset hash skips extraction and supports concurrent same version");
+    using var secondArchive = Archive("synthetic second");
+    using var second = WebAssetCache.Open(secondArchive, cacheRoot);
+    Check(File.Exists(file), "running different asset version is retained");
+    first.Dispose();
+    secondArchive.Position = 0;
+    using (var again = WebAssetCache.Open(secondArchive, cacheRoot))
+        Check(!Directory.Exists(first.AssetsPath), "inactive asset version removed on later startup");
+    File.Delete(Path.Combine(second.AssetsPath, ".complete"));
+    File.WriteAllText(Path.Combine(second.AssetsPath, "index.html"), "partial extraction");
+    secondArchive.Position = 0;
+    using (var recovered = WebAssetCache.Open(secondArchive, cacheRoot))
+        Check(File.ReadAllText(Path.Combine(recovered.AssetsPath, "index.html")) == "synthetic second", "incomplete extraction recovered");
+}
+
+{
     var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
     using var single = JsonDocument.Parse(JsonSerializer.Serialize(new CsvFilePayload("MAIN.csv", "YQ==", "0"), options));
     Check(!single.RootElement.TryGetProperty("relativePath", out _), "single-file payload omits absent relative path");

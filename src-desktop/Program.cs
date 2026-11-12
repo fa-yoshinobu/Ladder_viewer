@@ -1,6 +1,4 @@
-using System.IO.Compression;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
@@ -27,6 +25,7 @@ internal sealed class ViewerWindow : Form
     private CommentListRequest? instructionComments;
     private readonly ToolStripMenuItem commentListMenu = new("コメントリスト");
     private CommentListWindow? commentListWindow;
+    private WebAssetCache? assetCache;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private string[] startupPaths;
@@ -45,6 +44,7 @@ internal sealed class ViewerWindow : Form
         commentListMenu.Click += (_, _) => { if (instructionComments is { } comments) ShowCommentList(comments); };
         instructionMenu.Items.Add(commentListMenu);
         Disposed += (_, _) => instructionMenu.Dispose();
+        Disposed += (_, _) => assetCache?.Dispose();
     }
 
     private async void InitializeView(object? sender, EventArgs e)
@@ -54,11 +54,12 @@ internal sealed class ViewerWindow : Form
             var dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LadderViewer");
             using var webArchive = Assembly.GetExecutingAssembly().GetManifestResourceStream("LadderViewer.web.zip")
                 ?? throw new InvalidOperationException("画面データが見つかりません。アプリを再ビルドしてください。");
-            var digest = Convert.ToHexString(SHA256.HashData(webArchive))[..16];
-            webArchive.Position = 0;
-            var assets = Path.Combine(dataRoot, "app", digest);
-            Directory.CreateDirectory(assets);
-            ZipFile.ExtractToDirectory(webArchive, assets, overwriteFiles: true);
+            var anotherViewer = System.Diagnostics.Process.GetProcessesByName("LadderViewer");
+            bool preserveUnleased;
+            try { preserveUnleased = anotherViewer.Any(process => process.Id != Environment.ProcessId); }
+            finally { foreach (var process in anotherViewer) process.Dispose(); }
+            assetCache = WebAssetCache.Open(webArchive, Path.Combine(dataRoot, "app"), preserveUnleased);
+            var assets = assetCache.AssetsPath;
 
             var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(dataRoot, "WebView2"));
             await view.EnsureCoreWebView2Async(environment);
