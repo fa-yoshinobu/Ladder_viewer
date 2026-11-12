@@ -55,7 +55,6 @@ export function KeyenceLadder({drawing,zoom,selected,onSelect,onContextMenu,onTo
  // Only stroke correction is shared with Mitsubishi; KEYENCE geometry stays in its own layout.
  const c=strokeCoordinates(zoom,raster.ratio,raster.x,raster.y);
  const rail=strokeCoordinates(zoom,raster.ratio,raster.x,raster.y,2);
- const X=c.x,Y=c.y;
  const line=(x1:number,y1:number,x2:number,y2:number,isRail=false,difference?:'added'|'removed')=>{
   const coordinates=isRail?rail:c;
   return <line x1={coordinates.x(x1)} y1={coordinates.y(y1)} x2={coordinates.x(x2)} y2={coordinates.y(y2)} class={isRail?'kv-rail':`kv-line${difference?' wire wire-'+difference:''}`}/>;

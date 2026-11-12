@@ -25,6 +25,7 @@ jobs:
           dotnet-version: '10.0.x'
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run format:check
       - run: npm test
       - run: npm run build
       - run: dotnet run --project tests/desktop/Check.csproj -c Release

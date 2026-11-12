@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx,css}\"",
     "typecheck": "tsc -p tsconfig.typecheck.json",
     "build": "tsc --noEmit && vite build",
     "test": "tsx --test tests/*.test.ts",
@@ -17,6 +19,7 @@
   "devDependencies": {
     "@types/node": "^22.20.5",
     "@types/papaparse": "^5.5.2",
+    "prettier": "^3.10.1",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.6"

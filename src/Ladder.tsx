@@ -58,7 +58,7 @@ function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, b
     <SelectionRect phase="frame" className="hit" selected={selected===i.id} hovered={hovered} difference={differenceKind} {...symbolBounds(s,rowHeight,baseline)}/>
     {i.op === 'NOP' ? null : marker ? <>
       <rect class={`command-outline flow-marker ${i.controlFlow?.kind==='loop'?'flow-loop':''}`} x={X(x+6)} y={Y(y-12)} width={X(x+w-6)-X(x+6)} height={Y(y+12)-Y(y-12)}/>
-      <text class="command-text" x={x+14} y={y+4}><tspan class={i.difference?.opChanged?'diff-value':''}>{i.op}</tspan>{i.operands.map((operand,index)=><>{' '}<Operand instruction={i} index={index}/></>)}</text>
+      <text class="command-text" x={x+14} y={y+4}><tspan class={i.difference?.opChanged?'diff-value':''}>{i.op}</tspan>{i.operands.map((_operand,index)=><>{' '}<Operand instruction={i} index={index}/></>)}</text>
       {flow&&<text class="flow-note" x={x+14} y={y+26}>{flowArrow}{flow.label}{flow.targetStep!==undefined&&<>{scopeTarget?' ～ ':' → '}{flow.targetId&&navigate?<tspan class="flow-target" role="button" tabIndex={0} aria-label={`STEP ${flow.targetStep||'—'}へ移動`} onClick={event=>{event.stopPropagation();navigate(flow.targetId!);}} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();event.stopPropagation();navigate(flow.targetId!);}}}>STEP {flow.targetStep||'—'}</tspan>:<>STEP {flow.targetStep||'—'}</>}</>}</text>}
     </> : s.fb ? <>
       <rect class="fb-outline" x={X(x)} y={Y(y-22)} width={X(x+w)-X(x)} height={Y(s.fb.rows*rowHeight-8)-Y(y-22)}/>
@@ -91,19 +91,19 @@ function Symbol({ s, selected, hovered, hover, choose, navigate, c, rowHeight, b
       </g>)}
     </> : s.contact && !comparison && !special ? <>
       <LadderGlyph kind="contact" x={x} y={y} width={CELL} c={c} negated={inverse} pulse={pulse<0?'rise':pulse>0?'fall':null} inputClass={inputClass} outputClass={outputClass}/>
-      <text class="device" x={cx} y={y - 15}>{i.operands.map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>
+      <text class="device" x={cx} y={y - 15}>{i.operands.map((_operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>
     </> : coil ? <>
       <LadderGlyph kind="coil" x={x} y={y} width={CELL} c={c} inputClass={inputClass} outputClass={outputClass}/>
-      <text class="device" x={cx} y={y - 15}>{i.operands.map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>
+      <text class="device" x={cx} y={y - 15}>{i.operands.map((_operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>
       {i.op === 'OUTH' && <text class="operator" x={cx} y={y + 4}>H</text>}
     </> : i.op === 'INV' ? <>
       <LadderGlyph kind="invert" x={x} y={y} width={CELL} c={c} inputClass={inputClass} outputClass={outputClass}/>
     </> : isInlineLogic(i.op) ? <>
       <LadderGlyph kind="pulse" x={x} y={y} width={CELL} c={c} pulse={i.op.endsWith('P')?'rise':'fall'} inputClass={inputClass} outputClass={outputClass}/>
-      {(i.op === 'EGP' || i.op === 'EGF') && <text class="device" x={cx} y={y - 15}>{i.operands.map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>}
+      {(i.op === 'EGP' || i.op === 'EGF') && <text class="device" x={cx} y={y - 15}>{i.operands.map((_operand, index) => <>{index ? ' ' : ''}<Operand instruction={i} index={index} maxLength={11}/></>)}</text>}
     </> : <>
       <LadderGlyph kind={comparison?'comparison':'command'} x={x} y={y} width={w} c={c} inputClass={inputClass} outputClass={outputClass}/>
-      <text class="command-text" x={x + 14} y={y + 4}><tspan class={i.difference?.opChanged?'diff-value':''}>{command}</tspan>{i.operands.map((operand,index) => <>{' '}<Operand instruction={i} index={index}/></>)}</text>
+      <text class="command-text" x={x + 14} y={y + 4}><tspan class={i.difference?.opChanged?'diff-value':''}>{command}</tspan>{i.operands.map((_operand,index) => <>{' '}<Operand instruction={i} index={index}/></>)}</text>
     </>}
     {showComments && !s.fb && !i.inlineST && !i.pins && !marker && <CommentText text={description} x={centered ? cx : x + 14} y={y + 20} width={centered ? CELL - 4 : w - 28} centered={centered}/>}
   </g>;
@@ -145,7 +145,7 @@ export function Ladder({ network, selected, choose, navigate, zoom, rowHeight, c
       <title>{`MC ${master.operands.join(' ')}`}</title>
       <rect class="hit" x={2} y={masterY + 4} width={LEFT_GUTTER + CELL * 2 - 4} height={rowHeight - 8}/>
       <text class="step-label" x={LEFT_GUTTER - 10} y={masterY + baseline + 4}><Operand instruction={master} index={0}/></text>
-      <text class="pointer-label" x={LEFT_GUTTER + 10} y={masterY + baseline + 4}>{master.operands.slice(1).map((operand, index) => <>{index ? ' ' : ''}<Operand instruction={master} index={index + 1}/></>)}</text>
+      <text class="pointer-label" x={LEFT_GUTTER + 10} y={masterY + baseline + 4}>{master.operands.slice(1).map((_operand, index) => <>{index ? ' ' : ''}<Operand instruction={master} index={index + 1}/></>)}</text>
       {showComments && <CommentText text={deviceComment(master.operands[1], comments)} x={LEFT_GUTTER + 10} y={masterY + baseline + 20} width={CELL * 2 - 20}/>}
       {line(rootStroke, LEFT_GUTTER - 6, masterY + baseline - 9, LEFT_GUTTER + 6, masterY + baseline - 9)}
       {line(rootStroke, LEFT_GUTTER - 6, masterY + baseline + 9, LEFT_GUTTER + 6, masterY + baseline + 9)}

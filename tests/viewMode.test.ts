@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram, type Network } from '../src/model.ts';
 import { parseComparison } from '../src/comparison.ts';
-import { CELL, COLUMNS, GRID_WIDTH, LADDER_WIDTH, LEFT_GUTTER, PAGE_GAP, ROW, SCROLLBAR_HEIGHT, displayGrid, drawingPages, drawingMetrics, gridLayout, networkSize } from '../src/layout.ts';
+import { CELL, COLUMNS, LADDER_WIDTH, LEFT_GUTTER, PAGE_GAP, ROW, SCROLLBAR_HEIGHT, displayGrid, drawingPages, drawingMetrics, gridLayout, networkSize } from '../src/layout.ts';
 import { NetworkDrawing, drawingHeight, instructionDrawingOffset, networkPrefix } from '../src/NetworkDrawing.tsx';
 import {HorizontalScroll} from '../src/HorizontalScroll.tsx';
 import {comparisonDisplayProgram} from '../src/comparisonDisplay.ts';
