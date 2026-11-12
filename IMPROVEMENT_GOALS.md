@@ -1,6 +1,6 @@
 # Ladder Viewer 改善ゴール
 
-[README](../README.md) · [ビルド・テスト](BUILD.md) · [TODO](../TODO.md)
+[README](README.md) · [ビルド・テスト](docs/BUILD.md) · [TODO](TODO.md)
 
 v0.6.6 時点のコードレビューに基づく改善項目です。1ゴール＝1つの独立した作業単位で、上から順に着手することを想定しています。
 
@@ -25,7 +25,7 @@ dotnet run --project tests/desktop/Check.csproj
 | G2 | コード書式を統一しCIで検査する | 高 | ローカル検証済み |
 | G3 | 3画面の重複処理を共通化する | 高 | ローカル検証済み |
 | G4 | 入力サイズに上限を設ける | 高 | ローカル検証済み |
-| G5 | 文書を実態に合わせる | 中 | 未着手 |
+| G5 | 文書を実態に合わせる | 中 | ローカル検証済み |
 | G6 | UI検証スクリプトをリポジトリのテストにする | 中 | 未着手 |
 | G7 | バージョンを一元管理する | 中 | 未着手 |
 | G8 | 形式判定・文字コード判定の重複をなくす | 中 | 未着手 |
@@ -53,7 +53,7 @@ dotnet run --project tests/desktop/Check.csproj
 
 **検証**: `npm run typecheck` がローカルで成功する。わざと `tests/` に型エラーを入れると失敗する。
 
-**確認結果**: 型検査成功。`tests/` の意図的な型エラーが失敗することを確認して検証用ファイルを削除。共通検証はビルド成功、TypeScript 363件成功、C# 58件成功（reparse関連1グループは環境理由でスキップ）。GitHub上のCI実行は未確認。
+**確認結果**: 型検査成功。`tests/` の意図的な型エラーが失敗することを確認して検証用ファイルを削除。共通検証はビルド成功、TypeScript 363件成功、C# 58件成功（reparse関連1グループは環境理由でスキップ）。GitHub上のCIも成功（run 43279698799）。
 
 **対象外**: リリース手順の変更。
 
@@ -139,13 +139,15 @@ dotnet run --project tests/desktop/Check.csproj
 **対象**: `CHANGELOG.md`、`TODO.md`、`docs/BUILD.md`、`README.md`
 
 **完了条件**
-- [ ] `CHANGELOG.md` に v0.6.0〜v0.6.6 の変更が載っている（GitHub Releasesの内容から転記）。
-- [ ] BUILDのリリース手順に「`CHANGELOG.md` へ追記する」が入っている。
-- [ ] `TODO.md` に残件が載っている。本書を残件一覧とするなら、`TODO.md` から本書へリンクする。
-- [ ] BUILDの「構成と管理対象」で、`artifacts/build/` のうち再生成できるもの（`web/`、`LadderViewer/`、`Check/`）と、手作業の検証物を区別して説明している。
-- [ ] 再生成できない検証物の置き場所を `artifacts/build/` の外に決めている（G6と整合させる）。
+- [x] `CHANGELOG.md` に v0.6.0〜v0.6.6 の変更が載っている（GitHub Releasesの内容から転記）。
+- [x] BUILDのリリース手順に「`CHANGELOG.md` へ追記する」が入っている。
+- [x] `TODO.md` に残件が載っている。本書を残件一覧とするなら、`TODO.md` から本書へリンクする。
+- [x] BUILDの「構成と管理対象」で、`artifacts/build/` のうち再生成できるもの（`web/`、`LadderViewer/`、`Check/`）と、手作業の検証物を区別して説明している。
+- [x] 再生成できない検証物の置き場所を `artifacts/build/` の外に決めている（G6と整合させる）。
 
 **検証**: 文書内のリンクがすべて開ける。
+
+**確認結果**: ローカル文書リンク21件の参照先を確認。GitHub APIで取得できたv0.6.5・v0.6.6は公開Releaseから転記。現在Releaseが存在しないv0.6.0〜v0.6.4は各タグのリリースノートを使用し、CHANGELOGに出典を明記。既存の検証資料は移動・削除せず、今後の保存先をartifacts/manual/とした。共通検証成功（TypeScript 365件、C# 63件、reparse関連1グループは環境理由でスキップ）。
 
 **対象外**: 英語版文書の追加。
 

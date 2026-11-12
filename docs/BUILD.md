@@ -61,7 +61,7 @@ git push origin v0.6.0
 
 テスト、内部画面のビルド、Windows版の発行が成功すると、GitHub Releaseを作成してEXEだけを格納した `LadderViewer-win-x64.zip` とSHA-256チェックサムを添付します。EXEのバージョンはタグの番号に合わせます。既存のReleaseや添付ファイルは上書きしません。
 
-公開前に [.github/release-notes.md](../.github/release-notes.md) のChanges欄を、今回の変更内容に合わせて更新してください。リリースノートとVirusTotalのスキャン結果は英語で記載します。その他の文書は日本語のままで構いません。
+公開前に [CHANGELOG.md](../CHANGELOG.md) へ今回のバージョンと変更内容を追記し、[.github/release-notes.md](../.github/release-notes.md) のChanges欄も更新してください。リリースノートとVirusTotalのスキャン結果は英語で記載します。その他の文書は日本語のままで構いません。
 
 公開後は配布したEXEをVirusTotalでスキャンします。スキャンを再実行する場合は、`Scan release with VirusTotal` ワークフローに対象のリリースタグを指定してください。[共通リリース標準](https://github.com/fa-yoshinobu/release_standard)も参照してください。
 
@@ -84,11 +84,15 @@ dotnet run --project tests/desktop/Check.csproj
 | `tests/` | 架空データによる検証 |
 | `docs/` | 説明書・画面例 |
 | `artifacts/release/` | 完成したEXE・配布ZIP |
-| `artifacts/build/` | 内部画面・.NETの中間ファイル。削除後は再ビルドで生成 |
+| `artifacts/build/web/` | 内部画面。`npm run build`で再生成 |
+| `artifacts/build/LadderViewer/`・`artifacts/build/Check/` | .NETの中間ファイル。ビルド・C#チェックで再生成 |
+| `artifacts/manual/` | 手作業の検証資料・参考画像。Git管理外、ビルドでは再生成されない |
 | `artifacts/reports/` | CIで作成するスキャン結果 |
 | `node_modules/` | npmで取得した開発用ライブラリ |
 
 三菱CSVとキーエンスMNMは拡張子で振り分け、メーカーごとに解析モデルと回路配置を分けています。基本記号と表示操作は共通です。
+
+既存の`artifacts/build/reference-audit/`・`kvx-audit/`などには手作業の検証資料が含まれます。`artifacts/build/`全体を生成物として削除しないでください。今後の手作業の資料は`artifacts/manual/`に保存し、既存資料の移動・削除は個別に判断します。継続実行するUIテストは`tests/e2e/`で管理します。
 
 アプリアイコンは `src/icon.svg`（画面・ファビコン）と `src-desktop/app.ico`（EXE・ウィンドウ）です。図柄を変える場合は両方を更新してください。
 
