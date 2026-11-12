@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {parseComparison} from '../src/comparison.ts';
 import {gridLayout} from '../src/layout.ts';
-import {symbolDifferenceKind,type Program} from '../src/model.ts';
+import {symbolDifferenceKind,type Program,type Network} from '../src/model.ts';
 import {comparisonDisplayProgram} from '../src/comparisonDisplay.ts';
 import {compareConnections} from '../src/connections.ts';
 import {compareConnectionGraphs,type ConnectionInput} from '../src/connectionGraph.ts';
@@ -75,7 +75,7 @@ test('single-side wire colors use natural spans after output alignment re-routes
   const p=parseComparison(csv(reverse?b:a,reverse?a:b),'synthetic-natural-wire-colors');
   const sides=(['source','target'] as const).map(side=>comparisonDisplayProgram(p,side));
   const actual=sides.map(program=>gridLayout(program.networks[0]));
-  const expected=sides.map(program=>program.networks.map(n=>({...n,connectionDifferences:undefined})));
+  const expected:Network[][]=sides.map(program=>program.networks.map(n=>({...n,connectionDifferences:undefined})));
   compareConnections(expected[0],expected[1]);
   for(const [side,grid] of actual.entries())assert.deepEqual(grid.wires.flatMap((w,index)=>w.difference?[index]:[]),expected[side][0].connectionDifferences!.wires);
  }

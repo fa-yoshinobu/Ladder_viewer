@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "typecheck": "tsc -p tsconfig.typecheck.json",
     "build": "tsc --noEmit && vite build",
     "test": "tsx --test tests/*.test.ts",
     "windows:build": "npm run build && dotnet publish src-desktop/LadderViewer.csproj -c Release -r win-x64 --self-contained false -o artifacts/release"
@@ -14,6 +15,7 @@
     "preact": "^11.2.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.5",
     "@types/papaparse": "^5.5.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",

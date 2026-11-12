@@ -235,7 +235,7 @@ test('third-page navigation and scope endpoints follow compact heights with note
  const props={network:n,zoom,rowHeight:ROW,viewMode:'wrap' as const,width:LADDER_WIDTH*zoom,height:drawingHeight(n,ROW,zoom),prefix};
  const end=prefix+(top+metrics.baseline+12)*zoom;
  const scopes=[MasterControlScope({...props,ranges:[{start:n.instructions[0],end:owner,level:0,lane:0}]}),
-  ControlFlowScope({...props,ranges:[{kind:'FOR',start:n.instructions[0],end:owner,lane:0,branches:[]} ]})];
+  ControlFlowScope({...props,ranges:[{kind:'STFOR',start:n.instructions[0],end:owner,lane:0,branches:[]} ]})];
  for(const scope of scopes)assert.ok(scope.props.children[0].props.children[1].props.d.includes(`V${end}`));
 });
 

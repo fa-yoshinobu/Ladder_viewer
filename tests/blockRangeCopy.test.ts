@@ -38,7 +38,7 @@ test('right-click opens the existing native Copy menu with only the block range'
  Object.defineProperty(globalThis,'window',{configurable:true,value:{chrome:{webview:{postMessage:(message:unknown)=>messages.push(message)}}}});
  try{
   let prevented=0,stopped=0;
-  const event={preventDefault:()=>prevented++,stopPropagation:()=>stopped++} as MouseEvent;
+  const event={preventDefault:()=>prevented++,stopPropagation:()=>stopped++} as unknown as MouseEvent;
   blockRangeMenu(event,'STEP 184～192');
   assert.deepEqual(messages,[{type:'instruction-menu',text:'STEP 184～192'}]);
   assert.equal(prevented,1);assert.equal(stopped,1);

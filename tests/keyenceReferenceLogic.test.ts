@@ -46,9 +46,10 @@ test('contact diff keys ignore join role but preserve bit width and contact pola
   assert.equal(keyenceContactKey(load,[...operands]),keyenceContactKey(and,[...operands]));
   assert.notEqual(keyenceContactKey(load,[...operands]),keyenceContactKey(negated,[...operands]));
   const instruction=program([`${load} ${operands.join(' ')}`]).instructions[0];
-  instruction.difference={kind:'changed',opChanged:true,otherText:[and,...operands].join(' ')};
+  const difference={kind:'changed' as const,opChanged:true,operandChanges:[],otherText:[and,...operands].join(' ')};
+  instruction.difference=difference;
   assert.equal(keyenceSymbolDifferenceKind(instruction),undefined);
-  instruction.difference.otherText=[negated,...operands].join(' ');
+  difference.otherText=[negated,...operands].join(' ');
   assert.equal(keyenceSymbolDifferenceKind(instruction),'changed');
  }
  assert.notEqual(keyenceContactKey('BLD',['DM9600','#3']),keyenceContactKey('BLD.D',['DM9600','#3']));
