@@ -9,12 +9,13 @@ import { drawingHeight, instructionDrawingOffset } from './NetworkDrawing';
 import { buildSearchIndex, searchInstructions, type SearchMode } from './search';
 import { useZoom } from './useZoom';
 import { visibleRange } from './visibleRange';
+import { useSetting } from './settings';
 export function useMitsubishiNavigation(
   program: Program | null,
   keyenceProgram: KeyenceProgram | null,
   deviceComments: DeviceComments,
 ) {
-  const [showComments, setShowComments] = useState(true);
+  const [showComments, setShowComments] = useSetting('showComments');
   const [selected, setSelected] = useState<Instruction | null>(null);
   const [selectedSide, setSelectedSide] = useState<CompareSide>('source');
   const [comparisonDisplay, setComparisonDisplay] = useState<ComparisonDisplay>('both');
@@ -35,7 +36,7 @@ export function useMitsubishiNavigation(
     1,
     !!program?.comparison && comparisonDisplay === 'both',
   );
-  const [viewMode, setViewMode] = useState<LadderViewMode>('wrap');
+  const [viewMode, setViewMode] = useSetting('viewMode');
   const viewAnchor = useRef<string | null>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 800 });
   const scroll = useRef<HTMLDivElement>(null);

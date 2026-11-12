@@ -6,24 +6,16 @@ import { type NativeCsvSelection } from './nativeCsv';
 import { useFindShortcut } from './useFindShortcut';
 import { useMitsubishiNavigation } from './useMitsubishiNavigation';
 import { useProgramFiles } from './useProgramFiles';
-import { ladderPalettes, type LadderPalette } from './ViewerToolbar';
+import { type LadderPalette } from './ViewerToolbar';
+import { readSetting, writeSetting } from './settings';
 type Theme = 'light' | 'dark';
 function initialTheme(): Theme {
-  try {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-  } catch {}
-  return matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  return readSetting('theme');
 }
 document.documentElement.dataset.theme = initialTheme();
 // The ladder palette is remembered separately for light and dark mode.
 function savedLadderPalette(theme: Theme): LadderPalette {
-  try {
-    const saved = localStorage.getItem(`ladderPalette-${theme}`);
-    const match = ladderPalettes.find((p) => p.value === saved);
-    if (match) return match.value;
-  } catch {}
-  return 'standard';
+  return readSetting(`ladderPalette-${theme}`);
 }
 document.documentElement.dataset.ladder = savedLadderPalette(
   document.documentElement.dataset.theme as Theme,
@@ -80,16 +72,12 @@ export function useViewerWorkspace() {
     document.documentElement.dataset.ladder = palette;
     setTheme(next);
     setLadderPalette(palette);
-    try {
-      localStorage.setItem('theme', next);
-    } catch {}
+    writeSetting('theme', next);
   }
   function changeLadderPalette(next: LadderPalette) {
     document.documentElement.dataset.ladder = next;
     setLadderPalette(next);
-    try {
-      localStorage.setItem(`ladderPalette-${theme}`, next);
-    } catch {}
+    writeSetting(`ladderPalette-${theme}`, next);
   }
   function chooseProgram(name: string) {
     const keyence = keyencePrograms.find((p) => p.name === name);

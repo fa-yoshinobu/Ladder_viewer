@@ -26,6 +26,8 @@ internal sealed class ViewerWindow : Form
     private readonly ToolStripMenuItem commentListMenu = new("コメントリスト");
     private CommentListWindow? commentListWindow;
     private WebAssetCache? assetCache;
+    private readonly string placementPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LadderViewer", "window.json");
+    private bool restoreMaximized;
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
 
     private string[] startupPaths;
@@ -38,6 +40,20 @@ internal sealed class ViewerWindow : Form
         MinimumSize = new Size(960, 640);
         Size = new Size(1500, 950);
         StartPosition = FormStartPosition.CenterScreen;
+        var placement = WindowPlacement.Load(placementPath, Screen.AllScreens.Select(screen => screen.WorkingArea).ToArray());
+        if (placement is not null)
+        {
+            StartPosition = FormStartPosition.Manual;
+            Bounds = new Rectangle(placement.X, placement.Y, placement.Width, placement.Height);
+            restoreMaximized = placement.Maximized;
+            if (restoreMaximized) WindowState = FormWindowState.Maximized;
+        }
+        Resize += (_, _) => { if (WindowState != FormWindowState.Minimized) restoreMaximized = WindowState == FormWindowState.Maximized; };
+        FormClosing += (_, _) =>
+        {
+            var bounds = WindowState == FormWindowState.Normal ? Bounds : RestoreBounds;
+            WindowPlacement.Save(placementPath, new(bounds.X, bounds.Y, bounds.Width, bounds.Height, restoreMaximized));
+        };
         Controls.Add(view);
         Shown += InitializeView;
         instructionMenu.Items.Add("コピー", null, (_, _) => CopyInstruction());

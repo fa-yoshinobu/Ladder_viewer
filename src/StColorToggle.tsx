@@ -1,13 +1,8 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect } from 'preact/hooks';
+import { useSetting } from './settings';
 
 export function StColorToggle() {
-  const [enabled, setEnabled] = useState(() => {
-    try {
-      return localStorage.getItem('stHighlight') === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [enabled, setEnabled] = useSetting('stHighlight');
   useEffect(() => {
     document.documentElement.dataset.stHighlight = String(enabled);
   }, [enabled]);
@@ -19,9 +14,6 @@ export function StColorToggle() {
         onChange={(event) => {
           const next = event.currentTarget.checked;
           setEnabled(next);
-          try {
-            localStorage.setItem('stHighlight', String(next));
-          } catch {}
         }}
       />
       ST色分け

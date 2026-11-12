@@ -35,6 +35,22 @@ string Folder(string name) { var path = Path.Combine(root, name); Directory.Crea
 string Write(string folder, string name, string text, Encoding? encoding = null) { var path = Path.Combine(folder, name); File.WriteAllText(path, text, encoding ?? new UTF8Encoding(false)); return path; }
 
 {
+    var primary = new System.Drawing.Rectangle(0, 0, 1920, 1040);
+    var secondary = new System.Drawing.Rectangle(1920, 0, 1920, 1040);
+    var saved = new WindowPlacement(2100, 50, 1400, 900, true);
+    Check(WindowPlacement.Normalize(saved, [primary, secondary]) == saved, "window placement on connected secondary monitor retained");
+    Check(WindowPlacement.Normalize(saved, [primary]) is null, "removed monitor falls back to default window placement");
+    var oversized = WindowPlacement.Normalize(new(1800, 900, 2000, 1200, false), [primary]);
+    Check(oversized == new WindowPlacement(0, 0, 1920, 1040, false), "resized monitor clamps restored window to working area");
+    Check(WindowPlacement.Normalize(new(20, 20, -1, 800, false), [primary]) is null, "invalid stored window dimensions rejected");
+    var file = Path.Combine(Folder("window-preferences"), "window.json");
+    WindowPlacement.Save(file, saved);
+    Check(WindowPlacement.Load(file, [primary, secondary]) == saved, "window position size and maximized state round trip");
+    File.WriteAllText(file, "invalid JSON");
+    Check(WindowPlacement.Load(file, [primary]) is null, "invalid window settings fall back safely");
+}
+
+{
     var cacheRoot = Folder("asset-cache");
     MemoryStream Archive(string text)
     {

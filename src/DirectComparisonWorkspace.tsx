@@ -1,5 +1,6 @@
 import { DetailPanel } from './DetailPanel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
+import { useSetting } from './settings';
 import { openCommentList, showInstructionMenu, closeInstructionMenu } from './CommentList';
 import { keyenceCommentList, mitsubishiCommentList, commentListRequest } from './commentListData';
 import type { BatchResult, CsvInput } from './batch';
@@ -62,9 +63,9 @@ export function DirectComparisonWorkspace({
   const [result, setResult] = useState<DirectResult | null>(null),
     [comparing, setComparing] = useState(false),
     [compareError, setCompareError] = useState('');
-  const [display, setDisplay] = useState<'both' | 'source' | 'target'>('both'),
-    [comments, setComments] = useState(true),
-    [viewMode, setViewMode] = useState<'wrap' | 'scroll'>('wrap');
+  const [display, setDisplay] = useState<'both' | 'source' | 'target'>('both');
+  const [comments, setComments] = useSetting('showComments');
+  const [viewMode, setViewMode] = useSetting('viewMode');
   const { zoom, setZoom, zoomIn, zoomOut } = useZoom(0.5, display === 'both');
   const [query, setQuery] = useState(''),
     [searchMode, setSearchMode] = useState<'partial' | 'exact'>('partial'),

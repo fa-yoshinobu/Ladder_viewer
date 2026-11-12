@@ -31,6 +31,7 @@ import { useZoom } from '../useZoom';
 import { fitZoom } from '../zoom';
 import { VirtualNetworkList } from '../VirtualNetworkList';
 import { visibleRange } from '../visibleRange';
+import { useSetting } from '../settings';
 
 interface Props {
   program: KeyenceProgram;
@@ -67,7 +68,7 @@ export function KeyenceViewer({
 }: Props) {
   const viewport = useRef<HTMLDivElement>(null),
     viewAnchor = useRef<number | null>(null);
-  const [showComments, setShowComments] = useState(true);
+  const [showComments, setShowComments] = useSetting('showComments');
   const { zoom, setZoom, zoomIn, zoomOut } = useZoom();
   const [size, setSize] = useState({ width: 1000, height: 800 }),
     [scrollTop, setScrollTop] = useState(0);
@@ -75,7 +76,7 @@ export function KeyenceViewer({
     [selectedNetwork, setSelectedNetwork] = useState('');
   const [query, setQuery] = useState(''),
     [searchIndex, setSearchIndex] = useState(-1);
-  const [viewMode, setViewMode] = useState<'wrap' | 'scroll'>('wrap');
+  const [viewMode, setViewMode] = useSetting('viewMode');
   const [searchMode, setSearchMode] = useState<'partial' | 'exact'>('partial');
   const [pendingTarget, setPendingTarget] = useState<KeyenceInstruction | null>(null);
   const [scriptExpansion, setScriptExpansion] = useState(() => ({
