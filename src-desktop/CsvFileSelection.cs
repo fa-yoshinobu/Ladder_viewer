@@ -74,7 +74,7 @@ internal static class CsvFileSelection
         return selected.ToArray();
     }
 
-    private enum CommentFormat { Mitsubishi, Keyence }
+    internal enum CommentFormat { Mitsubishi, Keyence }
 
     static CsvFileSelection() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 
@@ -227,7 +227,7 @@ internal static class CsvFileSelection
     private static bool IsReadError(Exception error) => error is not InputLimitException &&
         error is IOException or UnauthorizedAccessException or DecoderFallbackException or System.Security.SecurityException;
 
-    private static CommentFormat? DetectCommentFormat(Func<Stream> open)
+    internal static CommentFormat? DetectCommentFormat(Func<Stream> open)
     {
         try { return ReadCommentFormat(open, new UTF8Encoding(false, true)); }
         catch (DecoderFallbackException)
@@ -253,9 +253,17 @@ internal static class CsvFileSelection
         {
             if (string.IsNullOrWhiteSpace(line)) continue;
             count++;
-            var columns = line.Split(line.Contains('\t') ? '\t' : ',').Select(column => column.Trim().Trim('"').Replace("\"\"", "\"")).ToArray();
-            if (columns.Length > 1 && columns[0] == "デバイス名" && !columns.Contains("命令")) return CommentFormat.Mitsubishi;
-            if (columns.Length > 2 && columns[0] == "" && columns[1] == "" && columns[2] == "コメント1") return CommentFormat.Keyence;
+            foreach (var delimiter in new[] { "\t", "," })
+            {
+                using var fields = new Microsoft.VisualBasic.FileIO.TextFieldParser(new StringReader(line));
+                fields.SetDelimiters(delimiter);
+                fields.HasFieldsEnclosedInQuotes = true;
+                string[] columns;
+                try { columns = fields.ReadFields() ?? []; }
+                catch (Microsoft.VisualBasic.FileIO.MalformedLineException) { continue; }
+                if (count == 1 && delimiter == "," && columns.Length > 2 && columns[0] == "" && columns[1] == "" && columns[2] == "コメント1") return CommentFormat.Keyence;
+                if (columns.Length > 1 && columns[0] == "デバイス名" && !columns.Contains("命令")) return CommentFormat.Mitsubishi;
+            }
         }
         return null;
     }

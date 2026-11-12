@@ -6,14 +6,14 @@ export function csvRows(text: string, preview = 0) {
   const source = text.replace(/^\uFEFF/, '');
   const delimiter =
     ['\t', ','].find((delimiter) =>
-      Papa.parse<string[]>(source, { delimiter, preview: 10, skipEmptyLines: true }).data.some(
+      Papa.parse<string[]>(source, { delimiter, preview: 10, skipEmptyLines: 'greedy' }).data.some(
         (row) =>
           (row.includes('ステップ番号') && row.includes('命令')) ||
-          (row[0] === 'デバイス名' && row.length > 1) ||
+          (row[0]?.trim() === 'デバイス名' && row.length > 1) ||
           (row[0] === '行' && row.includes('照合元') && row.includes('照合先')),
       ),
     ) ?? '\t';
-  return Papa.parse<string[]>(source, { delimiter, preview, skipEmptyLines: true });
+  return Papa.parse<string[]>(source, { delimiter, preview, skipEmptyLines: 'greedy' });
 }
 export const displayGxText = (text: string) => text.replace(/^\*/, '').replace(/\\r\\n/g, '\n');
 

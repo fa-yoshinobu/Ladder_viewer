@@ -1,0 +1,134 @@
+[
+  {
+    "name": "mitsubishi-utf8",
+    "base64": "IuODh+ODkOOCpOOCueWQjSIJIkphcGFuZXNlL+aXpeacrOiqniIKIk02MCIJIuaetuepuuOCs+ODoeODs+ODiCIK",
+    "text": "\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "keyence-utf8",
+    "base64": "LCzjgrPjg6Hjg7Pjg4gxLOOCs+ODoeODs+ODiDIKTVI2MCws5p6256m644Kz44Oh44Oz44OILAo=",
+    "text": ",,コメント1,コメント2\nMR60,,架空コメント,\n",
+    "format": "keyence"
+  },
+  {
+    "name": "mitsubishi-utf8-bom",
+    "base64": "77u/IuODh+ODkOOCpOOCueWQjSIJIkphcGFuZXNlL+aXpeacrOiqniIKIk02MCIJIuaetuepuuOCs+ODoeODs+ODiCIK",
+    "text": "\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "keyence-utf8-bom",
+    "base64": "77u/LCzjgrPjg6Hjg7Pjg4gxLOOCs+ODoeODs+ODiDIKTVI2MCws5p6256m644Kz44Oh44Oz44OILAo=",
+    "text": ",,コメント1,コメント2\nMR60,,架空コメント,\n",
+    "format": "keyence"
+  },
+  {
+    "name": "mitsubishi-utf16le",
+    "base64": "//4iAMcw0DCkMLkwDVQiAAkAIgBKAGEAcABhAG4AZQBzAGUALwDlZSxnnooiAAoAIgBNADYAMAAiAAkAIgC2Z3p6szDhMPMwyDAiAAoA",
+    "text": "\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "keyence-utf16le",
+    "base64": "//4sACwAszDhMPMwyDAxACwAszDhMPMwyDAyAAoATQBSADYAMAAsACwAtmd6erMw4TDzMMgwLAAKAA==",
+    "text": ",,コメント1,コメント2\nMR60,,架空コメント,\n",
+    "format": "keyence"
+  },
+  {
+    "name": "mitsubishi-utf16be",
+    "base64": "/v8AIjDHMNAwpDC5VA0AIgAJACIASgBhAHAAYQBuAGUAcwBlAC9l5Wcsip4AIgAKACIATQA2ADAAIgAJACJntnp6MLMw4TDzMMgAIgAK",
+    "text": "\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "keyence-utf16be",
+    "base64": "/v8ALAAsMLMw4TDzMMgAMQAsMLMw4TDzMMgAMgAKAE0AUgA2ADAALAAsZ7Z6ejCzMOEw8zDIACwACg==",
+    "text": ",,コメント1,コメント2\nMR60,,架空コメント,\n",
+    "format": "keyence"
+  },
+  {
+    "name": "mitsubishi-cp932",
+    "base64": "IoNmg2+DQ4NYlrwiCSJKYXBhbmVzZS+T+pZ7jOoiCiJNNjAiCSKJy4vzg1KDgYOTg2ciCg==",
+    "text": "\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "keyence-cp932",
+    "base64": "LCyDUoOBg5ODZzEsg1KDgYOTg2cyCk1SNjAsLInLi/ODUoOBg5ODZywK",
+    "text": ",,コメント1,コメント2\nMR60,,架空コメント,\n",
+    "format": "keyence"
+  },
+  {
+    "name": "quoted-comma",
+    "base64": "IuODh+ODkOOCpOOCueWQjSIsIkphcGFuZXNlLOWRveS7pCIKTTYwLFN5bnRoZXRpYw==",
+    "text": "\"デバイス名\",\"Japanese,命令\"\nM60,Synthetic",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "quoted-tab",
+    "base64": "IuODh+ODkOOCpOOCueWQjSIsIkphcGFuZXNlCXRleHQiCk02MCxTeW50aGV0aWM=",
+    "text": "\"デバイス名\",\"Japanese\ttext\"\nM60,Synthetic",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "escaped-quote",
+    "base64": "IuODh+ODkOOCpOOCueWQjSIsIkphcGFuZXNlICIibGFiZWwiIiIKTTYwLFN5bnRoZXRpYw==",
+    "text": "\"デバイス名\",\"Japanese \"\"label\"\"\"\nM60,Synthetic",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "command-header",
+    "base64": "44OH44OQ44Kk44K55ZCNLOWRveS7pApNNjAsT1VU",
+    "text": "デバイス名,命令\nM60,OUT",
+    "format": null
+  },
+  {
+    "name": "keyence-late",
+    "base64": "U3ludGhldGljCiws44Kz44Oh44Oz44OIMSzjgrPjg6Hjg7Pjg4gyCk1SNjAsLOaetuepuuOCs+ODoeODs+ODiCwK",
+    "text": "Synthetic\n,,コメント1,コメント2\nMR60,,架空コメント,\n",
+    "format": null
+  },
+  {
+    "name": "blank-prefix",
+    "base64": "CiAKIuODh+ODkOOCpOOCueWQjSIJIkphcGFuZXNlL+aXpeacrOiqniIKIk02MCIJIuaetuepuuOCs+ODoeODs+ODiCIK",
+    "text": "\n \n\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "tenth-nonempty",
+    "base64": "U3ludGhldGljClN5bnRoZXRpYwpTeW50aGV0aWMKU3ludGhldGljClN5bnRoZXRpYwpTeW50aGV0aWMKU3ludGhldGljClN5bnRoZXRpYwpTeW50aGV0aWMKIuODh+ODkOOCpOOCueWQjSIJIkphcGFuZXNlL+aXpeacrOiqniIKIk02MCIJIuaetuepuuOCs+ODoeODs+ODiCIK",
+    "text": "Synthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\n\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": "mitsubishi"
+  },
+  {
+    "name": "eleventh-nonempty",
+    "base64": "U3ludGhldGljClN5bnRoZXRpYwpTeW50aGV0aWMKU3ludGhldGljClN5bnRoZXRpYwpTeW50aGV0aWMKU3ludGhldGljClN5bnRoZXRpYwpTeW50aGV0aWMKU3ludGhldGljCiLjg4fjg5DjgqTjgrnlkI0iCSJKYXBhbmVzZS/ml6XmnKzoqp4iCiJNNjAiCSLmnrbnqbrjgrPjg6Hjg7Pjg4giCg==",
+    "text": "Synthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\nSynthetic\n\"デバイス名\"\t\"Japanese/日本語\"\n\"M60\"\t\"架空コメント\"\n",
+    "format": null
+  },
+  {
+    "name": "program",
+    "base64": "44K544OG44OD44OX55Wq5Y+3CeWRveS7pAlJL08o44OH44OQ44Kk44K5KQowCUxECU02MA==",
+    "text": "ステップ番号\t命令\tI/O(デバイス)\n0\tLD\tM60",
+    "format": null
+  },
+  {
+    "name": "malformed-body",
+    "base64": "LCzjgrPjg6Hjg7Pjg4gxCk1SNjAsLCJ1bnRlcm1pbmF0ZWQ=",
+    "text": ",,コメント1\nMR60,,\"unterminated",
+    "format": "keyence"
+  },
+  {
+    "name": "quoted-keyence",
+    "base64": "IiIsIiIsIuOCs+ODoeODs+ODiDEiLCJleHRyYSxmaWVsZCIKTVI2MCwsU3ludGhldGljLA==",
+    "text": "\"\",\"\",\"コメント1\",\"extra,field\"\nMR60,,Synthetic,",
+    "format": "keyence"
+  },
+  {
+    "name": "invalid-bom-utf16",
+    "base64": "//4A2A==",
+    "text": null,
+    "format": null
+  }
+]

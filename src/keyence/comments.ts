@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { decodeKeyenceText } from './encoding';
+import { detectCommentFormat } from '../commentFormat';
 
 export type KeyenceDeviceComments = Record<string, string>;
 export function keyenceCommentAddress(address: string): string {
@@ -11,7 +12,7 @@ export function keyenceCommentAddress(address: string): string {
 function rows(bytes: ArrayBuffer): string[][] {
   const result = Papa.parse<string[]>(decodeKeyenceText(bytes), {
     delimiter: ',',
-    skipEmptyLines: true,
+    skipEmptyLines: 'greedy',
   });
   if (result.errors.length) throw new Error('キーエンスのコメントCSVを読み込めません。');
   return result.data;
@@ -21,11 +22,7 @@ function isHeader(row: string[] | undefined): boolean {
 }
 export function isKeyenceCommentCsv(bytes: ArrayBuffer): boolean {
   try {
-    const header = decodeKeyenceText(bytes)
-      .split(/\r\n?|\n/)
-      .find((line) => line.trim());
-    if (!header) return false;
-    return isHeader(Papa.parse<string[]>(header, { delimiter: ',' }).data[0]);
+    return detectCommentFormat(decodeKeyenceText(bytes)) === 'keyence';
   } catch {
     return false;
   }

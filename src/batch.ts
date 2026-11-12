@@ -1,13 +1,10 @@
 import { csvRows } from './gxFormat';
+import { detectCommentFormat } from './commentFormat';
 import { programFormat } from './programFormat';
 import { parseKeyenceMnm } from './keyence/parser';
 import type { KeyenceProgram } from './keyence/model';
 import { linkKeyenceMacros } from './keyence/macros';
-import {
-  isKeyenceCommentCsv,
-  parseKeyenceComments,
-  type KeyenceDeviceComments,
-} from './keyence/comments';
+import { parseKeyenceComments, type KeyenceDeviceComments } from './keyence/comments';
 import { isComparisonHeader, parseComparison } from './comparison';
 import type { DeviceComments } from './comments';
 import { decodeCsv, parseProgram, type Program } from './model';
@@ -57,16 +54,20 @@ export function parseCsvBatch(
       const format = programFormat(file.name);
       if (!format) throw new Error('対応形式は三菱CSV・キーエンスMNMです。');
       if (format === 'keyence') return { file, kind: 'keyence' };
-      if (isKeyenceCommentCsv(file.bytes))
+      const text = decodeCsv(file.bytes);
+      const commentFormat = detectCommentFormat(text);
+      if (commentFormat === 'keyence')
         return { file, kind: 'keyence-comments', comments: parseKeyenceComments(file.bytes) };
-      const text = decodeCsv(file.bytes),
-        headers = csvRows(text, 10).data;
-      if (
-        headers.some((row) => row[0] === 'デバイス名' && row.length > 1 && !row.includes('命令'))
-      ) {
+      const headers = csvRows(text, 10).data;
+      if (commentFormat === 'mitsubishi') {
         const parsed = csvRows(text);
         if (parsed.errors.length) throw new Error(parsed.errors[0].message);
-        const head = parsed.data.findIndex((row) => row[0] === 'デバイス名');
+        const head = parsed.data.findIndex(
+          (row) =>
+            row[0]?.trim() === 'デバイス名' &&
+            row.length > 1 &&
+            !row.some((value) => value.trim() === '命令'),
+        );
         const japanese = parsed.data[head].findIndex((column) => /Japanese|日本語/.test(column));
         const column = japanese > 0 ? japanese : 1,
           comments: DeviceComments = Object.create(null);

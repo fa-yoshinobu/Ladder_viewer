@@ -120,16 +120,7 @@ export interface Program {
 }
 export const instructionKey = (i: Instruction) => JSON.stringify([i.op, i.operands]);
 
-export function decodeCsv(bytes: ArrayBuffer): string {
-  const b = new Uint8Array(bytes);
-  const encoding =
-    b[0] === 255 && b[1] === 254 ? 'utf-16le' : b[0] === 254 && b[1] === 255 ? 'utf-16be' : 'utf-8';
-  try {
-    return new TextDecoder(encoding, { fatal: true }).decode(bytes);
-  } catch {
-    return new TextDecoder('shift_jis', { fatal: true }).decode(bytes);
-  }
-}
+export { decodePlcText as decodeCsv } from './textEncoding';
 export function parseProgram(text: string, name: string): Program {
   const parsed = csvRows(text);
   if (parsed.errors.length) throw new Error(`CSV形式エラー: ${parsed.errors[0].message}`);

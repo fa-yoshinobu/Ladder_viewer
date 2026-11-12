@@ -11,6 +11,26 @@ const string CommentCsv = "\"test\"\n\"デバイス名\"\t\"Japanese/日本語\"
 var passed = 0;
 var skipped = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); Console.WriteLine("PASS " + name); passed++; }
+using (var fixtures = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", "comment-formats.json"))))
+{
+    foreach (var fixture in fixtures.RootElement.EnumerateArray())
+    {
+        var bytes = Convert.FromBase64String(fixture.GetProperty("base64").GetString()!);
+        var name = fixture.GetProperty("name").GetString();
+        if (fixture.GetProperty("text").ValueKind == JsonValueKind.Null)
+        {
+            var rejected = false;
+            try { CsvFileSelection.DetectCommentFormat(() => new MemoryStream(bytes)); }
+            catch (DecoderFallbackException) { rejected = true; }
+            Check(rejected, "shared comment fixture rejects invalid encoding " + name);
+        }
+        else
+        {
+            var actual = CsvFileSelection.DetectCommentFormat(() => new MemoryStream(bytes))?.ToString().ToLowerInvariant();
+            Check(actual == fixture.GetProperty("format").GetString(), "shared comment fixture " + name);
+        }
+    }
+}
 string Folder(string name) { var path = Path.Combine(root, name); Directory.CreateDirectory(path); return path; }
 string Write(string folder, string name, string text, Encoding? encoding = null) { var path = Path.Combine(folder, name); File.WriteAllText(path, text, encoding ?? new UTF8Encoding(false)); return path; }
 
