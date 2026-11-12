@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { placeSymbolColumn } from './ladderGeometry';
 import {
   CELL,
@@ -133,7 +134,7 @@ export function mergeWires(wires: readonly GridWire[]): GridWire[] {
           ? { x1: a, y1: fixed, x2: b, y2: fixed }
           : { x1: fixed, y1: a, x2: fixed, y2: b },
       );
-    let [start, end] = spans[0];
+    let [start, end] = requireValue(spans[0]);
     for (const [a, b] of spans.slice(1)) {
       if (a <= end) end = Math.max(end, b);
       else {
@@ -207,14 +208,14 @@ export function layoutGrid(n: Network, minimumRows?: BranchRowHints): GridLayout
       });
       end = { col: start + span, row: y, bottom: y };
     } else if (e.kind === 'and') {
-      const a = place(e.children[0], x, y, group);
-      const b = place(e.children[1], a.col, y, group);
+      const a = place(requireValue(e.children[0]), x, y, group);
+      const b = place(requireValue(e.children[1]), a.col, y, group);
       route(a, a.col, y);
       end = { ...b, bottom: Math.max(a.bottom, b.bottom) };
     } else {
-      const a = place(e.children[0], x, y, group),
-        rightRow = Math.max(y + 1, a.bottom + 1, minimum(e.children[1]));
-      const b = place(e.children[1], x, rightRow, branch(rightRow));
+      const a = place(requireValue(e.children[0]), x, y, group),
+        rightRow = Math.max(y + 1, a.bottom + 1, minimum(requireValue(e.children[1])));
+      const b = place(requireValue(e.children[1]), x, rightRow, branch(rightRow));
       const col = Math.max(a.col, b.col);
       line(x, y, x, b.row);
       route(a, col, a.row);
@@ -305,7 +306,8 @@ export function layoutGrid(n: Network, minimumRows?: BranchRowHints): GridLayout
   let previousCondition: Logic | null | undefined;
   for (const action of n.actions) {
     let prefix = action.condition;
-    while (prefix && !placed.has(prefix) && prefix.kind === 'and') prefix = prefix.children[0];
+    while (prefix && !placed.has(prefix) && prefix.kind === 'and')
+      prefix = prefix.children[0] ?? null;
     const sharedEnd = prefix ? placed.get(prefix) : undefined;
     let startRow = nextRow;
     if (action.condition !== previousCondition) {
@@ -481,7 +483,8 @@ export function displayGrid(network: Network, viewMode: LadderViewMode = 'wrap')
           (w) => Math.min(w.y1, w.y2) <= s.row && s.row <= Math.max(w.y1, w.y2),
         );
       const index = horizontalEnds.get(key(s.col, s.row));
-      if (!junction && index !== undefined && wires[index].x1 <= col) wires[index].x2 = col;
+      if (!junction && index !== undefined && requireValue(wires[index]).x1 <= col)
+        requireValue(wires[index]).x2 = col;
       else wires.push({ x1: s.col, y1: s.row, x2: col, y2: s.row, difference: s.inputDifference });
     }
     return { ...s, col };

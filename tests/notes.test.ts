@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram } from '../src/model.ts';
@@ -62,7 +63,7 @@ test('each MOV owns its note row and notes no longer add a network prefix', () =
       { op: 'MOV', operands: ['K7', 'D30'], note: 'move one' },
       { op: 'MOV', operands: ['K8', 'D31'], note: 'move two' },
     ]),
-    n = p.networks[0],
+    n = requireValue(p.networks[0]),
     raw = p.instructions.map((instruction) => instruction.note),
     zoom = 1.25;
   n.warnings = ['Synthetic warning'];
@@ -92,10 +93,12 @@ test('each MOV owns its note row and notes no longer add a network prefix', () =
 });
 
 test('circuits without notes retain their original dimensions and baseline', () => {
-  const n = normal([
-    { op: 'LD', operands: ['X12'] },
-    { op: 'OUT', operands: ['Y12'] },
-  ]).networks[0];
+  const n = requireValue(
+    normal([
+      { op: 'LD', operands: ['X12'] },
+      { op: 'OUT', operands: ['Y12'] },
+    ]).networks[0],
+  );
   assert.deepEqual(noteLayout(n), []);
   for (const rowHeight of [ROW, 72]) {
     assert.deepEqual(drawingMetrics(n, rowHeight), { padding: 0, rowHeight, baseline: BASELINE });
@@ -163,7 +166,7 @@ test('multiline, contact, coil, pointer, FB-pin and hidden-command notes remain 
   ];
   for (const fixture of fixtures) {
     const p = normal(fixture.commands),
-      n = p.networks[0],
+      n = requireValue(p.networks[0]),
       raw = p.instructions.map((instruction) => instruction.note);
     const notes = noteLayout(n),
       metrics = drawingMetrics(n, ROW),
@@ -172,7 +175,10 @@ test('multiline, contact, coil, pointer, FB-pin and hidden-command notes remain 
       const owners = notes.filter((note) => note.instructions.includes(instruction));
       assert.equal(owners.length, 1, fixture.name + ' retains each original note exactly once');
       for (const line of instruction.note.split('\n'))
-        assert.ok(owners[0].lines.includes(line), fixture.name + ' retains full note text');
+        assert.ok(
+          requireValue(owners[0]).lines.includes(line),
+          fixture.name + ' retains full note text',
+        );
     }
     for (const note of notes) {
       assert.ok(note.top + metrics.padding >= 0, fixture.name + ' note is inside its row');
@@ -184,9 +190,9 @@ test('multiline, contact, coil, pointer, FB-pin and hidden-command notes remain 
       );
     }
     assert.equal(metrics.padding > 0, fixture.padding, fixture.name + ' padding');
-    if (fixture.name === 'pointer') assert.equal(notes[0].pointer, true);
+    if (fixture.name === 'pointer') assert.equal(requireValue(notes[0]).pointer, true);
     if (fixture.name === 'multiline') {
-      assert.equal(metrics.padding, -notes[0].top);
+      assert.equal(metrics.padding, -requireValue(notes[0]).top);
       assert.equal(metrics.rowHeight, ROW + metrics.padding);
     }
     assert.deepEqual(
@@ -209,8 +215,8 @@ test('comparison sides share note padding and single-side display restores natur
       'END',
     ],
   );
-  const source = p.networks[0],
-    target = p.comparison!.target.networks[0];
+  const source = requireValue(p.networks[0]),
+    target = requireValue(p.comparison!.target.networks[0]);
   const a = drawingMetrics(source, ROW),
     b = drawingMetrics(target, ROW);
   const naturalSource = drawingMetrics({ ...source, comparisonNotePadding: undefined }, ROW);
@@ -224,8 +230,8 @@ test('comparison sides share note padding and single-side display restores natur
     laterRow(source) * a.rowHeight + a.baseline,
     laterRow(target) * b.rowHeight + b.baseline,
   );
-  const singleSource = comparisonDisplayProgram(p, 'source').networks[0],
-    singleTarget = comparisonDisplayProgram(p, 'target').networks[0];
+  const singleSource = requireValue(comparisonDisplayProgram(p, 'source').networks[0]),
+    singleTarget = requireValue(comparisonDisplayProgram(p, 'target').networks[0]);
   assert.equal(Object.hasOwn(singleSource, 'comparisonNotePadding'), false);
   assert.equal(Object.hasOwn(singleTarget, 'comparisonNotePadding'), false);
   assert.equal(Object.hasOwn(singleSource, 'rowAlignment'), false);
@@ -241,7 +247,7 @@ test('notes follow compact output columns and navigation uses the same padded pa
       ...Array.from({ length: 25 }, (_, index) => ({ op: 'AND', operands: [`X${index + 31}`] })),
       { op: 'MOV', operands: ['K3', 'D50'], note: 'one\ntwo\nthree' },
     ]),
-    n = p.networks[0],
+    n = requireValue(p.networks[0]),
     owner = p.instructions.at(-1)!,
     zoom = 1.25;
   n.title = 'Synthetic long';
@@ -253,7 +259,7 @@ test('notes follow compact output columns and navigation uses the same padded pa
     ['wrap', 33],
     ['scroll', 26],
   ] as const) {
-    const note = noteLayout(n, mode)[0],
+    const note = requireValue(noteLayout(n, mode)[0]),
       symbol = displayGrid(n, mode).symbols.find((symbol) => symbol.instruction === owner)!;
     assert.equal(note.owner, owner);
     assert.equal(note.col, col);

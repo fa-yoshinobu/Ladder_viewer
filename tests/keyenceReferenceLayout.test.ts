@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -62,7 +63,7 @@ test('three-input symbols keep each independent condition connected to its named
     ['PID DM8804 MR8805', ['PAUSE', 'MANUAL', 'RES']],
   ] as const) {
     const p = program(['LD R8500', 'LD R8501', 'LD R8502', command]);
-    const d = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, false),
+    const d = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, false),
       block = d.symbols.find((s) => s.ports)!;
     assert.equal(block.kind, 'multi-input');
     assert.deepEqual(
@@ -95,11 +96,11 @@ test('three-input comparison aligns later inputs while retaining each side conne
       program(reverse ? target : source),
       program(reverse ? source : target),
     );
-    const aligned = keyenceComparisonDrawings(comparison, false, 'scroll')[0],
-      natural = keyenceComparisonDrawings(comparison, false, 'scroll', false)[0];
+    const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll')[0]),
+      natural = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll', false)[0]);
     for (const side of ['source', 'target'] as const) {
-      const d = aligned[side][0],
-        original = natural[side][0],
+      const d = requireValue(aligned[side][0]),
+        original = requireValue(natural[side][0]),
         block = d.symbols.find((s) => s.ports)!;
       assert.deepEqual(
         block.ports!.map((p) => (p.y - d.baseline) / ROW),
@@ -134,7 +135,7 @@ test('wrapping retains all three input terminals and full symbol height', () => 
     'LD R8951',
     'SFT MR8960 MR8975',
   ]);
-  const base = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, false),
+  const base = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, false),
     wrapped = keyenceViewDrawing(base, 'wrap');
   const block = wrapped.symbols.find((s) => s.ports)!;
   assert.ok(wrapped.continuationLabels!.length > 1);
@@ -163,11 +164,11 @@ test('CON after a multiple-input output preserves the following command and outp
     ['LD R8801', 'LD R8802', 'LD R8803', 'SFT MR8804 MR8819'],
   ]) {
     const p = program([...prefix, 'CON', 'MOV #37 DM8820', 'OUT MR8821']);
-    const d = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, false),
+    const d = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, false),
       block = d.symbols.find((s) => s.ports)!,
       move = d.symbols.find((s) => s.instruction.opcode === 'MOV')!;
     assert.ok(move, 'every linked command must be drawn');
-    assert.equal(move.y, block.ports![0].y);
+    assert.equal(move.y, requireValue(block.ports![0]).y);
     assert.equal(move.x, block.x + block.width);
     assert.equal(move.x + move.width, d.right - 8);
     assert.ok(

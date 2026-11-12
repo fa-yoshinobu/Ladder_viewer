@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseComparison } from '../src/comparison.ts';
@@ -65,7 +66,7 @@ test('a shared OR merge removed from the output conditions marks its actual junc
   const source = ['LDI B400', 'LD Y0E1', 'MEP', 'ORB', 'OUT X71', 'SET X0A8'];
   const target = ['LDI B400', 'OUT X71', 'LD Y0E1', 'MEP', 'SET X0A8'];
   const p = parseComparison(csv(source, target), 'branch');
-  const g = gridLayout(p.networks[0]);
+  const g = gridLayout(requireValue(p.networks[0]));
   const vertical = g.wires.find((w) => w.x1 === 2 && w.x2 === 2 && w.y1 !== w.y2);
   assert.equal(vertical?.difference, 'removed');
   assert.ok(g.wires.some((w) => w.x1 === 2 && w.x2 === 10 && w.difference === 'removed'));
@@ -98,7 +99,9 @@ test('insertion and row padding do not color unchanged existing branch connectio
     for (const symbol of side.networks
       .flatMap((n) => gridLayout(n).symbols)
       .filter(
-        (s) => s.instruction.op === 'OUT' && ['Y1', 'Y2'].includes(s.instruction.operands[0]),
+        (s) =>
+          s.instruction.op === 'OUT' &&
+          ['Y1', 'Y2'].includes(requireValue(s.instruction.operands[0])),
       ))
       assert.equal(symbol.inputDifference, undefined);
 });
@@ -127,10 +130,10 @@ test('a new independent rung colors its branch, not the existing mother rail ter
     csv(['LD X0', 'OUT Y0'], ['LD X0', 'OUT Y0', 'LD X9', 'OUT Y9']),
     'new',
   );
-  const existing = gridLayout(p.comparison!.target.networks[0]);
+  const existing = gridLayout(requireValue(p.comparison!.target.networks[0]));
   assert.ok(existing.symbols.every((s) => !s.inputDifference && !s.outputDifference));
   assert.ok(existing.wires.every((w) => !w.difference));
-  const added = gridLayout(p.comparison!.target.networks[1]);
+  const added = gridLayout(requireValue(p.comparison!.target.networks[1]));
   assert.ok(added.wires.some((w) => w.difference === 'added'));
   assert.equal(added.symbols.find((s) => s.instruction.op === 'LD')?.inputDifference, 'added');
 });
@@ -146,15 +149,15 @@ test('single-side wire colors use natural spans after output alignment re-routes
       'synthetic-natural-wire-colors',
     );
     const sides = (['source', 'target'] as const).map((side) => comparisonDisplayProgram(p, side));
-    const actual = sides.map((program) => gridLayout(program.networks[0]));
+    const actual = sides.map((program) => gridLayout(requireValue(program.networks[0])));
     const expected: Network[][] = sides.map((program) =>
       program.networks.map((n) => ({ ...n, connectionDifferences: undefined })),
     );
-    compareConnections(expected[0], expected[1]);
+    compareConnections(requireValue(expected[0]), requireValue(expected[1]));
     for (const [side, grid] of actual.entries())
       assert.deepEqual(
         grid.wires.flatMap((w, index) => (w.difference ? [index] : [])),
-        expected[side][0].connectionDifferences!.wires,
+        requireValue(requireValue(expected[side])[0]).connectionDifferences!.wires,
       );
   }
 });

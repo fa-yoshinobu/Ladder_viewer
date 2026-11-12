@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceInstruction, KeyenceProgram } from './model';
 import { buildKeyenceNetworks, type KeyenceNetwork } from './logic';
 import { findKeyenceLegacyScriptRegions, type KeyenceLegacyScriptRegion } from './legacyScript';
@@ -21,10 +22,10 @@ function counterpart(
   other?: KeyenceProgram,
 ) {
   if (!other) return undefined;
-  const row = program.instructions[region.jumpIndex].comparisonRow;
+  const row = requireValue(program.instructions[region.jumpIndex]).comparisonRow;
   if (row === undefined) return undefined;
   return keyenceScriptRegions(other).find(
-    (r) => other.instructions[r.jumpIndex].comparisonRow === row,
+    (r) => requireValue(other.instructions[r.jumpIndex]).comparisonRow === row,
   );
 }
 
@@ -42,7 +43,7 @@ export function keyenceScriptNetworks(
   for (const region of regions) {
     instructions.push(...program.instructions.slice(cursor, region.guardStartIndex));
     const own = program.instructions.slice(region.guardStartIndex, region.endIndex + 1),
-      guard = { ...own[0], statement: region.leadingStatement };
+      guard = { ...requireValue(own[0]), statement: region.leadingStatement };
     const peer = counterpart(program, region, other),
       peerGuard = peer && other?.instructions[peer.guardStartIndex];
     if (
@@ -67,7 +68,7 @@ export function keyenceScriptNetworks(
       id = keys.get(region.id) ?? region.id,
       isExpanded = expanded.has(id);
     const script = { id, expanded: isExpanded, instructionIds: body.map((i) => i.id) };
-    const jump = program.instructions[region.jumpIndex];
+    const jump = requireValue(program.instructions[region.jumpIndex]);
     if (isExpanded) {
       instructions.push(
         guard,
@@ -84,7 +85,7 @@ export function keyenceScriptNetworks(
         operands: [],
         comment: '',
         statement: '',
-        sourceEndLine: program.instructions[region.endIndex].sourceLine,
+        sourceEndLine: requireValue(program.instructions[region.endIndex]).sourceLine,
         st: { lines: region.sourceLines, legacyScript: true },
         script: { ...script, hiddenDifference: bodyChanged && !sourceChanged },
       };
@@ -120,11 +121,17 @@ export function keyenceScriptNetworks(
   for (const region of regions) {
     const id = keys.get(region.id) ?? region.id;
     if (!expanded.has(id)) continue;
-    const start = networkByInstruction.get(program.instructions[region.guardStartIndex].id),
-      end = networkByInstruction.get(program.instructions[region.endIndex].id);
+    const start = networkByInstruction.get(
+        requireValue(program.instructions[region.guardStartIndex]).id,
+      ),
+      end = networkByInstruction.get(requireValue(program.instructions[region.endIndex]).id);
     if (start === undefined || end === undefined) continue;
     for (let index = start; index <= end; index++)
-      networks[index].scriptRange = { id, start: index === start, end: index === end };
+      requireValue(networks[index]).scriptRange = {
+        id,
+        start: index === start,
+        end: index === end,
+      };
   }
   return networks;
 }
@@ -168,10 +175,13 @@ export function keyenceScriptComparison(
   const intervals = regions
     .flatMap((rs, side) =>
       rs.map((region) => {
-        const start = groupById[side].get(
-          comparison[sides[side]].instructions[region.guardStartIndex].id,
+        const start = requireValue(groupById[side]).get(
+          requireValue(comparison[requireValue(sides[side])].instructions[region.guardStartIndex])
+            .id,
         );
-        const end = groupById[side].get(comparison[sides[side]].instructions[region.endIndex].id);
+        const end = requireValue(groupById[side]).get(
+          requireValue(comparison[requireValue(sides[side])].instructions[region.endIndex]).id,
+        );
         return { start: start ?? -1, end: end ?? -1 };
       }),
     )
@@ -191,17 +201,22 @@ export function keyenceScriptComparison(
     (rs, side) =>
       new Map(
         rs.map((region) => {
-          const program = comparison[sides[side]],
-            peer = counterpart(program, region, comparison[sides[1 - side]]);
+          const program = comparison[requireValue(sides[side])],
+            peer = counterpart(program, region, comparison[requireValue(sides[1 - side])]);
           const key = peer
-            ? 'script-pair-' + program.instructions[region.jumpIndex].comparisonRow
+            ? 'script-pair-' + requireValue(program.instructions[region.jumpIndex]).comparisonRow
             : `script-${sides[side]}-${region.id}`;
           return [region.id, key] as const;
         }),
       ),
   );
   const networks = sides.map((side, index) =>
-    keyenceScriptNetworks(comparison[side], expanded, comparison[sides[1 - index]], keys[index]),
+    keyenceScriptNetworks(
+      comparison[side],
+      expanded,
+      comparison[requireValue(sides[1 - index])],
+      keys[index],
+    ),
   );
   const displayGroup = new Map(
     ranges.flatMap(({ start, end }, index) =>
@@ -215,8 +230,10 @@ export function keyenceScriptComparison(
   }));
   networks.forEach((side, index) =>
     side.forEach((network) => {
-      const original = groupById[index].get(network.instructions[0].id)!;
-      groups[displayGroup.get(original)!][sides[index]].push(network);
+      const original = requireValue(groupById[index]).get(
+        requireValue(network.instructions[0]).id,
+      )!;
+      requireValue(groups[displayGroup.get(original)!])[requireValue(sides[index])].push(network);
     }),
   );
   return { ...comparison, groups };

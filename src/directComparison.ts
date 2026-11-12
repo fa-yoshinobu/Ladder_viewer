@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { BatchResult } from './batch';
 import type { Program } from './model';
 import { deviceComment, type DeviceComments } from './comments';
@@ -55,15 +56,16 @@ export function pairDirectPrograms(source: DirectInput[], target: DirectInput[])
   if (
     source.length === 1 &&
     target.length === 1 &&
-    ((!source[0].relativePath && !target[0].relativePath) || key(source[0]) === key(target[0]))
+    ((!requireValue(source[0]).relativePath && !requireValue(target[0]).relativePath) ||
+      key(requireValue(source[0])) === key(requireValue(target[0])))
   )
     return [
       {
         id: 'pair',
         label:
-          source[0].name === target[0].name
-            ? source[0].name
-            : source[0].name + ' → ' + target[0].name,
+          requireValue(source[0]).name === requireValue(target[0]).name
+            ? requireValue(source[0]).name
+            : requireValue(source[0]).name + ' → ' + requireValue(target[0]).name,
         source: source[0],
         target: target[0],
       },

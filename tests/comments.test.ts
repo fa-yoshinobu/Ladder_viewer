@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { deviceComment, commentLines } from '../src/comments.ts';
@@ -13,7 +14,7 @@ test('long and multiline comments fit within two lines and preserve their origin
   const text = '一二三四五六七八九十 ABCDEFGHIJKLMNOP';
   const lines = commentLines(text, 12);
   assert.equal(lines.length, 2);
-  assert.ok(lines[1].endsWith('…'));
+  assert.ok(requireValue(lines[1]).endsWith('…'));
   assert.deepEqual(commentLines('運転\n停止', 12), ['運転', '停止']);
   assert.deepEqual(commentLines('ABC', 12), ['ABC']);
 });

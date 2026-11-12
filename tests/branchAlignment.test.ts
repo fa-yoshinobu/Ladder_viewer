@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseComparison } from '../src/comparison.ts';
@@ -85,7 +86,7 @@ const keyence = (commands: string[]) =>
           'LDD<': 'LD<.D',
           'ANDD<': 'AND<.D',
         } as Record<string, string>
-      )[op] ?? op;
+      )[requireValue(op)] ?? op;
     return [
       opcode,
       ...operands.map((o) =>
@@ -165,10 +166,10 @@ for (const vendor of ['Mitsubishi', 'KEYENCE'] as const) {
         })),
       });
       return [p, p.comparison!.target].map((side, index) => {
-        const n = side.networks[0],
+        const n = requireValue(side.networks[0]),
           g = gridLayout(n),
           natural = gridLayout(
-            comparisonDisplayProgram(p, index ? 'target' : 'source').networks[0],
+            requireValue(comparisonDisplayProgram(p, index ? 'target' : 'source').networks[0]),
           );
         for (const s of g.symbols)
           assert.equal(instructionDrawingOffset(n, s.instruction.id, ROW, 1, 'wrap'), s.row * ROW);
@@ -176,9 +177,9 @@ for (const vendor of ['Mitsubishi', 'KEYENCE'] as const) {
       });
     }
     const comparison = compareKeyencePrograms(mnm(source), mnm(target));
-    const aligned = keyenceComparisonDrawings(comparison, false, 'scroll')[0],
-      natural = keyenceComparisonDrawings(comparison, false, 'scroll', false)[0];
-    const blocks = keyenceCompareDrawing(comparison, false, 1, 'scroll', 'both')[0];
+    const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll')[0]),
+      natural = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll', false)[0]);
+    const blocks = requireValue(keyenceCompareDrawing(comparison, false, 1, 'scroll', 'both')[0]);
     return (['source', 'target'] as const).map((side) => {
       const drawing = (d: (typeof aligned.source)[number]): Drawing => ({
         railX: d.left,
@@ -198,12 +199,15 @@ for (const vendor of ['Mitsubishi', 'KEYENCE'] as const) {
           outputDifference: s.outputDifference,
         })),
       });
-      for (const s of aligned[side][0].symbols)
+      for (const s of requireValue(aligned[side][0]).symbols)
         assert.equal(
-          blocks[side][0].locations!.find((l) => l.id === s.instruction.id)!.y,
-          s.y - aligned[side][0].baseline,
+          requireValue(blocks[side][0]).locations!.find((l) => l.id === s.instruction.id)!.y,
+          s.y - requireValue(aligned[side][0]).baseline,
         );
-      return { aligned: drawing(aligned[side][0]), natural: drawing(natural[side][0]) };
+      return {
+        aligned: drawing(requireValue(aligned[side][0])),
+        natural: drawing(requireValue(natural[side][0])),
+      };
     });
   };
   test(`${vendor} inserted input branches do not add gaps between independent reset outputs`, () => {
@@ -215,7 +219,7 @@ for (const vendor of ['Mitsubishi', 'KEYENCE'] as const) {
             string[],
           ]),
         );
-        const reset = sides[reverse ? 1 : 0].aligned;
+        const reset = requireValue(sides[reverse ? 1 : 0]).aligned;
         assert.deepEqual(
           reset.symbols.filter((s) => s.command.startsWith('RST ')).map((s) => s.row),
           [0, 1],

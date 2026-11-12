@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram } from '../src/model.ts';
@@ -15,8 +16,10 @@ function circuit(contacts: number, device: string) {
     (_, index) => `${index}\t${index ? 'AND' : 'LD'}\tX${index}`,
   );
   commands.push(`${contacts}\tOUT\t${device}`);
-  return parseProgram('ステップ番号\t命令\tI/O(デバイス)\n' + commands.join('\n'), 'synthetic.csv')
-    .networks[0];
+  return requireValue(
+    parseProgram('ステップ番号\t命令\tI/O(デバイス)\n' + commands.join('\n'), 'synthetic.csv')
+      .networks[0],
+  );
 }
 test('short comparison groups keep their heights in both display modes', () => {
   const group = { source: [circuit(2, 'Y0'), circuit(3, 'Y1')], target: [circuit(1, 'Y2')] };

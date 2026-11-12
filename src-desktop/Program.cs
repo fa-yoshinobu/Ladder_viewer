@@ -83,6 +83,7 @@ internal sealed class ViewerWindow : Form
             view.CoreWebView2.Settings.AreDevToolsEnabled = false;
             view.CoreWebView2.Settings.IsStatusBarEnabled = false;
             view.CoreWebView2.Settings.IsZoomControlEnabled = false;
+            view.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
             view.CoreWebView2.SetVirtualHostNameToFolderMapping(AppHost, assets, CoreWebView2HostResourceAccessKind.Deny);
             view.CoreWebView2.NavigationStarting += (_, navigation) =>
             {

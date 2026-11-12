@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { visibleRange } from '../src/visibleRange';
@@ -15,7 +16,7 @@ test('5,000 variable-height circuits match a full scan with logarithmic lookups'
       layouts.length,
       (index) => {
         lookups++;
-        return layouts[index];
+        return requireValue(layouts[index]);
       },
       start,
       start + 800,

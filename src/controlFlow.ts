@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { Instruction, Network } from './model';
 
 export interface ControlFlow {
@@ -82,7 +83,7 @@ function pointerKey(value: string): string | undefined {
   const match = /^(GLP|#?P)(\d+)$/i.exec(value);
   if (!match) return undefined;
   const number = Number(match[2]);
-  const namespace = match[1].toUpperCase() === 'GLP' ? 'GLP' : 'P';
+  const namespace = requireValue(match[1]).toUpperCase() === 'GLP' ? 'GLP' : 'P';
   return Number.isSafeInteger(number) ? namespace + number : undefined;
 }
 
@@ -277,12 +278,12 @@ export function assignControlFlow(networks: Network[]): void {
         continue;
       }
       if (Object.hasOwn(systemLabels, op)) {
-        instruction.controlFlow = { kind: 'system', label: systemLabels[op] };
+        instruction.controlFlow = { kind: 'system', label: requireValue(systemLabels[op]) };
         continue;
       }
       if (
         op === 'JMPO' &&
-        !(instruction.operands.length === 1 && pointerKey(instruction.operands[0]))
+        !(instruction.operands.length === 1 && pointerKey(requireValue(instruction.operands[0])))
       ) {
         instruction.controlFlow = { kind: 'jump', label: '生成ジャンプ' };
         continue;
@@ -290,9 +291,11 @@ export function assignControlFlow(networks: Network[]): void {
       if (op === 'JMP' || op === 'CJ' || op === 'SCJ' || op === 'JMPO') {
         instruction.controlFlow = { kind: 'jump', label: 'ポインターへ移動' };
         const key =
-          instruction.operands.length === 1 ? pointerKey(instruction.operands[0]) : undefined;
+          instruction.operands.length === 1
+            ? pointerKey(requireValue(instruction.operands[0]))
+            : undefined;
         const definitions = key ? pointers.get(key) : undefined;
-        if (definitions?.length === 1) link(instruction, definitions[0]);
+        if (definitions?.length === 1) link(instruction, requireValue(definitions[0]));
         else warn(network, instruction, '一意のポインターへ解決できないため行先を表示しません。');
       }
     }

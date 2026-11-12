@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { blockRangeMenu, blockRangeText } from './blockRangeCopy';
 import { useContext, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { CommentListContext, showInstructionMenu } from './CommentList';
@@ -49,7 +50,7 @@ function Operand({
 }) {
   return (
     <tspan class={instruction.difference?.operandChanges.includes(index) ? 'diff-value' : ''}>
-      <AddressText text={instruction.operands[index]} svg maxLength={maxLength} />
+      <AddressText text={requireValue(instruction.operands[index])} svg maxLength={maxLength} />
     </tspan>
   );
 }

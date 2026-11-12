@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import Papa from 'papaparse';
 import { decodeKeyenceText } from './encoding';
 import { detectCommentFormat } from '../commentFormat';
@@ -7,7 +8,7 @@ export function keyenceCommentAddress(address: string): string {
   const key = address.trim().toUpperCase();
   const match =
     /^((?:B|W))([0-9A-F]+)$/.exec(key) ?? /^(MR|LR|CR|DM|EM|FM|CM|TM|R|T|C)([0-9]+)$/.exec(key);
-  return match ? match[1] + match[2].replace(/^0+(?=.)/, '') : key;
+  return match ? match[1] + requireValue(match[2]).replace(/^0+(?=.)/, '') : key;
 }
 function rows(bytes: ArrayBuffer): string[][] {
   const result = Papa.parse<string[]>(decodeKeyenceText(bytes), {
@@ -40,7 +41,7 @@ export function parseKeyenceComments(bytes: ArrayBuffer): KeyenceDeviceComments 
 }
 export function keyenceDeviceComment(address: string, comments: KeyenceDeviceComments): string {
   const exact = address.trim().toUpperCase();
-  if (Object.hasOwn(comments, exact)) return comments[exact];
+  if (Object.hasOwn(comments, exact)) return requireValue(comments[exact]);
   const key = keyenceCommentAddress(exact);
-  return Object.hasOwn(comments, key) ? comments[key] : '';
+  return Object.hasOwn(comments, key) ? requireValue(comments[key]) : '';
 }

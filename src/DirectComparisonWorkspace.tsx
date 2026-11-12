@@ -1,6 +1,8 @@
 import { DetailPanel } from './DetailPanel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useSetting } from './settings';
+import { MessageBanner } from './MessageBanner';
+import { useDebouncedValue } from './useDebouncedValue';
 import { openCommentList, showInstructionMenu, closeInstructionMenu } from './CommentList';
 import { keyenceCommentList, mitsubishiCommentList, commentListRequest } from './commentListData';
 import type { BatchResult, CsvInput } from './batch';
@@ -38,9 +40,10 @@ interface SideInput {
   batch: BatchResult | null;
   busy: boolean;
   error: string;
+  warning: string;
   progress: string;
 }
-const blank = (): SideInput => ({ batch: null, busy: false, error: '', progress: '' });
+const blank = (): SideInput => ({ batch: null, busy: false, error: '', warning: '', progress: '' });
 const noExpandedScripts = new Set<string>();
 export function DirectComparisonWorkspace({
   dark,
@@ -70,6 +73,12 @@ export function DirectComparisonWorkspace({
   const [query, setQuery] = useState(''),
     [searchMode, setSearchMode] = useState<'partial' | 'exact'>('partial'),
     [current, setCurrent] = useState(-1);
+  const settledQuery = useDebouncedValue(query);
+  const previousSearch = useRef<{
+    query: string;
+    mode: string;
+    result: DirectResult | null;
+  } | null>(null);
   const [selected, setSelected] = useState<DirectSelection | null>(null),
     [navigation, setNavigation] = useState<DirectNavigation | null>(null);
   const [scriptExpansion, setScriptExpansion] = useState<{
@@ -205,7 +214,7 @@ export function DirectComparisonWorkspace({
     );
   }, [result]);
   const matches = useMemo(() => {
-    const needle = normalizeSearchText(query);
+    const needle = normalizeSearchText(settledQuery);
     return searchEntries.filter(
       (entry) =>
         (display === 'both' || entry.side === display) &&
@@ -222,7 +231,7 @@ export function DirectComparisonWorkspace({
           searchMode,
         ),
     );
-  }, [searchEntries, query, searchMode, display]);
+  }, [searchEntries, settledQuery, searchMode, display]);
   const headings = useMemo(
     () =>
       matches.map((m) => ({
@@ -238,8 +247,23 @@ export function DirectComparisonWorkspace({
     setNavigation({ id: hit.instruction.id, side: hit.side, request: ++sequence.current });
   };
   useEffect(() => {
-    setCurrent(matches.length ? 0 : -1);
-    if (matches.length) navigate(0);
+    const previous = previousSearch.current;
+    previousSearch.current = { query: settledQuery, mode: searchMode, result };
+    if (
+      !previous ||
+      previous.query !== settledQuery ||
+      previous.mode !== searchMode ||
+      previous.result !== result
+    ) {
+      setCurrent(matches.length ? 0 : -1);
+      if (matches.length) navigate(0);
+    } else {
+      setCurrent(
+        matches.findIndex(
+          (hit) => hit.instruction.id === selected?.instruction.id && hit.side === selected.side,
+        ),
+      );
+    }
   }, [matches]);
   const fit = () => {
     if (!width.current) return;
@@ -304,19 +328,20 @@ export function DirectComparisonWorkspace({
         return;
       }
       const batch = message.result as BatchResult;
-      setSide(side, (old) => ({
-        ...old,
-        batch,
-        busy: false,
-        progress: '',
-        error: [
-          old.error,
-          ...batch.errors.map((e) => e.name + ': ' + e.message),
-          !directInputs(batch).length ? 'プログラムファイルがありません。' : '',
-        ]
+      setSide(side, (old) => {
+        const messages = [old.warning, ...batch.errors.map((e) => e.name + ': ' + e.message)]
           .filter(Boolean)
-          .join('\n'),
-      }));
+          .join('\n');
+        const loaded = directInputs(batch).length > 0;
+        return {
+          ...old,
+          batch,
+          busy: false,
+          progress: '',
+          error: loaded ? '' : messages || 'プログラムファイルがありません。',
+          warning: loaded ? messages : '',
+        };
+      });
     };
     parser.onerror = () => {
       for (const side of ['source', 'target'] as const)
@@ -437,7 +462,8 @@ export function DirectComparisonWorkspace({
       ...old,
       batch: null,
       busy: true,
-      error: warning,
+      error: '',
+      warning,
       progress: 'ファイルを読み込んでいます…',
     }));
     worker.current?.postMessage(
@@ -681,19 +707,19 @@ export function DirectComparisonWorkspace({
                   ? `✓ 読込み済み ${inputs[side].length}プログラム`
                   : 'CSV/MNM・フォルダーをドロップ'}
             </span>
-            {sides[side].error && (
-              <div class="error" role="alert">
-                {sides[side].error}
-              </div>
-            )}
+            <MessageBanner
+              text={sides[side].error}
+              dismiss={() => setSide(side, (old) => ({ ...old, error: '' }))}
+            />
+            <MessageBanner
+              text={sides[side].warning}
+              warning
+              dismiss={() => setSide(side, (old) => ({ ...old, warning: '' }))}
+            />
           </section>
         ))}
       </div>
-      {compareError && (
-        <div class="error" role="alert">
-          {compareError}
-        </div>
-      )}
+      <MessageBanner text={compareError} dismiss={() => setCompareError('')} />
       <div class="workspace comparison-workspace">
         <div ref={width} class="comparison-host">
           {result ? (

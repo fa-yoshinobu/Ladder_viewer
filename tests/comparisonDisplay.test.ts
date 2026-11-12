@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProgram, type Instruction, type Program } from '../src/model.ts';
@@ -11,8 +12,8 @@ function syntheticProgram(prefix: string): Program {
     id: prefix + '-' + index,
     sourceRow: index + 3,
     step: String(index),
-    op,
-    operands: [operand],
+    op: requireValue(op),
+    operands: [requireValue(operand)],
     note: 'synthetic note',
     statement: '',
   }));
@@ -21,8 +22,8 @@ function syntheticProgram(prefix: string): Program {
 function comparison(): Program {
   const source = syntheticProgram('source'),
     target = syntheticProgram('target');
-  source.networks[0].rowAlignment = [0, 4];
-  target.networks[0].rowAlignment = [1, 5];
+  requireValue(source.networks[0]).rowAlignment = [0, 4];
+  requireValue(target.networks[0]).rowAlignment = [1, 5];
   source.comparison = {
     target,
     sourceProject: 'before',
@@ -42,7 +43,7 @@ test('single-side display drops only row alignment without mutating either origi
     target = source.comparison!.target;
   for (const side of ['source', 'target'] as const) {
     const original = side === 'source' ? source : target,
-      network = original.networks[0],
+      network = requireValue(original.networks[0]),
       alignment = [...network.rowAlignment!];
     Object.freeze(network.rowAlignment);
     Object.freeze(network);
@@ -52,22 +53,22 @@ test('single-side display drops only row alignment without mutating either origi
     assert.notEqual(displayed, original);
     assert.notEqual(displayed.networks, original.networks);
     assert.notEqual(displayed.networks[0], network);
-    assert.equal(Object.hasOwn(displayed.networks[0], 'rowAlignment'), false);
+    assert.equal(Object.hasOwn(requireValue(displayed.networks[0]), 'rowAlignment'), false);
     assert.deepEqual(network.rowAlignment, alignment);
     assert.equal(displayed.instructions, original.instructions);
-    assert.equal(displayed.networks[0].instructions, network.instructions);
-    assert.equal(displayed.networks[0].actions, network.actions);
+    assert.equal(requireValue(displayed.networks[0]).instructions, network.instructions);
+    assert.equal(requireValue(displayed.networks[0]).actions, network.actions);
     assert.equal(displayed.name, original.name);
     assert.equal(displayed.cpu, original.cpu);
   }
-  assert.deepEqual(source.networks[0].rowAlignment, [0, 4]);
-  assert.deepEqual(target.networks[0].rowAlignment, [1, 5]);
+  assert.deepEqual(requireValue(source.networks[0]).rowAlignment, [0, 4]);
+  assert.deepEqual(requireValue(target.networks[0]).rowAlignment, [1, 5]);
 });
 
 test('single-side copies retain master, control, difference and source metadata by reference', () => {
   const source = comparison(),
-    network = source.networks[0],
-    instruction = network.instructions[0];
+    network = requireValue(source.networks[0]),
+    instruction = requireValue(network.instructions[0]);
   const header: Instruction = {
     ...instruction,
     id: 'synthetic-master',
@@ -90,7 +91,7 @@ test('single-side copies retain master, control, difference and source metadata 
   instruction.controlFlow = {
     kind: 'jump',
     label: 'synthetic jump',
-    targetId: network.instructions[1].id,
+    targetId: requireValue(network.instructions[1]).id,
     targetStep: '1',
   };
   instruction.difference = {
@@ -101,7 +102,7 @@ test('single-side copies retain master, control, difference and source metadata 
     otherStep: '0',
   };
   const displayed = comparisonDisplayProgram(source, 'source'),
-    copy = displayed.networks[0];
+    copy = requireValue(displayed.networks[0]);
   assert.equal(displayed.comparison, source.comparison);
   assert.equal(displayed.warnings, source.warnings);
   assert.equal(copy.masterControl, header);
@@ -109,15 +110,15 @@ test('single-side copies retain master, control, difference and source metadata 
   assert.equal(copy.controlRanges, network.controlRanges);
   assert.equal(copy.connectionDifferences, network.connectionDifferences);
   assert.equal(copy.warnings, network.warnings);
-  assert.equal(copy.instructions[0].controlFlow, instruction.controlFlow);
-  assert.equal(copy.instructions[0].difference, instruction.difference);
-  assert.equal(copy.instructions[0].sourceRow, 3);
+  assert.equal(requireValue(copy.instructions[0]).controlFlow, instruction.controlFlow);
+  assert.equal(requireValue(copy.instructions[0]).difference, instruction.difference);
+  assert.equal(requireValue(copy.instructions[0]).sourceRow, 3);
 });
 
 test('both-side and ordinary CSV displays retain the original program and its geometry', () => {
   const source = comparison();
   assert.equal(comparisonDisplayProgram(source, 'both'), source);
-  assert.deepEqual(source.networks[0].rowAlignment, [0, 4]);
+  assert.deepEqual(requireValue(source.networks[0]).rowAlignment, [0, 4]);
   const ordinary = syntheticProgram('ordinary');
   for (const display of ['both', 'source', 'target'] as const)
     assert.equal(comparisonDisplayProgram(ordinary, display), ordinary);

@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import Papa from 'papaparse';
 import type { Instruction } from './model';
 import { isPointerDefinition } from './instructions';
@@ -23,7 +24,7 @@ export function commandParts(text: string): { tokens: string[]; note: string } {
   let token = '',
     quote = '';
   for (let index = 0; index < text.length; index++) {
-    const c = text[index];
+    const c = requireValue(text[index]);
     if (quote) {
       token += c;
       if (c === quote) {
@@ -62,7 +63,7 @@ export function instructionFields(text: string) {
 }
 
 export function gxInstructions(rows: string[][], header: number): Instruction[] {
-  const columns = rows[header],
+  const columns = requireValue(rows[header]),
     get = (row: string[], key: string) => row[columns.indexOf(key)]?.trim() ?? '';
   const instructions: Instruction[] = [],
     bodies = new Map<string, { text: string; sourceRow: number }>();
@@ -71,7 +72,7 @@ export function gxInstructions(rows: string[][], header: number): Instruction[] 
     body: { number: string; lines: string[]; sourceRow: number } | undefined;
   const append = (old: string, text: string) => [old, text].filter(Boolean).join('\n');
   for (let index = header + 1; index < rows.length; index++) {
-    const row = rows[index],
+    const row = requireValue(rows[index]),
       sourceRow = index + 1,
       first = row[0]?.trim() ?? '';
     if (body) {
@@ -89,7 +90,7 @@ export function gxInstructions(rows: string[][], header: number): Instruction[] 
     }
     const start = /^<STB([1-9]\d*)>$/.exec(first);
     if (start) {
-      body = { number: start[1], lines: [], sourceRow };
+      body = { number: requireValue(start[1]), lines: [], sourceRow };
       continue;
     }
     if (/^<\/STB\d+>$/.test(first))
@@ -142,13 +143,13 @@ export function gxInstructions(rows: string[][], header: number): Instruction[] 
         id: `row-${sourceRow}`,
         sourceRow,
         step: get(row, 'ステップ番号'),
-        op,
+        op: requireValue(op),
         operands: [...(special ? [] : command.tokens.slice(1)), ...args.tokens],
         note: append(note, args.note),
         statement,
         block,
       };
-      if (isPointerDefinition(op)) current.piStatement = command.note;
+      if (isPointerDefinition(requireValue(op))) current.piStatement = command.note;
       else current.note = append(current.note, command.note);
       instructions.push(current);
       statement = '';
@@ -173,7 +174,7 @@ export function gxInstructions(rows: string[][], header: number): Instruction[] 
     const owners = instructions.filter((i) => i.op === `STB${number}`);
     if (owners.length !== 1)
       throw new Error(`STB${number}の本文に対応する命令が一意に決まりません。`);
-    owners[0].inlineST = { number: Number(number), ...source };
+    requireValue(owners[0]).inlineST = { number: Number(number), ...source };
   }
   for (const instruction of instructions) {
     if (/^STB[1-9]\d*$/.test(instruction.op) && !instruction.inlineST)

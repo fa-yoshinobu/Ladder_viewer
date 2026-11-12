@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import {
   csvRows,
   gxInstructions,
@@ -123,7 +124,8 @@ export const instructionKey = (i: Instruction) => JSON.stringify([i.op, i.operan
 export { decodePlcText as decodeCsv } from './textEncoding';
 export function parseProgram(text: string, name: string): Program {
   const parsed = csvRows(text);
-  if (parsed.errors.length) throw new Error(`CSV形式エラー: ${parsed.errors[0].message}`);
+  if (parsed.errors.length)
+    throw new Error(`CSV形式エラー: ${requireValue(parsed.errors[0]).message}`);
   const rows = parsed.data,
     header = rows.findIndex((row) => row.includes('ステップ番号') && row.includes('命令'));
   if (header < 0)
@@ -176,7 +178,7 @@ export function buildProgram(instructions: Instruction[], name: string, cpu = ''
   const joinsPrevious = (index: number) => {
     let depth = 1;
     for (let cursor = index + 1; cursor < instructions.length; cursor++) {
-      const next = instructions[cursor];
+      const next = requireValue(instructions[cursor]);
       if (isMemoryControl(next.op)) continue;
       const operation = logicOperation(next.op);
       if (operation === 'load') depth++;
@@ -188,7 +190,7 @@ export function buildProgram(instructions: Instruction[], name: string, cpu = ''
   };
   let lastFb: Instruction | null = null;
   for (const [index, i] of instructions.entries()) {
-    if (index && instructions[index - 1].block?.id !== i.block?.id) flush();
+    if (index && requireValue(instructions[index - 1]).block?.id !== i.block?.id) flush();
     if (i.block && isFunctionCall(i.op)) flush();
     if (pinDefinition(i.op) && lastFb) {
       ensure(i).instructions.push(i);

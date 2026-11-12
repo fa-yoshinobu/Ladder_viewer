@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Instruction, Program } from '../src/model.ts';
@@ -89,7 +90,7 @@ test('NFKC, case and whitespace normalization match queries without modifying so
     searchInstructions(index, ' test\n mode ', 'exact')[0]?.instruction,
     p.instructions[0],
   );
-  assert.ok(index[0].fields.includes('カナ 表示'));
+  assert.ok(requireValue(index[0]).fields.includes('カナ 表示'));
   assert.equal(JSON.stringify(p), before);
 });
 
@@ -132,8 +133,8 @@ test('comparison display filters sides and keeps identical rows and ids as separ
     both.map((entry) => entry.side),
     ['source', 'target'],
   );
-  assert.equal(both[0].instruction, source.instructions[0]);
-  assert.equal(both[1].instruction, target.instructions[0]);
+  assert.equal(requireValue(both[0]).instruction, source.instructions[0]);
+  assert.equal(requireValue(both[1]).instruction, target.instructions[0]);
   const sourceOnly = buildSearchIndex(p, {}, 'source');
   const targetOnly = buildSearchIndex(p, {}, 'target');
   assert.deepEqual(
@@ -144,8 +145,8 @@ test('comparison display filters sides and keeps identical rows and ids as separ
     targetOnly.map((entry) => entry.side),
     ['target'],
   );
-  assert.equal(sourceOnly[0].instruction, source.instructions[0]);
-  assert.equal(targetOnly[0].instruction, target.instructions[0]);
+  assert.equal(requireValue(sourceOnly[0]).instruction, source.instructions[0]);
+  assert.equal(requireValue(targetOnly[0]).instruction, target.instructions[0]);
 });
 
 test('normal programs always index their own source and rebuilding does not retain another program', () => {

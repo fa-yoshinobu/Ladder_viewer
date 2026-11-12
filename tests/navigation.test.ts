@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProgram, type Instruction } from '../src/model.ts';
@@ -20,17 +21,20 @@ function syntheticProgram(commands: Command[]) {
 
 test('navigation includes title and warning prefix and resolves hidden instructions nearby', () => {
   const p = syntheticProgram([['LD', 'X0'], ['MPS'], ['OUT', 'Y0'], ['MPP'], ['OUT', 'Y1']]);
-  const n = p.networks[0],
+  const n = requireValue(p.networks[0]),
     rowHeight = 72,
     zoom = 1.5;
   n.title = 'synthetic\nheading';
   n.warnings = ['synthetic warning one', 'synthetic warning two'];
   const prefix = 2 * 18 * zoom + 2 * 25;
   assert.equal(
-    instructionDrawingOffset(n, p.instructions[4].id, rowHeight, zoom, 'wrap'),
+    instructionDrawingOffset(n, requireValue(p.instructions[4]).id, rowHeight, zoom, 'wrap'),
     prefix + rowHeight * zoom,
   );
-  assert.equal(instructionDrawingOffset(n, p.instructions[1].id, rowHeight, zoom, 'wrap'), prefix);
+  assert.equal(
+    instructionDrawingOffset(n, requireValue(p.instructions[1]).id, rowHeight, zoom, 'wrap'),
+    prefix,
+  );
   assert.equal(instructionDrawingOffset(n, 'not-in-network', rowHeight, zoom, 'wrap'), 0);
 });
 
@@ -40,16 +44,16 @@ test('navigation uses comparison row alignment once without changing the mapping
     ['OUT', 'Y3'],
     ['OUT', 'Y4'],
   ]);
-  const n = p.networks[0],
+  const n = requireValue(p.networks[0]),
     rowHeight = 80,
     zoom = 0.75;
   n.rowAlignment = [1, 4];
   assert.equal(
-    instructionDrawingOffset(n, p.instructions[0].id, rowHeight, zoom, 'wrap'),
+    instructionDrawingOffset(n, requireValue(p.instructions[0]).id, rowHeight, zoom, 'wrap'),
     rowHeight * zoom,
   );
   assert.equal(
-    instructionDrawingOffset(n, p.instructions[2].id, rowHeight, zoom, 'wrap'),
+    instructionDrawingOffset(n, requireValue(p.instructions[2]).id, rowHeight, zoom, 'wrap'),
     4 * rowHeight * zoom,
   );
   assert.deepEqual(n.rowAlignment, [1, 4]);
@@ -61,7 +65,7 @@ test('long-circuit navigation follows wrapped pages and keeps horizontal display
     ...Array.from({ length: 25 }, (_, index): Command => ['AND', `X${index + 11}`]),
   ];
   const p = syntheticProgram([...contacts, ['OUT', 'Y10']]);
-  const n = p.networks[0],
+  const n = requireValue(p.networks[0]),
     rowHeight = 64,
     zoom = 1.25,
     target = p.instructions.at(-1)!;
@@ -104,21 +108,21 @@ test('FB-pin navigation includes the parent position and internal pin spacing', 
     ['SyntheticBlock IN:Value', 'D1'],
     ['SyntheticBlock OUT:Result', 'D2'],
   ]);
-  const n = p.networks[0],
+  const n = requireValue(p.networks[0]),
     rowHeight = 84,
     zoom = 1.5,
-    parent = p.instructions[1];
+    parent = requireValue(p.instructions[1]);
   n.title = 'synthetic FB';
   n.warnings = ['synthetic warning'];
   const prefix = 18 * zoom + 25;
   assert.equal(parent.pins!.length, 3);
   assert.equal(instructionDrawingOffset(n, parent.id, rowHeight, zoom, 'wrap'), prefix);
   assert.equal(
-    instructionDrawingOffset(n, parent.pins![1].id, rowHeight, zoom, 'wrap'),
+    instructionDrawingOffset(n, requireValue(parent.pins![1]).id, rowHeight, zoom, 'wrap'),
     prefix + (24 + 22) * zoom,
   );
   assert.equal(
-    instructionDrawingOffset(n, parent.pins![2].id, rowHeight, zoom, 'wrap'),
+    instructionDrawingOffset(n, requireValue(parent.pins![2]).id, rowHeight, zoom, 'wrap'),
     prefix + (24 + 44) * zoom,
   );
 });

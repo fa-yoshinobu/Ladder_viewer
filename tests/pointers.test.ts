@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram } from '../src/model.ts';
@@ -42,11 +43,11 @@ test('GLP0 and P0 stay separate and explicit JMPO labels resolve without guessin
   const glp = p.instructions.find((i) => i.op === 'GLP0')!,
     pointer = p.instructions.find((i) => i.op === 'P0')!;
   const jumps = p.instructions.filter((i) => ['CJ', 'JMP', 'JMPO'].includes(i.op));
-  assert.equal(jumps[0].controlFlow?.targetId, glp.id);
-  assert.equal(jumps[1].controlFlow?.targetId, pointer.id);
-  assert.equal(jumps[2].controlFlow?.targetId, glp.id);
-  assert.equal(jumps[3].controlFlow?.targetId, undefined);
-  assert.equal(jumps[3].controlFlow?.label, '生成ジャンプ');
+  assert.equal(requireValue(jumps[0]).controlFlow?.targetId, glp.id);
+  assert.equal(requireValue(jumps[1]).controlFlow?.targetId, pointer.id);
+  assert.equal(requireValue(jumps[2]).controlFlow?.targetId, glp.id);
+  assert.equal(requireValue(jumps[3]).controlFlow?.targetId, undefined);
+  assert.equal(requireValue(jumps[3]).controlFlow?.label, '生成ジャンプ');
 });
 
 test('duplicate GLP definitions do not fall back to a same-number ordinary pointer', () => {
@@ -70,11 +71,11 @@ test('comparison sides resolve a GLP destination inside their own side', () => {
     target = source.comparison!.target;
   assert.equal(
     source.instructions.find((i) => i.op === 'CJ')!.controlFlow?.targetId,
-    source.instructions[0].id,
+    requireValue(source.instructions[0]).id,
   );
   assert.equal(
     target.instructions.find((i) => i.op === 'CJ')!.controlFlow?.targetId,
-    target.instructions[0].id,
+    requireValue(target.instructions[0]).id,
   );
   assert.equal(source.instructions.find((i) => i.op === 'CJ')!.controlFlow?.targetStep, '0');
   assert.equal(target.instructions.find((i) => i.op === 'CJ')!.controlFlow?.targetStep, '10');

@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { blockRangeMenu, blockRangeText, comparisonRangeText } from './blockRangeCopy';
 import { Fragment } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -104,8 +105,8 @@ export function DirectComparisonView({
     const change = blocks[index]?.changes[0];
     if (!change) return;
     for (const side of display === 'both' ? (['target', 'source'] as const) : sides) {
-      const item = blocks[index][side]
-        .flatMap((c) => c.instructions)
+      const item = requireValue(blocks[index])
+        [side].flatMap((c) => c.instructions)
         .find((i) => i.row === change.id);
       if (item) {
         choose({ side, instruction: item });
@@ -132,8 +133,8 @@ export function DirectComparisonView({
         0,
         old.findIndex((b) => b.top + b.height > viewport.top),
       );
-      const before = old[index],
-        after = blocks[Math.min(index, blocks.length - 1)];
+      const before = requireValue(old[index]),
+        after = requireValue(blocks[Math.min(index, blocks.length - 1)]);
       const top =
         after.top +
         (Math.max(0, viewport.top - before.top) / Math.max(1, before.height)) * after.height;
@@ -158,7 +159,7 @@ export function DirectComparisonView({
       b[navigation.side].some((c) => c.instructions.some((i) => i.id === navigation.id)),
     );
     if (index < 0) return;
-    const block = blocks[index];
+    const block = requireValue(blocks[index]);
     let before = 0;
     for (const circuit of block[navigation.side]) {
       const instruction = circuit.instructions.find((i) => i.id === navigation.id);

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -16,7 +17,7 @@ test('BOX_ST owns its exact source and remains an output of the preceding circui
   const p = parse(['LD R9730', 'ANB MR9731', 'BOX_ST', ...body, 'LD R9732', 'OUT MR9733']),
     before = structuredClone(p);
   const networks = buildKeyenceNetworks(p),
-    box = p.instructions[2];
+    box = requireValue(p.instructions[2]);
   assert.deepEqual(
     networks.map((n) => n.instructions.map((i) => i.opcode)),
     [
@@ -24,8 +25,8 @@ test('BOX_ST owns its exact source and remains an output of the preceding circui
       ['LD', 'OUT'],
     ],
   );
-  assert.equal(networks[0].actions[0].instruction, box);
-  assert.equal(networks[0].actions[0].condition?.kind, 'and');
+  assert.equal(requireValue(requireValue(networks[0]).actions[0]).instruction, box);
+  assert.equal(requireValue(requireValue(networks[0]).actions[0]).condition?.kind, 'and');
   assert.deepEqual(
     box.st?.lines,
     body.map((raw, index) => ({ sourceLine: index + 5, raw, text: raw.slice(1) })),
@@ -38,7 +39,7 @@ test('BOX_ST owns its exact source and remains an output of the preceding circui
     "\tuiDummy := 67;\r\n\r\n\tsDummy := 'part;two';",
   );
   assert.deepEqual(p.comments, []);
-  assert.equal(p.instructions[3].statement, '');
+  assert.equal(requireValue(p.instructions[3]).statement, '');
   assert.deepEqual(
     networks.flatMap((n) => n.warnings),
     [],
@@ -61,13 +62,14 @@ test('BOX_ST participates in saved branches without resetting the shared conditi
     'OUT MR9742',
   ]);
   const networks = buildKeyenceNetworks(p),
-    [box, out] = networks[0].actions;
+    [box, out] = requireValue(networks[0]).actions;
   assert.equal(networks.length, 1);
-  assert.equal(box.instruction.opcode, 'BOX_ST');
-  assert.equal(out.instruction.opcode, 'OUT');
-  assert.equal(box.condition?.kind, 'and');
-  if (box.condition?.kind === 'and') assert.equal(box.condition.left, out.condition);
-  assert.deepEqual(networks[0].warnings, []);
+  assert.equal(requireValue(box).instruction.opcode, 'BOX_ST');
+  assert.equal(requireValue(out).instruction.opcode, 'OUT');
+  assert.equal(requireValue(box).condition?.kind, 'and');
+  const condition = requireValue(box).condition;
+  if (condition?.kind === 'and') assert.equal(condition.left, requireValue(out).condition);
+  assert.deepEqual(requireValue(networks[0]).warnings, []);
 });
 
 test('disabled markers bound complete circuits while every original instruction stays in order', () => {
@@ -106,7 +108,8 @@ test('disabled markers bound complete circuits while every original instruction 
     networks.flatMap((n) => n.actions).map((a) => a.instruction.opcode),
     ['OUT', 'OUT', 'SET', 'OUT'],
   );
-  for (const network of networks) assert.equal(network.actions[0].condition?.kind, 'contact');
+  for (const network of networks)
+    assert.equal(requireValue(network.actions[0]).condition?.kind, 'contact');
   assert.deepEqual(
     networks.flatMap((n) => n.warnings),
     [],
@@ -133,12 +136,12 @@ test('disabled boxed ST stays visible in the model and copies its original sourc
   const networks = buildKeyenceNetworks(p),
     disabled = networks.find((n) => n.disabled)!;
   assert.equal(disabled.actions.length, 1);
-  const box = disabled.actions[0].instruction;
+  const box = requireValue(disabled.actions[0]).instruction;
   assert.equal(box.opcode, 'BOX_ST');
   assert.equal(box.disabled, true);
   assert.equal(keyenceInstructionCopyText(box, p), '\tuiDummy := 83;');
-  assert.equal(disabled.actions[0].condition?.kind, 'contact');
-  assert.equal(networks[0].statement, 'Dummy inactive circuit');
+  assert.equal(requireValue(disabled.actions[0]).condition?.kind, 'contact');
+  assert.equal(requireValue(networks[0]).statement, 'Dummy inactive circuit');
   assert.equal(networks.at(-1)?.disabled, undefined);
   assert.deepEqual(
     networks.flatMap((n) => n.warnings),
@@ -185,7 +188,7 @@ test('EOF without END does not create a phantom ST row from the final line termi
     for (const opcode of ['AREA_ST', 'BOX_ST']) {
       const text = ['DEVICE:60', opcode, ';\tuiDummy := 97;', ''].join(newline);
       const p = parseKeyenceMnm(new TextEncoder().encode(text).buffer, 'dummy-freeformed.mnm'),
-        i = p.instructions[0];
+        i = requireValue(p.instructions[0]);
       assert.equal(p.text, text);
       assert.equal(p.instructions.length, 1);
       assert.deepEqual(i.st?.lines, [
@@ -197,11 +200,11 @@ test('EOF without END does not create a phantom ST row from the final line termi
   const text = 'DEVICE:60\nAREA_ST\n;uiDummy := 101;\n;\n\n';
   const p = parseKeyenceMnm(new TextEncoder().encode(text).buffer, 'dummy-blank-lines.mnm');
   assert.deepEqual(
-    p.instructions[0].st?.lines.map((line) => line.text),
+    requireValue(p.instructions[0]).st?.lines.map((line) => line.text),
     ['uiDummy := 101;', '', ''],
   );
   assert.equal(
-    p.instructions[0].sourceEndLine,
+    requireValue(p.instructions[0]).sourceEndLine,
     5,
     'intentional empty source rows must be retained',
   );
@@ -214,8 +217,8 @@ test('AREA_ST remains independent when adjacent BOX_ST uses a ladder condition',
     networks.map((n) => n.instructions.map((i) => i.opcode)),
     [['AREA_ST'], ['LD', 'BOX_ST'], ['END']],
   );
-  assert.equal(networks[0].actions[0].condition, null);
-  assert.equal(networks[1].actions[0].condition?.kind, 'contact');
+  assert.equal(requireValue(requireValue(networks[0]).actions[0]).condition, null);
+  assert.equal(requireValue(requireValue(networks[1]).actions[0]).condition?.kind, 'contact');
   assert.deepEqual(
     networks.flatMap((n) => n.warnings),
     [],

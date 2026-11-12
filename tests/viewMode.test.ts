@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram, type Network } from '../src/model.ts';
@@ -92,24 +93,33 @@ const drawing = (
 
 test('short circuits keep exactly the same dimensions and unwrapped container in either mode', () => {
   const n = normal(['LD X0', 'OUT Y0']);
-  assert.equal(gridLayout(n).pages, 1);
-  assert.equal(displayGrid(n, 'scroll'), gridLayout(n));
-  assert.equal(displayGrid(n, 'wrap'), gridLayout(n));
+  assert.equal(gridLayout(requireValue(n)).pages, 1);
+  assert.equal(displayGrid(requireValue(n), 'scroll'), gridLayout(requireValue(n)));
+  assert.equal(displayGrid(requireValue(n), 'wrap'), gridLayout(requireValue(n)));
   for (const rowHeight of [ROW, 84]) {
-    assert.deepEqual(networkSize(n, rowHeight, 'scroll'), networkSize(n, rowHeight));
-    assert.deepEqual(networkSize(n, rowHeight, 'wrap'), { width: LADDER_WIDTH, height: rowHeight });
+    assert.deepEqual(
+      networkSize(requireValue(n), rowHeight, 'scroll'),
+      networkSize(requireValue(n), rowHeight),
+    );
+    assert.deepEqual(networkSize(requireValue(n), rowHeight, 'wrap'), {
+      width: LADDER_WIDTH,
+      height: rowHeight,
+    });
   }
   for (const zoom of [0.5, 1.4]) {
-    assert.equal(drawingHeight(n, ROW, zoom, 'scroll'), drawingHeight(n, ROW, zoom, 'wrap'));
-    assert.notEqual(drawing(n, 'scroll', zoom).props.class, 'network-scroll');
+    assert.equal(
+      drawingHeight(requireValue(n), ROW, zoom, 'scroll'),
+      drawingHeight(requireValue(n), ROW, zoom, 'wrap'),
+    );
+    assert.notEqual(drawing(requireValue(n), 'scroll', zoom).props.class, 'network-scroll');
   }
 });
 
 test('long circuits use one compact page without losing branch symbols or changing the canonical grid', () => {
   const n = normal(longCommands),
-    g = gridLayout(n),
+    g = gridLayout(requireValue(n)),
     before = JSON.stringify(g);
-  assert.deepEqual(n.warnings, []);
+  assert.deepEqual(requireValue(n).warnings, []);
   assert.ok(g.pages > 1);
   assert.ok(
     g.wires.some((w) => w.x1 === w.x2 && w.y1 !== w.y2),
@@ -118,7 +128,7 @@ test('long circuits use one compact page without losing branch symbols or changi
   for (const wire of g.wires) Object.freeze(wire);
   Object.freeze(g.wires);
   Object.freeze(g.symbols);
-  const display = displayGrid(n, 'scroll'),
+  const display = displayGrid(requireValue(n), 'scroll'),
     pages = drawingPages(display, ROW, 'scroll');
   const contactEnd = Math.max(...g.symbols.filter((s) => s.contact).map((s) => s.col + s.span));
   const columns = Math.max(
@@ -126,29 +136,34 @@ test('long circuits use one compact page without losing branch symbols or changi
     contactEnd + Math.max(...g.symbols.filter((s) => !s.contact).map((s) => s.span)),
   );
   assert.equal(pages.length, 1);
-  assert.equal(pages[0].left, 0);
-  assert.equal(pages[0].top, 0);
-  assert.equal(pages[0].width, columns * CELL);
+  assert.equal(requireValue(pages[0]).left, 0);
+  assert.equal(requireValue(pages[0]).top, 0);
+  assert.equal(requireValue(pages[0]).width, columns * CELL);
   assert.equal(
-    drawingPages(g, ROW, 'scroll')[0].width,
-    pages[0].width,
+    requireValue(drawingPages(g, ROW, 'scroll')[0]).width,
+    requireValue(pages[0]).width,
     'geometry agrees even when passed a canonical grid',
   );
   const visible = display.symbols.filter(
     (s) =>
-      s.col * CELL >= pages[0].left && (s.col + s.span) * CELL <= pages[0].left + pages[0].width,
+      s.col * CELL >= requireValue(pages[0]).left &&
+      (s.col + s.span) * CELL <= requireValue(pages[0]).left + requireValue(pages[0]).width,
   );
-  const expected = n.instructions.filter((i) => !['MPS', 'MPP', 'ANB'].includes(i.op));
+  const expected = requireValue(n).instructions.filter(
+    (i) => !['MPS', 'MPP', 'ANB'].includes(i.op),
+  );
   assert.deepEqual(visible.map((s) => s.instruction.id).sort(), expected.map((i) => i.id).sort());
   assert.deepEqual(
-    pages[0].outputs.map((s) => s.instruction.id),
-    n.actions.map((a) => a.instruction.id),
+    requireValue(pages[0]).outputs.map((s) => s.instruction.id),
+    requireValue(n).actions.map((a) => a.instruction.id),
   );
   assert.ok(
-    pages[0].outputs.every((s) => (s.col + s.span) * CELL === pages[0].width),
+    requireValue(pages[0]).outputs.every(
+      (s) => (s.col + s.span) * CELL === requireValue(pages[0]).width,
+    ),
     'all output ends share the compact right edge',
   );
-  assert.deepEqual(networkSize(n, 84, 'scroll'), {
+  assert.deepEqual(networkSize(requireValue(n), 84, 'scroll'), {
     width: LEFT_GUTTER + columns * CELL + 16,
     height: g.rows * 84,
   });
@@ -156,25 +171,28 @@ test('long circuits use one compact page without losing branch symbols or changi
     drawingPages(g, 84, 'wrap').map((page) => page.rows),
     [2, 3],
   );
-  assert.deepEqual(networkSize(n, 84, 'wrap'), {
+  assert.deepEqual(networkSize(requireValue(n), 84, 'wrap'), {
     width: LADDER_WIDTH,
     height: 5 * 84 + 2 * PAGE_GAP,
   });
   assert.equal(drawingPages(g, ROW, 'wrap').length, g.pages);
-  assert.equal(gridLayout(n), g, 'canonical layout remains cached');
-  assert.equal(displayGrid(n, 'wrap'), g, 'wrapping uses the canonical object');
+  assert.equal(gridLayout(requireValue(n)), g, 'canonical layout remains cached');
+  assert.equal(displayGrid(requireValue(n), 'wrap'), g, 'wrapping uses the canonical object');
   assert.equal(JSON.stringify(g), before, 'no canonical wire, coordinate or symbol is changed');
 });
 test('scrollbars reserve 16 CSS pixels regardless of zoom and can be owned by a comparison group', () => {
   const n = normal(longCommands);
-  n.title = '一行目\n二行目';
-  n.warnings = ['架空の注意'];
+  requireValue(n).title = '一行目\n二行目';
+  requireValue(n).warnings = ['架空の注意'];
   for (const zoom of [0.5, 1.4]) {
-    const size = networkSize(n, ROW, 'scroll');
+    const size = networkSize(requireValue(n), ROW, 'scroll');
     const contentHeight = size.height * zoom + 2 * 18 * zoom + 25;
-    assert.equal(drawingHeight(n, ROW, zoom, 'scroll'), contentHeight + SCROLLBAR_HEIGHT);
-    assert.equal(drawingHeight(n, ROW, zoom, 'scroll', false), contentHeight);
-    const wrapped = drawing(n, 'scroll', zoom);
+    assert.equal(
+      drawingHeight(requireValue(n), ROW, zoom, 'scroll'),
+      contentHeight + SCROLLBAR_HEIGHT,
+    );
+    assert.equal(drawingHeight(requireValue(n), ROW, zoom, 'scroll', false), contentHeight);
+    const wrapped = drawing(requireValue(n), 'scroll', zoom);
     assert.equal(wrapped.props.class, 'network-scroll');
     assert.deepEqual(wrapped.props.style, {
       width: LADDER_WIDTH * zoom,
@@ -183,11 +201,11 @@ test('scrollbars reserve 16 CSS pixels regardless of zoom and can be owned by a 
     const inner = wrapped.props.children;
     assert.equal(inner.props.style.width, size.width * zoom);
     assert.notEqual(
-      drawing(n, 'scroll', zoom, false).props.class,
+      drawing(requireValue(n), 'scroll', zoom, false).props.class,
       'network-scroll',
       'a group owns only one scrollbar',
     );
-    assert.notEqual(drawing(n, 'wrap', zoom).props.class, 'network-scroll');
+    assert.notEqual(drawing(requireValue(n), 'wrap', zoom).props.class, 'network-scroll');
   }
 });
 
@@ -233,7 +251,7 @@ test('switching comparison modes preserves row padding, command differences and 
       }
     }
   const row = (side: typeof p, operand: string) =>
-    gridLayout(side.networks[0]).symbols.find(
+    gridLayout(requireValue(side.networks[0])).symbols.find(
       (s) => s.instruction.op === 'OUT' && s.instruction.operands[0] === operand,
     )!.row;
   assert.equal(row(p, 'Y1'), row(p.comparison!.target, 'Y1'));
@@ -258,10 +276,10 @@ test('twelve contact columns plus a three-column command occupy fifteen columns,
     'MPP',
     'MOV K1 D0',
   ]);
-  const canonical = gridLayout(n),
+  const canonical = gridLayout(requireValue(n)),
     before = JSON.stringify(canonical),
-    display = displayGrid(n, 'scroll');
-  assert.deepEqual(n.warnings, []);
+    display = displayGrid(requireValue(n), 'scroll');
+  assert.deepEqual(requireValue(n).warnings, []);
   assert.deepEqual(
     canonical.symbols.filter((s) => !s.contact).map((s) => [s.col, s.span]),
     [
@@ -295,9 +313,9 @@ test('twelve contact columns plus a three-column command occupy fifteen columns,
     (w) => w.y1 === longOutput.row && w.y2 === longOutput.row && w.x2 === longOutput.col,
   );
   assert.ok(index >= 0);
-  assert.equal(display.wires[index].x2, 14);
+  assert.equal(requireValue(display.wires[index]).x2, 14);
   assert.equal(JSON.stringify(canonical), before);
-  assert.equal(gridLayout(n), canonical);
+  assert.equal(gridLayout(requireValue(n)), canonical);
 });
 
 test('contact terminals and branch junctions stay fixed while missing input lines are extended with their difference color', () => {
@@ -325,7 +343,7 @@ test('contact terminals and branch junctions stay fixed while missing input line
   ];
   for (const [caseIndex, commands] of fixtures.entries()) {
     const n = normal(commands),
-      base = gridLayout(n),
+      base = gridLayout(requireValue(n)),
       output = base.symbols.find((s) => !s.contact && s.instruction.operands[0] === 'Y0')!;
     assert.equal(output.col, 11);
     assert.ok(base.pages > 1);
@@ -346,16 +364,16 @@ test('contact terminals and branch junctions stay fixed while missing input line
           output.row <= Math.max(w.y1, w.y2),
       ),
     );
-    n.connectionDifferences = {
+    requireValue(n).connectionDifferences = {
       kind: 'removed',
       wires: [0, base.wires.length - 1],
       inputs: [output.instruction.id],
       outputs: [],
     };
-    const canonical = gridLayout(n),
+    const canonical = gridLayout(requireValue(n)),
       snapshot = JSON.stringify(canonical),
-      metadata = JSON.stringify(n.connectionDifferences),
-      display = displayGrid(n, 'scroll');
+      metadata = JSON.stringify(requireValue(n).connectionDifferences),
+      display = displayGrid(requireValue(n), 'scroll');
     assert.equal(display.width, LEFT_GUTTER + 15 * CELL + 16);
     if (horizontal >= 0)
       assert.deepEqual(
@@ -365,11 +383,11 @@ test('contact terminals and branch junctions stay fixed while missing input line
       );
     for (let i = 0; i < canonical.wires.length; i++) {
       assert.equal(
-        display.wires[i].difference,
-        canonical.wires[i].difference,
+        requireValue(display.wires[i]).difference,
+        requireValue(canonical.wires[i]).difference,
         'canonical difference indices retain their kind',
       );
-      if (canonical.wires[i].x1 === canonical.wires[i].x2)
+      if (requireValue(canonical.wires[i]).x1 === requireValue(canonical.wires[i]).x2)
         assert.deepEqual(
           display.wires[i],
           canonical.wires[i],
@@ -393,8 +411,8 @@ test('contact terminals and branch junctions stay fixed while missing input line
       display.symbols.filter((s) => s.contact),
       canonical.symbols.filter((s) => s.contact),
     );
-    assert.equal(JSON.stringify(gridLayout(n)), snapshot);
-    assert.equal(JSON.stringify(n.connectionDifferences), metadata);
+    assert.equal(JSON.stringify(gridLayout(requireValue(n))), snapshot);
+    assert.equal(JSON.stringify(requireValue(n).connectionDifferences), metadata);
   }
 });
 
@@ -404,13 +422,13 @@ test('FB output width, pins and aligned rows survive compact display', () => {
     ...Array.from({ length: 11 }, (_, i) => `AND X${i + 1}`),
     'MOV K1 D0',
   ]);
-  const fb = n.actions[0].instruction;
+  const fb = requireValue(requireValue(n).actions[0]).instruction;
   fb.op = 'FBCALL Synthetic';
   fb.operands = [];
   fb.pins = [{ ...fb, id: 'synthetic-pin', op: 'Synthetic IN:Value', operands: ['D0'] }];
-  const canonical = gridLayout(n),
+  const canonical = gridLayout(requireValue(n)),
     snapshot = JSON.stringify(canonical),
-    display = displayGrid(n, 'scroll');
+    display = displayGrid(requireValue(n), 'scroll');
   const symbol = display.symbols.find((s) => !s.contact)!;
   assert.equal(symbol.span, 5);
   assert.equal(symbol.col, 12);
@@ -419,11 +437,11 @@ test('FB output width, pins and aligned rows survive compact display', () => {
   assert.equal(display.rows, canonical.rows);
   assert.equal(symbol.instruction, fb);
   assert.equal(symbol.instruction.pins, fb.pins);
-  assert.deepEqual(networkSize(n, 84, 'scroll'), {
+  assert.deepEqual(networkSize(requireValue(n), 84, 'scroll'), {
     width: display.width,
     height: canonical.rows * 84,
   });
-  assert.equal(JSON.stringify(gridLayout(n)), snapshot);
+  assert.equal(JSON.stringify(gridLayout(requireValue(n))), snapshot);
 });
 
 test('scroll mode removes a two-column comparison boundary gap while preserving wire indices and colors', () => {
@@ -432,16 +450,16 @@ test('scroll mode removes a two-column comparison boundary gap while preserving 
     ...Array.from({ length: 12 }, (_, index) => `AND<= K${index} D${index * 2}`),
     'OUT Y0',
   ]);
-  const base = gridLayout(n);
-  n.connectionDifferences = {
+  const base = gridLayout(requireValue(n));
+  requireValue(n).connectionDifferences = {
     kind: 'removed',
     wires: [0],
-    inputs: [n.actions[0].instruction.id],
+    inputs: [requireValue(requireValue(n).actions[0]).instruction.id],
     outputs: [],
   };
-  const canonical = gridLayout(n),
+  const canonical = gridLayout(requireValue(n)),
     snapshot = JSON.stringify(canonical),
-    display = displayGrid(n, 'scroll');
+    display = displayGrid(requireValue(n), 'scroll');
   assert.equal(base.pages, 4);
   assert.equal(canonical.rows, 1);
   assert.deepEqual(canonical.wires[0], { x1: 10, y1: 0, x2: 12, y2: 0, difference: 'removed' });
@@ -463,12 +481,15 @@ test('scroll mode removes a two-column comparison boundary gap while preserving 
     'a collapsed wire retains its original array slot and color',
   );
   for (let index = 0; index < canonical.wires.length; index++)
-    assert.equal(display.wires[index].difference, canonical.wires[index].difference);
-  assert.equal(networkSize(n, ROW, 'scroll').width, display.width);
-  assert.equal(drawingPages(display, ROW, 'scroll')[0].width, 38 * CELL);
+    assert.equal(
+      requireValue(display.wires[index]).difference,
+      requireValue(canonical.wires[index]).difference,
+    );
+  assert.equal(networkSize(requireValue(n), ROW, 'scroll').width, display.width);
+  assert.equal(requireValue(drawingPages(display, ROW, 'scroll')[0]).width, 38 * CELL);
   assert.equal(display.symbols.find((s) => !s.contact)!.inputDifference, 'removed');
-  assert.equal(JSON.stringify(gridLayout(n)), snapshot);
-  assert.deepEqual(displayGrid(n, 'wrap'), canonical);
+  assert.equal(JSON.stringify(gridLayout(requireValue(n))), snapshot);
+  assert.deepEqual(displayGrid(requireValue(n), 'wrap'), canonical);
 });
 
 const sparseWrappedCommands = [
@@ -492,7 +513,7 @@ const sparseWrappedCommands = [
 
 test('wrapped pages trim unused trailing rows and navigation uses their cumulative heights', () => {
   const n = normal(sparseWrappedCommands),
-    g = gridLayout(n),
+    g = gridLayout(requireValue(n)),
     snapshot = JSON.stringify(g);
   assert.equal(g.rows, 7);
   assert.equal(g.pages, 2);
@@ -507,18 +528,18 @@ test('wrapped pages trim unused trailing rows and navigation uses their cumulati
       pages.map((page) => page.top),
       [0, 7 * rowHeight + PAGE_GAP],
     );
-    assert.deepEqual(networkSize(n, rowHeight, 'wrap'), {
+    assert.deepEqual(networkSize(requireValue(n), rowHeight, 'wrap'), {
       width: LADDER_WIDTH,
       height: 8 * rowHeight + 2 * PAGE_GAP,
     });
     assert.equal(
-      instructionDrawingOffset(n, owner.instruction.id, rowHeight, 1.25, 'wrap'),
-      pages[1].top * 1.25,
+      instructionDrawingOffset(requireValue(n), owner.instruction.id, rowHeight, 1.25, 'wrap'),
+      requireValue(pages[1]).top * 1.25,
     );
-    assert.equal(networkSize(n, rowHeight, 'scroll').height, 7 * rowHeight);
+    assert.equal(networkSize(requireValue(n), rowHeight, 'scroll').height, 7 * rowHeight);
   }
   assert.equal(
-    JSON.stringify(gridLayout(n)),
+    JSON.stringify(gridLayout(requireValue(n))),
     snapshot,
     'page compaction does not change symbols, wires or difference indices',
   );
@@ -532,7 +553,7 @@ test('wrapped pages trim unused trailing rows and navigation uses their cumulati
 
 test('a sparse wrapped page retains the complete height of a multi-row output', () => {
   const n = normal(sparseWrappedCommands),
-    owner = n.actions[0].instruction;
+    owner = requireValue(requireValue(n).actions[0]).instruction;
   owner.pins = Array.from({ length: 6 }, (_, index) => ({
     id: `synthetic-pin-${index}`,
     sourceRow: 100 + index,
@@ -542,13 +563,13 @@ test('a sparse wrapped page retains the complete height of a multi-row output', 
     note: '',
     statement: '',
   }));
-  const g = gridLayout(n),
+  const g = gridLayout(requireValue(n)),
     pages = drawingPages(g, ROW, 'wrap');
   assert.deepEqual(
     pages.map((page) => page.rows),
     [7, 4],
   );
-  assert.equal(networkSize(n, ROW, 'wrap').height, 11 * ROW + 2 * PAGE_GAP);
+  assert.equal(networkSize(requireValue(n), ROW, 'wrap').height, 11 * ROW + 2 * PAGE_GAP);
 });
 
 test('comparison shares only the page heights needed to align matching wrapped commands', () => {
@@ -564,13 +585,13 @@ test('comparison shares only the page heights needed to align matching wrapped c
     (command) => !['OR X12', 'OR X13', 'OR X14', 'OR X15'].includes(command),
   );
   const p = comparison(before, after),
-    grids = [p, p.comparison!.target].map((side) => gridLayout(side.networks[0]));
+    grids = [p, p.comparison!.target].map((side) => gridLayout(requireValue(side.networks[0])));
   assert.deepEqual(
     grids.map((g) => g.rows),
     [6, 2],
   );
   const offsets = [p, p.comparison!.target].map((side) => {
-    const n = side.networks[0],
+    const n = requireValue(side.networks[0]),
       g = gridLayout(n),
       owner = g.symbols.find((s) => s.instruction.op === 'MOV')!;
     assert.deepEqual(
@@ -581,7 +602,7 @@ test('comparison shares only the page heights needed to align matching wrapped c
     return instructionDrawingOffset(n, owner.instruction.id, ROW, 1, 'wrap');
   });
   assert.deepEqual(offsets, [6 * ROW + PAGE_GAP, 6 * ROW + PAGE_GAP]);
-  const natural = comparisonDisplayProgram(p, 'target').networks[0];
+  const natural = requireValue(comparisonDisplayProgram(p, 'target').networks[0]);
   assert.deepEqual(
     drawingPages(gridLayout(natural), ROW, 'wrap').map((page) => page.rows),
     [2, 1],
@@ -596,40 +617,53 @@ test('third-page navigation and scope endpoints follow compact heights with note
     ...Array.from({ length: 14 }, (_, index) => `AND X${index + 200}`),
     ...sparseWrappedCommands.slice(split),
   ]);
-  const owner = n.actions[0].instruction;
+  const owner = requireValue(requireValue(n).actions[0]).instruction;
   owner.note = 'Dummy note\nDummy continuation';
-  n.title = 'Dummy title';
-  n.warnings = ['Dummy warning'];
-  const g = gridLayout(n),
-    metrics = drawingMetrics(n, ROW),
+  requireValue(n).title = 'Dummy title';
+  requireValue(n).warnings = ['Dummy warning'];
+  const g = gridLayout(requireValue(n)),
+    metrics = drawingMetrics(requireValue(n), ROW),
     pages = drawingPages(g, metrics.rowHeight, 'wrap'),
     zoom = 1.25,
-    prefix = networkPrefix(n, zoom);
+    prefix = networkPrefix(requireValue(n), zoom);
   assert.deepEqual(
     pages.map((page) => page.rows),
     [7, 1, 1],
   );
   const top = 8 * metrics.rowHeight + 2 * PAGE_GAP;
-  assert.equal(pages[2].top, top);
-  assert.equal(instructionDrawingOffset(n, owner.id, ROW, zoom, 'wrap'), prefix + top * zoom);
+  assert.equal(requireValue(pages[2]).top, top);
+  assert.equal(
+    instructionDrawingOffset(requireValue(n), owner.id, ROW, zoom, 'wrap'),
+    prefix + top * zoom,
+  );
   const props = {
-    network: n,
+    network: requireValue(n),
     zoom,
     rowHeight: ROW,
     viewMode: 'wrap' as const,
     width: LADDER_WIDTH * zoom,
-    height: drawingHeight(n, ROW, zoom),
+    height: drawingHeight(requireValue(n), ROW, zoom),
     prefix,
   };
   const end = prefix + (top + metrics.baseline + 12) * zoom;
   const scopes = [
     MasterControlScope({
       ...props,
-      ranges: [{ start: n.instructions[0], end: owner, level: 0, lane: 0 }],
+      ranges: [
+        { start: requireValue(requireValue(n).instructions[0]), end: owner, level: 0, lane: 0 },
+      ],
     }),
     ControlFlowScope({
       ...props,
-      ranges: [{ kind: 'STFOR', start: n.instructions[0], end: owner, lane: 0, branches: [] }],
+      ranges: [
+        {
+          kind: 'STFOR',
+          start: requireValue(requireValue(n).instructions[0]),
+          end: owner,
+          lane: 0,
+          branches: [],
+        },
+      ],
     }),
   ];
   for (const scope of scopes)
@@ -648,13 +682,13 @@ test('a long three-branch condition places three shared outputs on consecutive r
     'OUT T0 K5',
     'MOV K1 D0',
   ]);
-  const canonical = gridLayout(network),
+  const canonical = gridLayout(requireValue(network)),
     before = JSON.stringify(canonical);
-  assert.deepEqual(network.warnings, []);
+  assert.deepEqual(requireValue(network).warnings, []);
   assert.ok(canonical.pages > 1);
   assert.ok(canonical.wires.some((w) => w.x1 === w.x2 && w.y1 !== w.y2));
   for (const mode of ['wrap', 'scroll'] as const) {
-    const drawing = displayGrid(network, mode),
+    const drawing = displayGrid(requireValue(network), mode),
       outputs = drawing.symbols.filter((s) => !s.contact);
     assert.deepEqual(
       outputs.map((s) => s.row),

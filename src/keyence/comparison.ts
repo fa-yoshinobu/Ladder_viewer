@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import { diffArrays } from 'diff';
 import {
   alignInstructions,
@@ -187,11 +188,11 @@ function alignRows(
   const positions: [number[], number[]] = [[], []];
   let slot = 0;
   const chunks = diffArrays(
-    rows[0].map((r) => r.key),
-    rows[1].map((r) => r.key),
+    requireValue(rows[0]).map((r) => r.key),
+    requireValue(rows[1]).map((r) => r.key),
   );
   for (let index = 0; index < chunks.length; index++) {
-    const part = chunks[index];
+    const part = requireValue(chunks[index]);
     if (!part.added && !part.removed) {
       for (let n = 0; n < part.count; n++) {
         positions[0].push(slot);
@@ -201,9 +202,12 @@ function alignRows(
     }
     let removed = 0,
       added = 0;
-    while (index < chunks.length && (chunks[index].added || chunks[index].removed)) {
-      if (chunks[index].removed) removed += chunks[index].count;
-      else added += chunks[index].count;
+    while (
+      index < chunks.length &&
+      (requireValue(chunks[index]).added || requireValue(chunks[index]).removed)
+    ) {
+      if (requireValue(chunks[index]).removed) removed += requireValue(chunks[index]).count;
+      else added += requireValue(chunks[index]).count;
       index++;
     }
     index--;
@@ -219,8 +223,8 @@ function alignRows(
   rows.forEach((side, index) =>
     side.forEach((r, row) => {
       if (r.row === 0) {
-        const at = positions[index][row];
-        headers[at] = Math.max(headers[at], r.drawing.headerHeight);
+        const at = requireValue(requireValue(positions[index])[row]);
+        headers[at] = Math.max(requireValue(headers[at]), r.drawing.headerHeight);
       }
     }),
   );
@@ -234,21 +238,21 @@ function alignRows(
     let rowIndex = 0,
       end = 0;
     return side.map((d) => {
-      const slots = positions[index].slice(rowIndex, rowIndex + d.rows);
+      const slots = requireValue(positions[index]).slice(rowIndex, rowIndex + d.rows);
       rowIndex += d.rows;
       const start = end,
-        headerHeight = tops[slots[0]] - start;
-      end = tops[slots.at(-1)!] + rowHeight;
+        headerHeight = requireValue(tops[requireValue(slots[0])]) - start;
+      end = requireValue(tops[slots.at(-1)!]) + rowHeight;
       const y = (value: number) => {
         const row = Math.round((value - d.headerHeight - d.baseline) / d.rowHeight);
-        return tops[slots[row]] + baseline - start;
+        return requireValue(tops[requireValue(slots[row])]) + baseline - start;
       };
       return {
         ...d,
         baseline,
         rowHeight,
         headerHeight,
-        rows: slots.at(-1)! - slots[0] + 1,
+        rows: slots.at(-1)! - requireValue(slots[0]) + 1,
         height: end - start,
         railTop: headerHeight,
         railBottom: end - start,
@@ -287,7 +291,7 @@ export function keyenceComparisonDrawings(
           [group.source[0], group.target[0]].map(
             (n, side) => (rows) =>
               layoutKeyenceNetwork(
-                n,
+                requireValue(n),
                 side ? comparison.target : comparison.source,
                 showComments,
                 viewMode === 'wrap',
@@ -295,18 +299,21 @@ export function keyenceComparisonDrawings(
               ),
           ),
         );
-        drawings = [[aligned[0]], [aligned[1]]];
+        drawings = [[requireValue(aligned[0])], [requireValue(aligned[1])]];
       }
       drawings = alignRows(drawings, branches);
     }
     if (alignLadder && viewMode === 'wrap' && drawings.every((side) => side.length === 1)) {
-      const pages = drawings.map(([d]) => keyenceDrawingPages(d)),
-        count = Math.min(pages[0].length, pages[1].length);
+      const pages = drawings.map(([d]) => keyenceDrawingPages(requireValue(d))),
+        count = Math.min(requireValue(pages[0]).length, requireValue(pages[1]).length);
       if (count > 1) {
         const rows = Array.from({ length: count }, (_, index) =>
-          Math.max(pages[0][index].rows, pages[1][index].rows),
+          Math.max(
+            requireValue(requireValue(pages[0])[index]).rows,
+            requireValue(requireValue(pages[1])[index]).rows,
+          ),
         );
-        for (const [d] of drawings) d.comparisonPageRows = rows;
+        for (const [d] of drawings) requireValue(d).comparisonPageRows = rows;
       }
     }
     const diff = compareConnectionGraphs(
@@ -318,8 +325,8 @@ export function keyenceComparisonDrawings(
       ]),
     );
     for (let side = 0; side < 2; side++)
-      for (const [index, d] of drawings[side].entries()) {
-        const changes = diff[side][index],
+      for (const [index, d] of requireValue(drawings[side]).entries()) {
+        const changes = requireValue(requireValue(diff[side])[index]),
           inputs = new Set(changes.inputs),
           outputs = new Set(changes.outputs),
           wireIndices = new Set(changes.wires);

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildProgram, type Instruction, type Network } from '../src/model.ts';
@@ -11,7 +12,7 @@ const program = (commands: string[]) =>
         id: `synthetic-${index}`,
         sourceRow: index + 1,
         step: String(index),
-        op,
+        op: requireValue(op),
         operands,
         note: '',
         statement: '',
@@ -35,18 +36,18 @@ test('one MC range crosses multiple rungs and ends at its matching MCR', () => {
     'OUT Y3',
   ]);
   const [range] = uniqueRanges(p.networks);
-  assert.equal(range.start, p.instructions[1]);
-  assert.equal(range.end, p.instructions[6]);
-  assert.equal(range.level, 0);
-  assert.equal(range.lane, 0);
+  assert.equal(requireValue(range).start, p.instructions[1]);
+  assert.equal(requireValue(range).end, p.instructions[6]);
+  assert.equal(requireValue(range).level, 0);
+  assert.equal(requireValue(range).lane, 0);
   for (const instruction of p.instructions.slice(0, 7)) {
     const n = p.networks.find((n) => n.instructions.includes(instruction))!;
-    assert.ok(scope(n).includes(range));
+    assert.ok(scope(n).includes(requireValue(range)));
   }
-  const after = p.networks.find((n) => n.instructions.includes(p.instructions[7]))!;
+  const after = p.networks.find((n) => n.instructions.includes(requireValue(p.instructions[7])))!;
   assert.deepEqual(scope(after), []);
   assert.equal(
-    p.networks.find((n) => n.instructions.includes(p.instructions[2]))!.masterControl,
+    p.networks.find((n) => n.instructions.includes(requireValue(p.instructions[2])))!.masterControl,
     p.instructions[1],
     'the existing one-header metadata is retained',
   );
@@ -71,12 +72,20 @@ test('nested MC ranges have separate lanes and an inner MCR leaves the outer ran
     'MCR N0',
   ]);
   const [outer, inner] = uniqueRanges(p.networks);
-  assert.deepEqual([outer.level, outer.lane, inner.level, inner.lane], [0, 0, 1, 1]);
-  assert.equal(inner.end, p.instructions[6]);
-  assert.equal(outer.end, p.instructions[9]);
-  const middle = p.networks.find((n) => n.instructions.includes(p.instructions[7]))!;
+  assert.deepEqual(
+    [
+      requireValue(outer).level,
+      requireValue(outer).lane,
+      requireValue(inner).level,
+      requireValue(inner).lane,
+    ],
+    [0, 0, 1, 1],
+  );
+  assert.equal(requireValue(inner).end, p.instructions[6]);
+  assert.equal(requireValue(outer).end, p.instructions[9]);
+  const middle = p.networks.find((n) => n.instructions.includes(requireValue(p.instructions[7])))!;
   assert.deepEqual(scope(middle), [outer]);
-  const closing = p.networks.find((n) => n.instructions.includes(p.instructions[6]))!;
+  const closing = p.networks.find((n) => n.instructions.includes(requireValue(p.instructions[6])))!;
   assert.deepEqual(scope(closing), [outer, inner]);
   assert.deepEqual(
     p.networks.flatMap((n) => n.warnings),
@@ -123,8 +132,8 @@ test('separate ranges may reuse a level and lane after the earlier range closes'
       [0, 0],
     ],
   );
-  assert.equal(ranges[0].end, p.instructions[3]);
-  assert.equal(ranges[1].end, p.instructions[7]);
+  assert.equal(requireValue(ranges[0]).end, p.instructions[3]);
+  assert.equal(requireValue(ranges[1]).end, p.instructions[7]);
   assert.deepEqual(
     p.networks.flatMap((n) => n.warnings),
     [],
@@ -157,9 +166,9 @@ test('invalid N operands and unmatched MCR commands remain intact and produce wa
 test('an unclosed MC remains open through the final network and warns at its start', () => {
   const p = program(['LD X0', 'MC N0 M0', 'LD X1', 'OUT Y1', 'LD X2', 'OUT Y2']);
   const [range] = uniqueRanges(p.networks);
-  assert.equal(range.end, undefined);
-  assert.ok(scope(p.networks.at(-1)!).includes(range));
-  const start = p.networks.find((n) => n.instructions.includes(range.start))!;
+  assert.equal(requireValue(range).end, undefined);
+  assert.ok(scope(p.networks.at(-1)!).includes(requireValue(range)));
+  const start = p.networks.find((n) => n.instructions.includes(requireValue(range).start))!;
   assert.ok(start.warnings.some((w) => w.includes('対応するMCRがありません')));
 });
 
@@ -176,8 +185,8 @@ test('same-level and decreasing active MC starts warn without creating false sco
   ]);
   const ranges = uniqueRanges(p.networks);
   assert.equal(ranges.length, 1);
-  assert.equal(ranges[0].start, p.instructions[0]);
-  assert.equal(ranges[0].end, p.instructions[7]);
+  assert.equal(requireValue(ranges[0]).start, p.instructions[0]);
+  assert.equal(requireValue(ranges[0]).end, p.instructions[7]);
   assert.equal(
     p.networks.flatMap((n) => n.warnings).filter((w) => w.includes('未対応のネスト順')).length,
     2,
@@ -199,9 +208,9 @@ test('MC adds a header row to the next rung and MCR closes that boundary', () =>
     p.networks.map((network) => network.actions.map((action) => action.instruction.op)),
     [['MC'], ['OUT'], ['MCR'], ['OUT']],
   );
-  const controlled = p.networks[1],
-    reset = p.networks[2],
-    after = p.networks[3];
+  const controlled = requireValue(p.networks[1]),
+    reset = requireValue(p.networks[2]),
+    after = requireValue(p.networks[3]);
   assert.equal(
     controlled.masterControl,
     p.instructions.find((instruction) => instruction.op === 'MC'),
@@ -209,7 +218,7 @@ test('MC adds a header row to the next rung and MCR closes that boundary', () =>
   assert.deepEqual(controlled.masterControl?.operands, ['N3', 'M9671']);
   assert.equal(reset.masterControl, undefined);
   assert.equal(after.masterControl, undefined);
-  assert.equal(reset.actions[0].condition, null);
+  assert.equal(requireValue(reset.actions[0]).condition, null);
   const grid = gridLayout(controlled);
   assert.ok(grid.symbols.every((symbol) => symbol.row >= 1));
   assert.equal(grid.rows, 2);

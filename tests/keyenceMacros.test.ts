@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCsvBatch } from '../src/batch.ts';
@@ -34,16 +35,21 @@ test('MCALL links unique parameter labels from the same folder and retains origi
   const left = result.keyencePrograms.find((p) => p.name === 'left/caller.mnm')!;
   const right = result.keyencePrograms.find((p) => p.name === 'right/caller.mnm')!;
   assert.deepEqual(
-    left.instructions[1].macro?.parameters.map((p) => p.name),
+    requireValue(left.instructions[1]).macro?.parameters.map((p) => p.name),
     ['Input', 'Lower', 'Upper'],
   );
   assert.deepEqual(
-    right.instructions[1].macro?.parameters.map((p) => p.name),
+    requireValue(right.instructions[1]).macro?.parameters.map((p) => p.name),
     ['Feed', 'Lower', 'Upper'],
   );
   assert.equal(left.text, new TextDecoder().decode(mnm(call)));
-  assert.equal(left.instructions[1].raw, call.split('\n')[1]);
-  assert.deepEqual(left.instructions[1].operands, ['DummyBound', 'DM810', 'DM811', 'DM812']);
+  assert.equal(requireValue(left.instructions[1]).raw, call.split('\n')[1]);
+  assert.deepEqual(requireValue(left.instructions[1]).operands, [
+    'DummyBound',
+    'DM810',
+    'DM811',
+    'DM812',
+  ]);
   assert.deepEqual(
     left.instructions.map((i) => i.opcode),
     ['LD', 'MCALL', 'END'],
@@ -53,12 +59,12 @@ test('MCALL links unique parameter labels from the same folder and retains origi
 test('missing, conflicting or duplicate macro definitions retain P numbers', () => {
   const alone = parseKeyenceMnm(mnm(call), 'dummy.mnm');
   assert.deepEqual(
-    alone.instructions[1].macro?.parameters.map((p) => p.name),
+    requireValue(alone.instructions[1]).macro?.parameters.map((p) => p.name),
     ['P0', 'P1', 'P2'],
   );
   const conflict = linked(definition + '\nLD P0 ; Contradiction');
   assert.deepEqual(
-    conflict.instructions[1].macro?.parameters.map((p) => p.name),
+    requireValue(conflict.instructions[1]).macro?.parameters.map((p) => p.name),
     ['P0', 'Lower', 'Upper'],
   );
   const duplicated = parseCsvBatch([
@@ -67,19 +73,19 @@ test('missing, conflicting or duplicate macro definitions retain P numbers', () 
     { name: 'macro-b.mnm', bytes: mnm(definition, 'dummybound', '1') },
   ]).keyencePrograms.find((p) => p.moduleName === 'DummyCaller')!;
   assert.deepEqual(
-    duplicated.instructions[1].macro?.parameters.map((p) => p.name),
+    requireValue(duplicated.instructions[1]).macro?.parameters.map((p) => p.name),
     ['P0', 'P1', 'P2'],
   );
   const ordinary = linked(definition.replaceAll('  ', ' '));
   assert.deepEqual(
-    ordinary.instructions[1].macro?.parameters.map((p) => p.name),
+    requireValue(ordinary.instructions[1]).macro?.parameters.map((p) => p.name),
     ['P0', 'P1', 'P2'],
   );
 });
 
 test('MCALL keeps argument comments separate and preserves ambiguous overall annotations', () => {
   const separated = parseKeyenceMnm(mnm(call + ' ; Value  Low  High'), 'dummy.mnm');
-  assert.deepEqual(separated.instructions[1].macro, {
+  assert.deepEqual(requireValue(separated.instructions[1]).macro, {
     parameters: [
       { name: 'P0', comment: 'Value' },
       { name: 'P1', comment: 'Low' },
@@ -90,13 +96,16 @@ test('MCALL keeps argument comments separate and preserves ambiguous overall ann
     DM810: 'External input',
     DM811: 'External lower',
   });
-  assert.equal(p.instructions[1].macro?.comment, 'This is one general note');
+  assert.equal(requireValue(p.instructions[1]).macro?.comment, 'This is one general note');
   assert.deepEqual(
-    p.instructions[1].macro?.parameters.map((p) => p.comment),
+    requireValue(p.instructions[1]).macro?.parameters.map((p) => p.comment),
     ['External input', 'External lower', ''],
   );
   const one = parseKeyenceMnm(mnm('MCALL DummyOne DM821 ; Single argument note'), 'dummy.mnm');
-  assert.equal(one.instructions[0].macro?.parameters[0].comment, 'Single argument note');
+  assert.equal(
+    requireValue(one.instructions[0]).macro?.parameters[0]?.comment,
+    'Single argument note',
+  );
 });
 
 test('macro headers and comments fit their rows in wrapped and scrolling drawings', () => {
@@ -113,7 +122,7 @@ test('macro headers and comments fit their rows in wrapped and scrolling drawing
   for (const showComments of [false, true])
     for (const mode of ['wrap', 'scroll'] as const) {
       const d = keyenceViewDrawing(
-        layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, showComments),
+        layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, showComments),
         mode,
       );
       const macro = d.symbols.find((s) => s.instruction.opcode === 'MCALL')!,
@@ -137,7 +146,7 @@ test('macro argument and label changes remain visible to comparison and unchange
   assert.equal(compareKeyencePrograms(a, a).changes.length, 0);
   const compared = compareKeyencePrograms(a, b);
   assert.equal(compared.changes.length, 1);
-  assert.equal(compared.changes[0].source?.opcode, 'MCALL');
+  assert.equal(requireValue(compared.changes[0]).source?.opcode, 'MCALL');
   assert.equal(
     unchangedDirectPair({
       id: 'dummy',
@@ -149,7 +158,7 @@ test('macro argument and label changes remain visible to comparison and unchange
   );
   const changed = parseKeyenceMnm(mnm(call.replace('DM811', 'DM819')), 'changed.mnm');
   const values = compareKeyencePrograms(parseKeyenceMnm(mnm(call), 'before.mnm'), changed);
-  assert.deepEqual(values.changes[0].source?.difference?.operandChanges, [2]);
+  assert.deepEqual(requireValue(values.changes[0]).source?.difference?.operandChanges, [2]);
   for (const mode of ['wrap', 'scroll'] as const)
     for (const group of keyenceComparisonDrawings(values, true, mode))
       for (const d of [...group.source, ...group.target]) {
@@ -171,18 +180,20 @@ test('a macro inserted on either side keeps matching contacts vertically aligned
   ])
     for (const comments of [false, true])
       for (const mode of ['wrap', 'scroll'] as const) {
-        const group = keyenceComparisonDrawings(
-          compareKeyencePrograms(source, target),
-          comments,
-          mode,
-        )[0];
+        const group = requireValue(
+          keyenceComparisonDrawings(
+            compareKeyencePrograms(requireValue(source), requireValue(target)),
+            comments,
+            mode,
+          )[0],
+        );
         const locations = (side: typeof group.source) => {
           let offset = 0;
           const result = new Map<string, number>();
           for (const d of side) {
             for (const s of d.symbols)
               if (s.instruction.opcode === 'LD')
-                result.set(s.instruction.operands[0], offset + s.y);
+                result.set(requireValue(s.instruction.operands[0]), offset + s.y);
             offset += d.height;
           }
           return result;

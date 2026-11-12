@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { highlightStRows, stTokens } from '../src/stSyntax.ts';
@@ -90,13 +91,13 @@ test('wrapping inside keywords, strings and comments preserves color and every c
     colored.map((row) => row.map((t) => t.text).join('')),
     rows.map((row) => row.text),
   );
-  assert.equal(colored[0][0].kind, 'keyword');
-  assert.equal(colored[1][0].kind, 'keyword');
-  assert.equal(colored[3][0].kind, 'string');
-  assert.equal(colored[4][0].kind, 'comment');
-  assert.ok(colored[6].every((t) => t.kind === 'comment'));
+  assert.equal(requireValue(requireValue(colored[0])[0]).kind, 'keyword');
+  assert.equal(requireValue(requireValue(colored[1])[0]).kind, 'keyword');
+  assert.equal(requireValue(requireValue(colored[3])[0]).kind, 'string');
+  assert.equal(requireValue(requireValue(colored[4])[0]).kind, 'comment');
+  assert.ok(requireValue(colored[6]).every((t) => t.kind === 'comment'));
   assert.deepEqual(colored[7], []);
-  assert.equal(colored[8][0].kind, 'keyword');
+  assert.equal(requireValue(requireValue(colored[8])[0]).kind, 'keyword');
   assert.deepEqual(highlightStRows([]), []);
 });
 
@@ -124,7 +125,8 @@ test('AREA_ST and BOX_ST coloring preserves wrapping, copying and changed-line c
         rows.map((row) => row.text),
       );
       for (let n = 0; n < rows.length; n++)
-        if (rows[n].text.startsWith('xxxx')) assert.equal(colored[n][0].kind, 'string');
+        if (requireValue(rows[n]).text.startsWith('xxxx'))
+          assert.equal(requireValue(requireValue(colored[n])[0]).kind, 'string');
     }
     assert.equal(JSON.stringify(instruction), original);
     assert.equal(keyenceInstructionCopyText(instruction, program), copy);
@@ -134,6 +136,9 @@ test('AREA_ST and BOX_ST coloring preserves wrapping, copying and changed-line c
     );
     const comparison = compareKeyencePrograms(program, target),
       changed = comparison.source.instructions.find((i) => i.st)!;
-    assert.deepEqual([...keyenceStChangedLines(changed)], [instruction.st!.lines[0].sourceLine]);
+    assert.deepEqual(
+      [...keyenceStChangedLines(changed)],
+      [requireValue(instruction.st!.lines[0]).sourceLine],
+    );
   }
 });

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { decodeCsv, parseProgram, instructionKey, type Logic } from '../src/model.ts';
@@ -51,10 +52,10 @@ test('GX project-only markers are removed from statements and notes', () => {
     ]),
     'gx.csv',
   );
-  assert.equal(p.networks[0].title, '周辺');
-  assert.equal(p.instructions[1].note, 'メモ');
-  assert.equal(p.networks[1].title, '[Title]見出し');
-  assert.equal(p.instructions[3].note, '二重*');
+  assert.equal(requireValue(p.networks[0]).title, '周辺');
+  assert.equal(requireValue(p.instructions[1]).note, 'メモ');
+  assert.equal(requireValue(p.networks[1]).title, '[Title]見出し');
+  assert.equal(requireValue(p.instructions[3]).note, '二重*');
 });
 
 test('continuation operands, note and source mapping are retained', () => {
@@ -66,10 +67,10 @@ test('continuation operands, note and source mapping are retained', () => {
     ]),
     'x.csv',
   );
-  assert.deepEqual(p.instructions[1].operands, ['K1', 'D21']);
-  assert.equal(p.instructions[1].note, 'メモ');
-  assert.equal(p.instructions[1].sourceRow, 5);
-  assert.equal(instructionKey(p.instructions[1]), '["MOV",["K1","D21"]]');
+  assert.deepEqual(requireValue(p.instructions[1]).operands, ['K1', 'D21']);
+  assert.equal(requireValue(p.instructions[1]).note, 'メモ');
+  assert.equal(requireValue(p.instructions[1]).sourceRow, 5);
+  assert.equal(instructionKey(requireValue(p.instructions[1])), '["MOV",["K1","D21"]]');
 });
 test('parallel series and branch restoration retain output conditions', () => {
   const ops = [
@@ -87,13 +88,16 @@ test('parallel series and branch restoration retain output conditions', () => {
     ['ANB', ''],
     ['OUT', 'Y2'],
   ];
-  const p = parseProgram(csv(ops.map(([op, arg], i) => [String(i), '', op, arg])), 'x.csv');
+  const p = parseProgram(
+    csv(ops.map(([op, arg], i) => [String(i), '', requireValue(op), requireValue(arg)])),
+    'x.csv',
+  );
   assert.equal(p.networks.length, 1);
   assert.deepEqual(
-    p.networks[0].actions.map((a) => expression(a.condition)),
+    requireValue(p.networks[0]).actions.map((a) => expression(a.condition)),
     ['((X0 | X1) & X2)', '((X0 | X1) & X3)', '((X0 | X1) & (X4 | X5))'],
   );
-  assert.deepEqual(p.networks[0].warnings, []);
+  assert.deepEqual(requireValue(p.networks[0]).warnings, []);
 });
 test('malformed input and unbalanced branch do not silently succeed', () => {
   assert.throws(() => parseProgram('a,b\n1,2', 'bad.csv'), /対応/);
@@ -104,7 +108,7 @@ test('malformed input and unbalanced branch do not silently succeed', () => {
     ]),
     'x.csv',
   );
-  assert.match(p.networks[0].warnings[0], /不足|ありません/);
+  assert.match(requireValue(requireValue(p.networks[0]).warnings[0]), /不足|ありません/);
 });
 test('synthetic programs preserve every instruction and operand with finite layouts', () => {
   const rows = [
@@ -169,12 +173,12 @@ test('grid keeps common contacts once and all network widths fixed', async () =>
     ]),
     'x',
   );
-  const g = gridLayout(p.networks[0]);
+  const g = gridLayout(requireValue(p.networks[0]));
   assert.equal(g.symbols.filter((s) => s.contact).length, 1);
   assert.equal(g.symbols.filter((s) => !s.contact).length, 2);
   assert.equal(
-    g.symbols.filter((s) => !s.contact)[0].col,
-    g.symbols.filter((s) => !s.contact)[1].col,
+    requireValue(g.symbols.filter((s) => !s.contact)[0]).col,
+    requireValue(g.symbols.filter((s) => !s.contact)[1]).col,
   );
 });
 test('synthetic FB pins, inline contacts and long circuits retain fixed-grid layout', async () => {
@@ -206,7 +210,7 @@ test('synthetic FB pins, inline contacts and long circuits retain fixed-grid lay
   const fb = p.instructions.filter((i) => i.op.startsWith('FBCALL '));
   assert.equal(fb.length, 1);
   assert.deepEqual(
-    fb[0].pins?.map((i) => [i.op, i.operands]),
+    requireValue(fb[0]).pins?.map((i) => [i.op, i.operands]),
     [
       ['DemoBlock IN:Enable', ['M40']],
       ['DemoBlock IN:Value', ['D40']],
@@ -266,17 +270,17 @@ test('pointer definitions label the following rung; CALL stays an action', async
     'p.csv',
   );
   assert.equal(p.networks.length, 3);
-  assert.equal(p.networks[0].pointer?.op, 'P42');
-  assert.equal(p.networks[0].title, 'TEST');
+  assert.equal(requireValue(p.networks[0]).pointer?.op, 'P42');
+  assert.equal(requireValue(p.networks[0]).title, 'TEST');
   assert.deepEqual(
-    p.networks[0].actions.map((a) => a.instruction.op),
+    requireValue(p.networks[0]).actions.map((a) => a.instruction.op),
     ['SET'],
   );
   assert.deepEqual(
-    p.networks[1].actions.map((a) => a.instruction.op),
+    requireValue(p.networks[1]).actions.map((a) => a.instruction.op),
     ['CALL'],
   );
-  assert.equal(p.networks[2].pointer?.op, 'P0');
+  assert.equal(requireValue(p.networks[2]).pointer?.op, 'P0');
   assert.deepEqual(
     p.networks.flatMap((n) => n.instructions).map((i) => i.id),
     p.instructions.map((i) => i.id),
@@ -310,14 +314,14 @@ test('typed and unsigned comparisons remain LD/AND/OR conditions with their orig
       ['OUT', 'M9401'],
     ]);
     assert.equal(p.networks.length, 1, load);
-    const network = p.networks[0];
+    const network = requireValue(p.networks[0]);
     assert.deepEqual(
       network.actions.map((action) => action.instruction.op),
       ['OUT'],
       load,
     );
     assert.deepEqual(
-      commandTree(network.actions[0].condition),
+      commandTree(requireValue(network.actions[0]).condition),
       ['or', ['and', [load, 'D401', 'K5'], [and, 'D402', 'K6']], [or, 'D403', 'K7']],
       load,
     );
@@ -339,12 +343,12 @@ test('EGP and EGF remain inline conditions before the output', () => {
     ['OUT', 'Y83'],
   ]);
   assert.equal(p.networks.length, 1);
-  const network = p.networks[0];
+  const network = requireValue(p.networks[0]);
   assert.deepEqual(
     network.actions.map((action) => action.instruction.op),
     ['OUT'],
   );
-  assert.deepEqual(commandTree(network.actions[0].condition), [
+  assert.deepEqual(commandTree(requireValue(network.actions[0]).condition), [
     'and',
     ['and', ['LD', 'X63'], ['EGP', 'V17']],
     ['EGF', 'V18'],
@@ -380,8 +384,8 @@ test('phase resets keep two phases independent and retain every original marker'
       network.actions.map((action) => action.instruction.op),
       ['OUT', 'PHASECHG'],
     );
-    assert.deepEqual(commandTree(network.actions[0].condition), ['PHASE', phase]);
-    assert.deepEqual(commandTree(network.actions[1].condition), [
+    assert.deepEqual(commandTree(requireValue(network.actions[0]).condition), ['PHASE', phase]);
+    assert.deepEqual(commandTree(requireValue(network.actions[1]).condition), [
       'and',
       ['PHASE', phase],
       ['AND', input],
@@ -415,12 +419,12 @@ test('unconditional control instructions do not inherit the preceding rung condi
       actions.map((action) => action.instruction.op),
       ['OUT', command[0], 'OUT'],
     );
-    assert.deepEqual(commandTree(actions[0].condition), ['LD', 'X181']);
-    assert.equal(actions[1].condition, null, command[0]);
-    assert.equal(actions[2].condition, null, command[0]);
+    assert.deepEqual(commandTree(requireValue(actions[0]).condition), ['LD', 'X181']);
+    assert.equal(requireValue(actions[1]).condition, null, command[0]);
+    assert.equal(requireValue(actions[2]).condition, null, command[0]);
     if (command[0] === 'JMP')
       assert.equal(
-        actions[1].instruction.controlFlow?.targetId,
+        requireValue(actions[1]).instruction.controlFlow?.targetId,
         p.instructions.find((instruction) => instruction.op === '#P521')?.id,
       );
     assert.deepEqual(

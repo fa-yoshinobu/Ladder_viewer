@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceInstruction } from './model';
 import { CELL } from '../ladderMetrics';
 
@@ -56,7 +57,9 @@ export function keyenceBoxColumnSpans(style: KeyenceOutputStyle): number[] {
       3,
       Math.ceil((nativeTextWidth('MCALL ' + style.operands![0]) + 24) / CELL),
     );
-    spans[spans.length - 1] += Math.max(0, header - spans.reduce((a, b) => a + b, 0));
+    const last = spans.length - 1;
+    spans[last] =
+      requireValue(spans[last]) + Math.max(0, header - spans.reduce((a, b) => a + b, 0));
     return spans;
   }
   const spans = Array<number>(style.columns ?? 1).fill(1),
@@ -64,7 +67,7 @@ export function keyenceBoxColumnSpans(style: KeyenceOutputStyle): number[] {
   spans[0] = fit(style.body);
   for (const [index, operand] of (style.operands ?? []).entries()) {
     const column = offset + (index % (spans.length - offset));
-    spans[column] = Math.max(spans[column], fit(operand));
+    spans[column] = Math.max(requireValue(spans[column]), fit(operand));
   }
   return spans;
 }
@@ -181,25 +184,25 @@ export function keyenceOutputStyle(instruction: KeyenceInstruction): KeyenceOutp
     return {
       ...native,
       kind: 'coil',
-      body: operands[0],
+      body: requireValue(operands[0]),
       bodyOperand: 0,
       negated: opcode === 'OUB',
     };
   if (opcode === 'KEEP' && operands.length === 1)
-    return { ...native, kind: 'keep', above: operands[0], aboveOperand: 0 };
+    return { ...native, kind: 'keep', above: requireValue(operands[0]), aboveOperand: 0 };
   if ((opcode === 'UDT' || opcode === 'UDC') && operands.length === 2)
     return {
       ...native,
       kind: 'multi-input',
       body: opcode + ' ' + operands[0],
       bodyOperand: 0,
-      above: operands[1],
+      above: requireValue(operands[1]),
       aboveOperand: 1,
     };
   if (/^(?:SFT|ITVL(?:\.S)?|PID)$/.test(opcode) && operands.length === 2)
     return { ...native, ...fields, kind: 'multi-input' };
   if ((opcode === 'SET' || opcode === 'RES') && operands.length === 1)
-    return { ...native, kind: 'labeled-coil', above: operands[0], aboveOperand: 0 };
+    return { ...native, kind: 'labeled-coil', above: requireValue(operands[0]), aboveOperand: 0 };
   if (/^(?:ONDL|OFDL|SHOT|BSET(?:\.D)?|BRES(?:\.D)?)$/.test(opcode) && operands.length === 2)
     return { ...native, ...fields, kind: 'labeled-coil' };
   if (/^(?:BOUT|BOUB)(?:\.D)?$/.test(opcode) && operands.length === 2)
@@ -221,7 +224,7 @@ export function keyenceOutputStyle(instruction: KeyenceInstruction): KeyenceOutp
       ...native,
       kind: opcode === 'OUTC' ? 'counter' : 'timer',
       body: device ? prefix + device.slice(1) : prefix + ' ' + operands[0],
-      above: operands[1],
+      above: requireValue(operands[1]),
       below: operands[2] ?? '',
       bodyOperand: 0,
       aboveOperand: 1,
@@ -229,11 +232,11 @@ export function keyenceOutputStyle(instruction: KeyenceInstruction): KeyenceOutp
     };
   }
   if ((opcode === 'CALL' || opcode === 'DIFU' || opcode === 'DIFD') && operands.length === 1)
-    return { ...native, kind: 'application', above: operands[0], aboveOperand: 0 };
+    return { ...native, kind: 'application', above: requireValue(operands[0]), aboveOperand: 0 };
   if ((opcode === 'JMP' && operands.length === 1) || (opcode === 'ENDS' && operands.length === 0))
     return { ...native, kind: 'jump', above: operands[0] ?? '', aboveOperand: 0 };
   if (opcode === 'STG' && operands.length === 1)
-    return { ...native, kind: 'stage', above: operands[0], aboveOperand: 0 };
+    return { ...native, kind: 'stage', above: requireValue(operands[0]), aboveOperand: 0 };
   if (/^W-(?:ON|OFF|UE|DE)$/.test(opcode) && operands.length === 2)
     return { ...native, ...fields, kind: 'wait', body: opcode.slice(2) };
   const known = nativeStyles.get(opcode);

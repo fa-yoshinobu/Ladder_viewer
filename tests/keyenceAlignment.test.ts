@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -59,11 +60,11 @@ test('KEYENCE inserted outputs align without stretching shared contacts or chang
         program(reverse ? base : extended),
         program(reverse ? extended : base),
       );
-      const aligned = keyenceComparisonDrawings(comparison, false, 'scroll')[0],
-        natural = keyenceComparisonDrawings(comparison, false, 'scroll', false)[0];
+      const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll')[0]),
+        natural = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll', false)[0]);
       for (const side of ['source', 'target'] as const) {
-        const d = aligned[side][0],
-          original = natural[side][0];
+        const d = requireValue(aligned[side][0]),
+          original = requireValue(natural[side][0]);
         assert.deepEqual(
           d.symbols
             .filter((s) => /^R[0-6]$/.test(s.instruction.operands[0] ?? ''))
@@ -89,13 +90,13 @@ test('KEYENCE inserted outputs align without stretching shared contacts or chang
           drawing.symbols.map((s) => [s.instruction.id, s.inputDifference, s.outputDifference]);
         assert.deepEqual(colors(d), colors(original));
       }
-      const blocks = keyenceCompareDrawing(comparison, false, 1, 'scroll', 'both')[0];
+      const blocks = requireValue(keyenceCompareDrawing(comparison, false, 1, 'scroll', 'both')[0]);
       for (const side of ['source', 'target'] as const) {
-        const coil = aligned[side][0].symbols.find(
+        const coil = requireValue(aligned[side][0]).symbols.find(
           (s) => s.instruction.opcode === 'OUT' && s.instruction.operands[0] === 'MR10',
         )!;
         assert.equal(
-          blocks[side][0].locations!.find((l) => l.id === coil.instruction.id)!.y,
+          requireValue(blocks[side][0]).locations!.find((l) => l.id === coil.instruction.id)!.y,
           (count + 1) * ROW,
         );
       }
@@ -111,10 +112,10 @@ test('KEYENCE independently aligned output groups retain CON links and the full 
       program([...prefix, 'OUT MR100', ...ending]),
       program([...prefix, ...ending]),
     );
-    const aligned = keyenceComparisonDrawings(comparison, false, 'scroll')[0],
-      natural = keyenceComparisonDrawings(comparison, false, 'scroll', false)[0];
+    const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll')[0]),
+      natural = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll', false)[0]);
     for (const side of ['source', 'target'] as const) {
-      const d = aligned[side][0],
+      const d = requireValue(aligned[side][0]),
         first = d.symbols.find(
           (s) =>
             s.instruction.opcode === (chain ? 'MOV' : 'FB') &&
@@ -128,7 +129,10 @@ test('KEYENCE independently aligned output groups retain CON links and the full 
       if (chain)
         assert.equal(first.y, d.symbols.find((s) => s.instruction.operands[0] === '#20')!.y);
       else assert.equal(first.blockRows, 4);
-      for (const changes of compareConnectionGraphs([graph(natural[side][0])], [graph(d)]))
+      for (const changes of compareConnectionGraphs(
+        [graph(requireValue(natural[side][0]))],
+        [graph(d)],
+      ))
         assert.deepEqual(
           changes.map(({ wires, inputs, outputs }) => ({ wires, inputs, outputs })),
           [{ wires: [], inputs: [], outputs: [] }],
@@ -148,7 +152,7 @@ test('KEYENCE sparse wrapped pages use their own heights and cumulative navigati
       'OUT MR10',
     ];
     const p = program(commands),
-      n = buildKeyenceNetworks(p)[0],
+      n = requireValue(buildKeyenceNetworks(p)[0]),
       base = layoutKeyenceNetwork(n, p, false),
       snapshot = JSON.stringify(base);
     const d = keyenceViewDrawing(base, 'wrap'),
@@ -171,15 +175,15 @@ test('KEYENCE comparison shares wrapped page heights only where matching subsequ
     program([...parallel, ...suffix]),
     program([...parallel.slice(0, 3), ...suffix]),
   );
-  const aligned = keyenceComparisonDrawings(comparison, false, 'wrap')[0],
-    natural = keyenceComparisonDrawings(comparison, false, 'wrap', false)[0];
+  const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'wrap')[0]),
+    natural = requireValue(keyenceComparisonDrawings(comparison, false, 'wrap', false)[0]);
   assert.equal(
-    aligned.source[0].symbols.find((s) => s.instruction.opcode === 'MOV')!.y,
-    aligned.target[0].symbols.find((s) => s.instruction.opcode === 'MOV')!.y,
+    requireValue(aligned.source[0]).symbols.find((s) => s.instruction.opcode === 'MOV')!.y,
+    requireValue(aligned.target[0]).symbols.find((s) => s.instruction.opcode === 'MOV')!.y,
   );
-  assert.equal(aligned.source[0].height, 8 * ROW + 2 * PAGE_GAP);
-  assert.equal(aligned.target[0].height, 8 * ROW + 2 * PAGE_GAP);
-  assert.equal(natural.target[0].height, 4 * ROW + 2 * PAGE_GAP);
+  assert.equal(requireValue(aligned.source[0]).height, 8 * ROW + 2 * PAGE_GAP);
+  assert.equal(requireValue(aligned.target[0]).height, 8 * ROW + 2 * PAGE_GAP);
+  assert.equal(requireValue(natural.target[0]).height, 4 * ROW + 2 * PAGE_GAP);
 });
 
 test('KEYENCE page compaction retains wire-only branches, function blocks and difference colors', () => {
@@ -189,7 +193,7 @@ test('KEYENCE page compaction retains wire-only branches, function blocks and di
     'FB Dummy DM1 DM2 DM3',
   ];
   const p = program(commands),
-    base = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, false, true);
+    base = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, false, true);
   assert.deepEqual(
     keyenceDrawingPages(base).map((page) => page.rows),
     [7, 4],
@@ -223,10 +227,10 @@ test('KEYENCE folded output insertion preserves contacts and search locations on
     program([...before, 'OUT MR100', 'OUT MR101', 'OUT MR102', 'OUT MR10']),
     program([...before, 'OUT MR10']),
   );
-  const aligned = keyenceComparisonDrawings(comparison, false, 'wrap')[0],
-    blocks = keyenceCompareDrawing(comparison, false, 1, 'wrap', 'both')[0];
+  const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'wrap')[0]),
+    blocks = requireValue(keyenceCompareDrawing(comparison, false, 1, 'wrap', 'both')[0]);
   for (const side of ['source', 'target'] as const) {
-    const d = aligned[side][0],
+    const d = requireValue(aligned[side][0]),
       coil = d.symbols.find(
         (s) => s.instruction.opcode === 'OUT' && s.instruction.operands[0] === 'MR10',
       )!;
@@ -237,7 +241,7 @@ test('KEYENCE folded output insertion preserves contacts and search locations on
     assert.equal(d.height, 12 * ROW + 2 * PAGE_GAP);
     assert.equal(coil.y, 11 * ROW + PAGE_GAP + BASELINE);
     assert.equal(
-      blocks[side][0].locations!.find((l) => l.id === coil.instruction.id)!.y,
+      requireValue(blocks[side][0]).locations!.find((l) => l.id === coil.instruction.id)!.y,
       coil.y - BASELINE,
     );
   }
@@ -256,16 +260,16 @@ test('KEYENCE compact comparison pages preserve different statement heights and 
     ]),
     program(commands),
   );
-  const aligned = keyenceComparisonDrawings(comparison, true, 'wrap')[0];
-  for (const [index, s] of aligned.source[0].symbols.entries())
+  const aligned = requireValue(keyenceComparisonDrawings(comparison, true, 'wrap')[0]);
+  for (const [index, s] of requireValue(aligned.source[0]).symbols.entries())
     assert.equal(
       s.y,
-      aligned.target[0].symbols[index].y,
+      requireValue(requireValue(aligned.target[0]).symbols[index]).y,
       'matching symbols keep the same height after wrapping different statements',
     );
   for (const d of [aligned.source[0], aligned.target[0]]) {
-    assert.equal(d.rowHeight, 72);
-    assert.equal(d.height - d.headerHeight, 8 * 72 + 2 * PAGE_GAP);
+    assert.equal(requireValue(d).rowHeight, 72);
+    assert.equal(requireValue(d).height - requireValue(d).headerHeight, 8 * 72 + 2 * PAGE_GAP);
   }
 });
 
@@ -294,8 +298,8 @@ test('KEYENCE KEEP aligns its input branches independently and retains both port
       program(reverse ? target : source),
       program(reverse ? source : target),
     );
-    const aligned = keyenceComparisonDrawings(comparison, false, 'scroll')[0],
-      natural = keyenceComparisonDrawings(comparison, false, 'scroll', false)[0];
+    const aligned = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll')[0]),
+      natural = requireValue(keyenceComparisonDrawings(comparison, false, 'scroll', false)[0]);
     const connections = (d: KeyenceDrawing) => {
       const g = graph(d);
       g.terminals = g.terminals.filter(
@@ -313,7 +317,7 @@ test('KEYENCE KEEP aligns its input branches independently and retains both port
       return g;
     };
     for (const side of ['source', 'target'] as const) {
-      const d = aligned[side][0];
+      const d = requireValue(aligned[side][0]);
       assert.deepEqual(
         d.symbols.filter((s) => s.kind === 'comparison').map((s) => row(d, s.y)),
         [0, 0, 1, 1, 2, 2],
@@ -327,7 +331,7 @@ test('KEYENCE KEEP aligns its input branches independently and retains both port
         ],
       );
       for (const changes of compareConnectionGraphs(
-        [connections(natural[side][0])],
+        [connections(requireValue(natural[side][0]))],
         [connections(d)],
       ))
         assert.deepEqual(

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -29,7 +30,7 @@ test('AREA_ST keeps source rows, tabs, blank lines and literal markup on its ins
     p.instructions.map((i) => i.opcode),
     ['AREA_ST', 'END', 'ENDH'],
   );
-  const instruction = p.instructions[0];
+  const instruction = requireValue(p.instructions[0]);
   assert.equal(instruction.raw, 'AREA_ST');
   assert.equal(instruction.sourceLine, 5);
   assert.equal(instruction.sourceEndLine, 5 + body.length);
@@ -43,7 +44,7 @@ test('AREA_ST keeps source rows, tabs, blank lines and literal markup on its ins
     })),
   );
   assert.deepEqual(p.comments, [{ sourceLine: 4, text: 'Dummy circuit heading' }]);
-  assert.equal(p.instructions[1].statement, '');
+  assert.equal(requireValue(p.instructions[1]).statement, '');
   assert.ok(
     p.text.includes(body.join('\r\n')),
     'the original line endings remain in the program text',
@@ -65,12 +66,12 @@ test('ST ends at the next MNM instruction and multiple ST sections retain their 
     ['AREA_ST', 'LD', 'OUT', 'AREA_ST'],
   );
   assert.deepEqual(
-    p.instructions[0].st?.lines.map((line) => line.text),
+    requireValue(p.instructions[0]).st?.lines.map((line) => line.text),
     ['uiDummy := 73;'],
   );
-  assert.equal(p.instructions[2].statement, 'ordinary comment');
+  assert.equal(requireValue(p.instructions[2]).statement, 'ordinary comment');
   assert.deepEqual(
-    p.instructions[3].st?.lines.map((line) => line.text),
+    requireValue(p.instructions[3]).st?.lines.map((line) => line.text),
     ['\tuiDummy := 91;'],
   );
   assert.deepEqual(p.comments, [{ sourceLine: 7, text: 'ordinary comment' }]);
@@ -90,7 +91,7 @@ test('ST source that resembles MNM metadata is never reclassified or stripped', 
   assert.equal(p.metadata.length, 3);
   assert.deepEqual(p.comments, []);
   assert.deepEqual(
-    p.instructions[0].st?.lines.map((line) => line.text),
+    requireValue(p.instructions[0]).st?.lines.map((line) => line.text),
     ['MODULE:DummySourceLiteral', 'MODULE_TYPE:9', 'END', 'AREA_ST'],
   );
   assert.equal(p.instructions.at(-1)?.opcode, 'END');
@@ -104,7 +105,7 @@ test('UTF-16 ST decoding retains Unicode source and the exact encoded source lin
     'dummy-unicode.mnm',
   );
   assert.equal(p.text, text);
-  assert.deepEqual(p.instructions[0].st?.lines, [
+  assert.deepEqual(requireValue(p.instructions[0]).st?.lines, [
     { sourceLine: 3, raw: ";\t架空文字列 := 'テスト;値';", text: "\t架空文字列 := 'テスト;値';" },
     { sourceLine: 4, raw: ';', text: '' },
   ]);
@@ -114,7 +115,7 @@ test('FBEXEC and FBEAND separate block type, instance and unchanged argument ind
   for (const opcode of ['FBEXEC', 'FBEAND']) {
     const raw = `${opcode} DummyGate dummyGateInstance TRUE T#3.7s ??? 'a; b' ; dummy inline note`;
     const p = parse([raw]),
-      instruction = p.instructions[0];
+      instruction = requireValue(p.instructions[0]);
     assert.equal(instruction.opcode, opcode);
     assert.equal(instruction.raw, raw);
     assert.equal(instruction.comment, 'dummy inline note');
@@ -141,7 +142,9 @@ test('FBEXEC and FBEAND separate block type, instance and unchanged argument ind
 
 test('unknown FUN, FUNLD and FUNAND keep every argument without guessing names or directions', () => {
   for (const opcode of ['FUN', 'FUNLD', 'FUNAND']) {
-    const i = parse([`${opcode} DummyTransform mockResult mockSource[7] #53`]).instructions[0];
+    const i = requireValue(
+      parse([`${opcode} DummyTransform mockResult mockSource[7] #53`]).instructions[0],
+    );
     assert.deepEqual(i.fb, {
       name: 'DummyTransform',
       pins: [
@@ -159,7 +162,7 @@ test('legacy KV-8000 FB and FUN models retain generic arguments and ordinary com
       [';Dummy legacy heading', `${opcode} DummyLegacy DM9760 #61 DM9762`, ';Dummy footer', 'END'],
       '99',
     );
-    assert.deepEqual(p.instructions[0].fb, {
+    assert.deepEqual(requireValue(p.instructions[0]).fb, {
       name: 'DummyLegacy',
       pins: [
         { name: '引数1', value: 'DM9760', operandIndex: 1 },
@@ -167,8 +170,8 @@ test('legacy KV-8000 FB and FUN models retain generic arguments and ordinary com
         { name: '引数3', value: 'DM9762', operandIndex: 3 },
       ],
     });
-    assert.equal(p.instructions[0].statement, 'Dummy legacy heading');
-    assert.equal(p.instructions[1].statement, 'Dummy footer');
+    assert.equal(requireValue(p.instructions[0]).statement, 'Dummy legacy heading');
+    assert.equal(requireValue(p.instructions[1]).statement, 'Dummy footer');
     assert.ok(p.instructions.every((i) => i.st === undefined));
   }
 });
@@ -185,13 +188,13 @@ test('bookmark and rung-comment text belongs to the marker rather than the follo
       'OUT MR9781',
     ]);
     assert.equal(
-      p.instructions[0].statement,
+      requireValue(p.instructions[0]).statement,
       'Dummy heading\nFirst dummy annotation\n\nSecond dummy annotation',
     );
-    assert.equal(p.instructions[0].raw, opcode);
-    assert.equal(p.instructions[0].sourceEndLine, 8);
-    assert.equal(p.instructions[1].statement, '');
-    assert.equal(p.instructions[2].statement, '');
+    assert.equal(requireValue(p.instructions[0]).raw, opcode);
+    assert.equal(requireValue(p.instructions[0]).sourceEndLine, 8);
+    assert.equal(requireValue(p.instructions[1]).statement, '');
+    assert.equal(requireValue(p.instructions[2]).statement, '');
     assert.deepEqual(
       p.comments.map((c) => c.sourceLine),
       [4, 6, 7, 8],
@@ -229,13 +232,15 @@ test('known function pins retain their declared direction rather than treating e
     ),
   );
   assert.deepEqual(
-    p.instructions[1].fb?.pins.map((pin) => pin.value),
+    requireValue(p.instructions[1]).fb?.pins.map((pin) => pin.value),
     ['dummySource', 'dummyDestination'],
   );
 });
 
 test('FIFO input-output pins keep distinct left and right row positions', () => {
-  const fb = parse(['FUN FIFORead dummyTable #29 dummyCount dummyItem']).instructions[0].fb!;
+  const fb = requireValue(
+    parse(['FUN FIFORead dummyTable #29 dummyCount dummyItem']).instructions[0],
+  ).fb!;
   assert.equal(fb.knownSignature, true);
   assert.deepEqual(
     fb.pins.map((pin) => [pin.name, pin.direction, pin.operandIndex, pin.inputRow, pin.outputRow]),
@@ -249,7 +254,7 @@ test('FIFO input-output pins keep distinct left and right row positions', () => 
 });
 
 test('known blocks preserve instances and unassigned placeholders while adding declared pin positions', () => {
-  const timer = parse(['FBEAND TON dummyTimer T#3.7s ???']).instructions[0];
+  const timer = requireValue(parse(['FBEAND TON dummyTimer T#3.7s ???']).instructions[0]);
   assert.equal(timer.fb?.instance, 'dummyTimer');
   assert.equal(timer.fb?.instanceOperandIndex, 1);
   assert.equal(timer.fb?.powerInput, 'In');
@@ -261,9 +266,11 @@ test('known blocks preserve instances and unassigned placeholders while adding d
       ['ET', '???', 'output', 3],
     ],
   );
-  const sort = parse([
-    "FBEAND StructSort dummySort dummyArray #29 TRUE 'DummyField' ??? dummyBusy dummyError dummyErrorCode",
-  ]).instructions[0];
+  const sort = requireValue(
+    parse([
+      "FBEAND StructSort dummySort dummyArray #29 TRUE 'DummyField' ??? dummyBusy dummyError dummyErrorCode",
+    ]).instructions[0],
+  );
   assert.equal(sort.fb?.knownSignature, true);
   assert.equal(
     sort.fb?.pins.find((pin) => pin.name === 'ProcTime')?.value,
@@ -271,9 +278,11 @@ test('known blocks preserve instances and unassigned placeholders while adding d
     'a placeholder must never be replaced with a guessed default',
   );
   assert.equal(sort.operands[6], '???');
-  const recv = parse([
-    'FBEXEC SocketUDP_Recv dummyReceiver #29 #73 dummyBuffer T#3.7s dummyReceived dummyPeer dummyPort dummyBusy dummyError dummyErrorCode',
-  ]).instructions[0].fb!;
+  const recv = requireValue(
+    parse([
+      'FBEXEC SocketUDP_Recv dummyReceiver #29 #73 dummyBuffer T#3.7s dummyReceived dummyPeer dummyPort dummyBusy dummyError dummyErrorCode',
+    ]).instructions[0],
+  ).fb!;
   assert.equal(recv.knownSignature, true);
   assert.equal(recv.instance, 'dummyReceiver');
   assert.deepEqual(
@@ -304,7 +313,7 @@ test('implicit function power pins distinguish load, boolean AND and zero-argume
       [true, 'EN', 'ENO'],
     ],
   );
-  assert.deepEqual(p.instructions[2].fb?.pins, []);
+  assert.deepEqual(requireValue(p.instructions[2]).fb?.pins, []);
 });
 
 test('constant IN-OUT declarations keep their formal direction and only the left pin row', () => {
@@ -319,7 +328,7 @@ test('constant IN-OUT declarations keep their formal direction and only the left
   ];
   for (const [name, names] of declarations) {
     const values = names.map((_, index) => `dummyArgument${index + 1}`);
-    const fb = parse([`FUN ${name} ${values.join(' ')}`]).instructions[0].fb!;
+    const fb = requireValue(parse([`FUN ${name} ${values.join(' ')}`]).instructions[0]).fb!;
     assert.equal(fb.knownSignature, true, name);
     assert.equal(fb.powerInput, 'EN');
     assert.equal(fb.powerOutput, 'ENO');
@@ -358,7 +367,7 @@ test('receive and refresh declarations put writable IN-OUT values on both sides'
   ];
   for (const [name, names, inoutRow] of cases) {
     const values = names.map((_, index) => `dummyValue${index + 1}`);
-    const fb = parse([`FUN ${name} ${values.join(' ')}`]).instructions[0].fb!;
+    const fb = requireValue(parse([`FUN ${name} ${values.join(' ')}`]).instructions[0]).fb!;
     assert.equal(fb.knownSignature, true, name);
     assert.equal(fb.powerOutput, 'ENO');
     assert.deepEqual(
@@ -377,7 +386,7 @@ test('receive and refresh declarations put writable IN-OUT values on both sides'
       fb.pins.map((pin) => pin.inputRow),
       names.map((_, index) => index),
     );
-    const pin = fb.pins[inoutRow];
+    const pin = requireValue(fb.pins[inoutRow]);
     assert.equal(pin.direction, 'inout');
     assert.equal(pin.outputRow, inoutRow);
     assert.equal(pin.constant, undefined);
@@ -416,7 +425,7 @@ test('port, cyclic refresh and string transfer calls retain their distinct param
       ],
     ],
   );
-  assert.equal(p.instructions[2].fb?.pins[0].value, "'Invented test payload'");
+  assert.equal(requireValue(p.instructions[2]).fb?.pins[0]?.value, "'Invented test payload'");
   assert.ok(
     p.instructions.every(
       (i) => i.fb?.knownSignature && i.fb.powerInput === 'EN' && i.fb.powerOutput === 'ENO',
@@ -440,7 +449,11 @@ test('recognized placement variants share the declaration without inventing a Re
       ['ENO', 'Result'],
     );
     assert.deepEqual(
-      p.instructions[0].fb?.pins.map((pin) => [pin.name, pin.value, pin.operandIndex]),
+      requireValue(p.instructions[0]).fb?.pins.map((pin) => [
+        pin.name,
+        pin.value,
+        pin.operandIndex,
+      ]),
       [
         ['Unit', 'dummyUnit', 1],
         ['BufMemAddress', '#73', 2],
@@ -448,12 +461,14 @@ test('recognized placement variants share the declaration without inventing a Re
       ],
     );
     assert.deepEqual(
-      p.instructions[1].fb?.pins.map((pin) => pin.name),
+      requireValue(p.instructions[1]).fb?.pins.map((pin) => pin.name),
       ['In1', 'In2'],
     );
   }
   for (const opcode of ['FBEXEC', 'FBEAND']) {
-    const fb = parse([`${opcode} TON dummyTimer T#3.7s dummyElapsed`]).instructions[0].fb!;
+    const fb = requireValue(
+      parse([`${opcode} TON dummyTimer T#3.7s dummyElapsed`]).instructions[0],
+    ).fb!;
     assert.equal(fb.knownSignature, true);
     assert.equal(fb.instance, 'dummyTimer');
     assert.equal(fb.powerInput, 'In');
@@ -476,7 +491,7 @@ test('signature mismatches and older device codes preserve generic names and all
     parse(['FUN MOVE dummyOne dummyTwo'], '99'),
   ];
   for (const p of cases) {
-    const i = p.instructions[0],
+    const i = requireValue(p.instructions[0]),
       start = i.opcode === 'FBEXEC' ? 2 : 1;
     assert.equal(i.fb?.knownSignature, undefined);
     assert.deepEqual(

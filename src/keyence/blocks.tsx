@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { StrokeCoordinates } from '../drawing';
 import type { KeyenceSymbol } from './layout';
 import { keyenceBlockGeometry, keyenceStBoxGeometry } from './blockGeometry';
@@ -191,7 +192,7 @@ export function KeyenceStBox({ symbol, c }: { symbol: KeyenceSymbol; c: StrokeCo
             y={y - 8 + index * ST_ROW_HEIGHT}
             xmlSpace="preserve"
           >
-            {colored[index].map((part, n) => (
+            {requireValue(colored[index]).map((part, n) => (
               <tspan key={n} class={`st-${part.kind}`}>
                 {part.text}
               </tspan>

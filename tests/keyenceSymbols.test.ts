@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -63,7 +64,7 @@ test('KEYENCE contacts keep their normal color when only their connection role c
     assert.equal(
       keyenceSymbolDifferenceKind({
         ...contact,
-        opcode: op,
+        opcode: requireValue(op),
         difference: { ...contact.difference!, otherText: otherOp + ' R1' },
       }),
       undefined,
@@ -114,8 +115,8 @@ test('native KEYENCE output symbols place device, preset and operation in separa
       ['RES', 'C8', undefined, 0],
     ],
   );
-  assert.equal(styles[4].body, 'LDA.S');
-  assert.equal(styles[4].above, 'DM100');
+  assert.equal(requireValue(styles[4]).body, 'LDA.S');
+  assert.equal(requireValue(styles[4]).above, 'DM100');
   const typed = program(['TMR T7 #30', 'OUTC C8 #5']).instructions.map(keyenceOutputStyle);
   assert.deepEqual(
     typed.map((s) => s.body),
@@ -123,11 +124,11 @@ test('native KEYENCE output symbols place device, preset and operation in separa
   );
   const typedProgram = program(['TMR T7 #30', 'OUTC C8 #5'], { T7: 'timer', C8: 'counter' });
   assert.equal(
-    keyenceInstructionCopyText(typedProgram.instructions[0], typedProgram),
+    keyenceInstructionCopyText(requireValue(typedProgram.instructions[0]), typedProgram),
     'TMR T7 #30\r\nT7: timer',
   );
   assert.equal(
-    keyenceInstructionCopyText(typedProgram.instructions[1], typedProgram),
+    keyenceInstructionCopyText(requireValue(typedProgram.instructions[1]), typedProgram),
     'OUTC C8 #5\r\nC8: counter',
   );
 });

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { highlightKeyenceScriptRows } from '../src/keyence/scriptSyntax.ts';
@@ -34,13 +35,17 @@ test('legacy script comments end at the source newline and survive visual wrappi
     colored.map((parts) => parts.map((p) => p.text).join('')),
     rows.map((row) => row.text),
   );
-  assert.equal(colored[0][0].kind, 'keyword');
-  assert.ok(colored[1].some((p) => p.kind === 'comment' && p.text === "' an invented comment"));
+  assert.equal(requireValue(requireValue(colored[0])[0]).kind, 'keyword');
+  assert.ok(
+    requireValue(colored[1]).some(
+      (p) => p.kind === 'comment' && p.text === "' an invented comment",
+    ),
+  );
   assert.deepEqual(colored[2], [{ text: ' continued IF 99', kind: 'comment' }]);
   assert.deepEqual(colored[3], []);
-  assert.ok(colored[4].some((p) => p.kind === 'function' && p.text === 'ABS'));
-  assert.ok(colored[4].some((p) => p.kind === 'number' && p.text === '-8'));
-  assert.ok(colored[4].every((p) => p.kind !== 'comment'));
+  assert.ok(requireValue(colored[4]).some((p) => p.kind === 'function' && p.text === 'ABS'));
+  assert.ok(requireValue(colored[4]).some((p) => p.kind === 'number' && p.text === '-8'));
+  assert.ok(requireValue(colored[4]).every((p) => p.kind !== 'comment'));
 });
 
 test('double-quoted legacy strings protect apostrophes while single quotes start comments', () => {
@@ -53,10 +58,16 @@ test('double-quoted legacy strings protect apostrophes while single quotes start
     colored.map((parts) => parts.map((p) => p.text).join('')),
     rows.map((row) => row.text),
   );
-  assert.ok(colored[0].some((p) => p.kind === 'string' && p.text === '"It\'s a ""dummy"" string"'));
-  assert.ok(colored[0].every((p) => p.kind !== 'comment'));
-  assert.ok(colored[1].some((p) => p.kind === 'comment' && p.text === "' IF Dummy THEN"));
-  assert.ok(colored[1].every((p) => p.kind !== 'string'));
+  assert.ok(
+    requireValue(colored[0]).some(
+      (p) => p.kind === 'string' && p.text === '"It\'s a ""dummy"" string"',
+    ),
+  );
+  assert.ok(requireValue(colored[0]).every((p) => p.kind !== 'comment'));
+  assert.ok(
+    requireValue(colored[1]).some((p) => p.kind === 'comment' && p.text === "' IF Dummy THEN"),
+  );
+  assert.ok(requireValue(colored[1]).every((p) => p.kind !== 'string'));
   assert.deepEqual(highlightKeyenceScriptRows([]), []);
 });
 

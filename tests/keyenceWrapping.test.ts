@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -22,7 +23,7 @@ const drawing = (lines: string[], showComments = true) => {
     ['DEVICE:99', ';MODULE:SyntheticWrap', ';MODULE_TYPE:0', ...lines].join('\r\n'),
   );
   const p = parseKeyenceMnm(bytes.buffer, 'synthetic-wrap.mnm');
-  return layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, showComments);
+  return layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, showComments);
 };
 const contacts = (count: number) =>
   Array.from({ length: count }, (_, index) => (index ? 'AND' : 'LD') + ' MR' + (index + 1));
@@ -44,9 +45,9 @@ test('Keyence ordinary symbols use the shared Mitsubishi cell, row and rail dime
   );
   assert.equal(base.height, COMMENT_ROW);
   assert.equal(hidden.height, ROW);
-  assert.equal(base.symbols[0].x, LEFT_GUTTER);
-  assert.equal(base.symbols[0].y, BASELINE);
-  assert.equal(base.symbols[0].width, CELL);
+  assert.equal(requireValue(base.symbols[0]).x, LEFT_GUTTER);
+  assert.equal(requireValue(base.symbols[0]).y, BASELINE);
+  assert.equal(requireValue(base.symbols[0]).width, CELL);
   const coil = base.symbols.find((symbol) => symbol.kind === 'coil')!;
   assert.equal(coil.width, CELL);
   assert.equal(coil.x + coil.width, base.right - 8);
@@ -98,7 +99,7 @@ test('wrapping moves symbols and search coordinates while retaining source ident
     captions(wrapped).map((label) => label.text),
     [continuationText(0, 2), continuationText(1, 2)],
   );
-  const pageOffset = captions(wrapped)[1].y - captions(wrapped)[0].y;
+  const pageOffset = requireValue(captions(wrapped)[1]).y - requireValue(captions(wrapped)[0]).y;
   for (const original of base.symbols) {
     const placed = wrapped.symbols.find((symbol) => symbol.instruction === original.instruction)!;
     assert.ok(placed);
@@ -159,7 +160,7 @@ test('a vertical branch on a page cut is retained once with continued input line
   assert.ok(branch);
   const wrapped = keyenceViewDrawing(base, 'wrap'),
     pages = captions(wrapped),
-    dy = pages[1].y - pages[0].y,
+    dy = requireValue(pages[1]).y - requireValue(pages[0]).y,
     inputX = wrapped.left;
   assert.equal(pages.length, 2);
   assert.ok(
@@ -178,9 +179,9 @@ test('a vertical branch on a page cut is retained once with continued input line
     ),
   );
   assert.equal(wrapped.rails?.length, 2);
-  assert.equal(wrapped.rails?.[0].x, base.left);
-  assert.equal(wrapped.rails?.[0].top, base.railTop);
-  assert.ok(wrapped.rails![1].top >= dy);
+  assert.equal(wrapped.rails?.[0]?.x, base.left);
+  assert.equal(wrapped.rails?.[0]?.top, base.railTop);
+  assert.ok(requireValue(wrapped.rails![1]).top >= dy);
   assert.ok(pages.every((page) => !/^→ \d+$/.test(page.text) && !/^\d+ →$/.test(page.text)));
 });
 
@@ -234,9 +235,9 @@ test('common page captions occupy the footer gap on every page including the fin
     pages = captions(wrapped),
     step = base.height - base.headerHeight + PAGE_GAP;
   assert.equal(pages.length, 2);
-  assert.equal(pages[0].y, base.railBottom + 15);
-  assert.equal(pages[1].y, base.railBottom + step + 15);
-  assert.equal(wrapped.height - pages[1].y, PAGE_GAP - 15);
+  assert.equal(requireValue(pages[0]).y, base.railBottom + 15);
+  assert.equal(requireValue(pages[1]).y, base.railBottom + step + 15);
+  assert.equal(wrapped.height - requireValue(pages[1]).y, PAGE_GAP - 15);
   assert.ok(pages.every((page) => wrapped.symbols.every((symbol) => page.y !== symbol.y - 17)));
 });
 

@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { Instruction, Network } from './model';
 import type { DeviceComments } from './comments';
 import {
@@ -176,6 +177,9 @@ export function instructionDrawingOffset(
   const page = scrolling ? 0 : Math.floor(symbol.col / COLUMNS);
   return (
     prefix +
-    (drawingPages(grid, rowHeight, viewMode)[page].top + symbol.row * rowHeight + inside) * zoom
+    (requireValue(drawingPages(grid, rowHeight, viewMode)[page]).top +
+      symbol.row * rowHeight +
+      inside) *
+      zoom
   );
 }

@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { StrokeCoordinates } from '../drawing';
 import { LadderGlyph } from '../LadderPrimitives';
 import type { KeyenceSymbol } from './layout';
@@ -71,29 +72,29 @@ export function KeyenceNativeSymbol({
         />
         {starts.slice(1).map((at) => wire(at, y - 21, at, y + 17))}
         <text class="operator" x={x + 12} y={y - 23} style={{ textAnchor: 'start' }}>
-          {part(style.body)} {part(instruction.operands[0], 0)}
+          {part(style.body)} {part(requireValue(instruction.operands[0]), 0)}
         </text>
         {parameters.map((parameter, index) => (
           <g key={index}>
             <text
               class="device kv-macro-parameter"
-              x={starts[index] + (spans[index] * unit) / 2}
+              x={requireValue(starts[index]) + (requireValue(spans[index]) * unit) / 2}
               y={y - 6}
             >
               {parameter.name}
             </text>
             <text
               class="device kv-native-operand"
-              x={starts[index] + (spans[index] * unit) / 2}
+              x={requireValue(starts[index]) + (requireValue(spans[index]) * unit) / 2}
               y={y + 9}
             >
               {part(parameter.value, parameter.operandIndex)}
             </text>
             {parameter.commentLines.length > 0 && (
-              <text class="device-comment" x={starts[index] + 6} y={y + 27}>
+              <text class="device-comment" x={requireValue(starts[index]) + 6} y={y + 27}>
                 <title>{parameter.comment}</title>
                 {parameter.commentLines.map((line, row) => (
-                  <tspan key={row} x={starts[index] + 6} dy={row ? 12 : 0}>
+                  <tspan key={row} x={requireValue(starts[index]) + 6} dy={row ? 12 : 0}>
                     {line}
                   </tspan>
                 ))}
@@ -122,7 +123,8 @@ export function KeyenceNativeSymbol({
     const starts = spans.map(
       (_, index) => x + spans.slice(0, index).reduce((a, b) => a + b, 0) * unit,
     );
-    const middle = (index: number) => starts[index] + (spans[index] * unit) / 2;
+    const middle = (index: number) =>
+      requireValue(starts[index]) + (requireValue(spans[index]) * unit) / 2;
     const macro = style.body === 'MCALL',
       offset = style.operatorColumn || macro ? 1 : 0,
       operandColumns = columns - offset;

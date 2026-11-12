@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Instruction, Network } from '../src/model.ts';
@@ -18,9 +19,9 @@ function fixture(commands: Command[], groupSize = 1) {
   for (let start = 0; start < instructions.length; start += groupSize) {
     const group = instructions.slice(start, start + groupSize);
     networks.push({
-      id: group[0].id,
+      id: requireValue(group[0]).id,
       title: '',
-      step: group[0].step,
+      step: requireValue(group[0]).step,
       instructions: group,
       actions: [],
       warnings: [],
@@ -88,15 +89,22 @@ test('an IF without ELSE spans every intersecting network and the false gate rea
   ]);
   assignControlFlow(networks);
   const [range] = ranges(networks);
-  assert.equal(range.kind, 'IF');
-  assert.equal(range.start, instructions[0]);
-  assert.equal(range.end, instructions[4]);
-  assert.equal(range.lane, 0);
-  for (const network of networks.slice(0, 5)) assert.ok(network.controlRanges?.includes(range));
-  assert.equal(networks[5].controlRanges, undefined);
-  assert.equal(instructions[2].controlFlow?.targetId, instructions[4].id);
-  assert.equal(instructions[2].controlFlow?.targetStep, instructions[4].step);
-  assert.ok(range.branches.includes(instructions[2]));
+  assert.equal(requireValue(range).kind, 'IF');
+  assert.equal(requireValue(range).start, instructions[0]);
+  assert.equal(requireValue(range).end, instructions[4]);
+  assert.equal(requireValue(range).lane, 0);
+  for (const network of networks.slice(0, 5))
+    assert.ok(network.controlRanges?.includes(requireValue(range)));
+  assert.equal(requireValue(networks[5]).controlRanges, undefined);
+  assert.equal(
+    requireValue(instructions[2]).controlFlow?.targetId,
+    requireValue(instructions[4]).id,
+  );
+  assert.equal(
+    requireValue(instructions[2]).controlFlow?.targetStep,
+    requireValue(instructions[4]).step,
+  );
+  assert.ok(requireValue(range).branches.includes(requireValue(instructions[2])));
   assert.deepEqual(warnings(networks), []);
   assert.doesNotThrow(() => JSON.stringify(networks));
 });
@@ -116,8 +124,11 @@ test('many ELSIF branches resolve independently without limiting their count', (
   );
   assert.equal(gates.length, 9);
   for (let index = 0; index < branches.length; index++) {
-    assert.equal(gates[index].controlFlow?.targetId, branches[index].id);
-    assert.equal(branches[index].controlFlow?.targetId, end.id);
+    assert.equal(
+      requireValue(gates[index]).controlFlow?.targetId,
+      requireValue(branches[index]).id,
+    );
+    assert.equal(requireValue(branches[index]).controlFlow?.targetId, end.id);
   }
   assert.equal(ranges(networks).length, 1);
   assert.deepEqual(warnings(networks), []);
@@ -146,12 +157,18 @@ test('CASE alternatives and their condition gates use only the matching CASE sco
   assignControlFlow(networks);
   const [range] = ranges(networks);
   const end = first(instructions, 'ENDCASE');
-  assert.equal(range.kind, 'CASE');
-  assert.equal(range.end, end);
-  assert.equal(instructions[5].controlFlow?.targetId, instructions[7].id);
-  assert.equal(instructions[9].controlFlow?.targetId, instructions[11].id);
-  assert.equal(instructions[11].controlFlow?.targetId, end.id);
-  assert.ok(networks.every((network) => network.controlRanges?.includes(range)));
+  assert.equal(requireValue(range).kind, 'CASE');
+  assert.equal(requireValue(range).end, end);
+  assert.equal(
+    requireValue(instructions[5]).controlFlow?.targetId,
+    requireValue(instructions[7]).id,
+  );
+  assert.equal(
+    requireValue(instructions[9]).controlFlow?.targetId,
+    requireValue(instructions[11]).id,
+  );
+  assert.equal(requireValue(instructions[11]).controlFlow?.targetId, end.id);
+  assert.ok(networks.every((network) => network.controlRanges?.includes(requireValue(range))));
   assert.deepEqual(warnings(networks), []);
 });
 
@@ -184,17 +201,35 @@ test('nested loops resolve nearest EXIT while FBRET leaves lexical IF and loop r
       ['IF', 2],
     ],
   );
-  assert.equal(instructions[10].controlFlow?.targetId, instructions[13].id);
-  assert.equal(instructions[14].controlFlow?.targetId, instructions[15].id);
-  assert.equal(instructions[13].controlFlow?.targetId, instructions[4].id);
-  assert.equal(instructions[15].controlFlow?.targetId, instructions[0].id);
-  assert.equal(instructions[3].controlFlow?.targetId, instructions[15].id);
-  assert.equal(instructions[6].controlFlow?.targetId, instructions[13].id);
-  assert.equal(instructions[11].controlFlow?.kind, 'return');
-  assert.equal(instructions[11].controlFlow?.targetId, undefined);
-  assert.ok(networks[11].controlRanges?.includes(all[0]));
-  assert.ok(networks[11].controlRanges?.includes(all[1]));
-  assert.ok(networks[11].controlRanges?.includes(all[2]));
+  assert.equal(
+    requireValue(instructions[10]).controlFlow?.targetId,
+    requireValue(instructions[13]).id,
+  );
+  assert.equal(
+    requireValue(instructions[14]).controlFlow?.targetId,
+    requireValue(instructions[15]).id,
+  );
+  assert.equal(
+    requireValue(instructions[13]).controlFlow?.targetId,
+    requireValue(instructions[4]).id,
+  );
+  assert.equal(
+    requireValue(instructions[15]).controlFlow?.targetId,
+    requireValue(instructions[0]).id,
+  );
+  assert.equal(
+    requireValue(instructions[3]).controlFlow?.targetId,
+    requireValue(instructions[15]).id,
+  );
+  assert.equal(
+    requireValue(instructions[6]).controlFlow?.targetId,
+    requireValue(instructions[13]).id,
+  );
+  assert.equal(requireValue(instructions[11]).controlFlow?.kind, 'return');
+  assert.equal(requireValue(instructions[11]).controlFlow?.targetId, undefined);
+  assert.ok(requireValue(networks[11]).controlRanges?.includes(requireValue(all[0])));
+  assert.ok(requireValue(networks[11]).controlRanges?.includes(requireValue(all[1])));
+  assert.ok(requireValue(networks[11]).controlRanges?.includes(requireValue(all[2])));
   assert.deepEqual(warnings(networks), []);
 });
 
@@ -209,12 +244,18 @@ test('REPEAT UNTIL condition ENDREPEAT retains the condition and links the loop 
   ]);
   assignControlFlow(networks);
   const [range] = ranges(networks);
-  assert.equal(range.kind, 'REPEAT');
-  assert.equal(range.end, instructions[4]);
-  assert.equal(instructions[4].controlFlow?.targetId, instructions[0].id);
-  assert.equal(instructions[2].controlFlow?.targetId, instructions[4].id);
-  assert.deepEqual(instructions[3].operands, ['D0', 'K4']);
-  assert.equal(networks[5].controlRanges, undefined);
+  assert.equal(requireValue(range).kind, 'REPEAT');
+  assert.equal(requireValue(range).end, instructions[4]);
+  assert.equal(
+    requireValue(instructions[4]).controlFlow?.targetId,
+    requireValue(instructions[0]).id,
+  );
+  assert.equal(
+    requireValue(instructions[2]).controlFlow?.targetId,
+    requireValue(instructions[4]).id,
+  );
+  assert.deepEqual(requireValue(instructions[3]).operands, ['D0', 'K4']);
+  assert.equal(requireValue(networks[5]).controlRanges, undefined);
   assert.deepEqual(warnings(networks), []);
 });
 
@@ -231,9 +272,14 @@ test('generated stack and allocation markers do not invent ranges or JMPO destin
   ]);
   assignControlFlow(networks);
   assert.deepEqual(ranges(networks), []);
-  for (const index of [0, 1, 3, 4]) assert.equal(instructions[index].controlFlow?.kind, 'system');
-  assert.deepEqual(instructions[2].controlFlow, { kind: 'jump', label: '生成ジャンプ' });
-  for (const index of [5, 6, 7]) assert.equal(instructions[index].controlFlow, undefined);
+  for (const index of [0, 1, 3, 4])
+    assert.equal(requireValue(instructions[index]).controlFlow?.kind, 'system');
+  assert.deepEqual(requireValue(instructions[2]).controlFlow, {
+    kind: 'jump',
+    label: '生成ジャンプ',
+  });
+  for (const index of [5, 6, 7])
+    assert.equal(requireValue(instructions[index]).controlFlow, undefined);
   assert.deepEqual(warnings(networks), []);
 });
 
@@ -251,12 +297,21 @@ test('ordinary jumps resolve unique P and #P definitions but not missing or dupl
     ['CJ', 'K2'],
   ]);
   assignControlFlow(networks);
-  assert.equal(instructions[2].controlFlow?.targetId, instructions[0].id);
-  assert.equal(instructions[3].controlFlow?.targetId, instructions[1].id);
-  assert.equal(instructions[4].controlFlow?.targetStep, instructions[1].step);
+  assert.equal(
+    requireValue(instructions[2]).controlFlow?.targetId,
+    requireValue(instructions[0]).id,
+  );
+  assert.equal(
+    requireValue(instructions[3]).controlFlow?.targetId,
+    requireValue(instructions[1]).id,
+  );
+  assert.equal(
+    requireValue(instructions[4]).controlFlow?.targetStep,
+    requireValue(instructions[1]).step,
+  );
   for (const index of [7, 8, 9]) {
-    assert.equal(instructions[index].controlFlow?.targetId, undefined);
-    assert.equal(networks[index].warnings.length, 1);
+    assert.equal(requireValue(instructions[index]).controlFlow?.targetId, undefined);
+    assert.equal(requireValue(networks[index]).warnings.length, 1);
   }
   assert.equal(warnings(networks).length, 3);
 });
@@ -286,12 +341,12 @@ test('mismatched nesting is warned without closing a different range or losing r
   }));
   assignControlFlow(networks);
   const [outer, inner] = ranges(networks);
-  assert.equal(inner.end, instructions[7]);
-  assert.equal(outer.end, instructions[8]);
-  assert.equal(instructions[6].controlFlow?.targetId, undefined);
-  assert.ok(networks[6].warnings.length);
-  assert.ok(networks[9].warnings.length);
-  assert.ok(networks[10].warnings.length);
+  assert.equal(requireValue(inner).end, instructions[7]);
+  assert.equal(requireValue(outer).end, instructions[8]);
+  assert.equal(requireValue(instructions[6]).controlFlow?.targetId, undefined);
+  assert.ok(requireValue(networks[6]).warnings.length);
+  assert.ok(requireValue(networks[9]).warnings.length);
+  assert.ok(requireValue(networks[10]).warnings.length);
   assert.deepEqual(
     instructions.map(({ id, sourceRow, step, op, operands, note, statement }) => ({
       id,
@@ -317,22 +372,22 @@ test('duplicate ELSE and a later ELSIF are not treated as valid branches', () =>
   ]);
   assignControlFlow(networks);
   const [range] = ranges(networks);
-  assert.deepEqual(range.branches, [instructions[1], instructions[2]]);
-  assert.ok(networks[3].warnings.length);
-  assert.ok(networks[4].warnings.length);
-  assert.equal(instructions[3].controlFlow?.targetId, undefined);
-  assert.equal(instructions[4].controlFlow?.targetId, undefined);
-  assert.equal(range.end, instructions[5]);
+  assert.deepEqual(requireValue(range).branches, [instructions[1], instructions[2]]);
+  assert.ok(requireValue(networks[3]).warnings.length);
+  assert.ok(requireValue(networks[4]).warnings.length);
+  assert.equal(requireValue(instructions[3]).controlFlow?.targetId, undefined);
+  assert.equal(requireValue(instructions[4]).controlFlow?.targetId, undefined);
+  assert.equal(requireValue(range).end, instructions[5]);
 });
 
 test('unfinished ranges and EXIT have no guessed end, and program calls keep no shared state', () => {
   const open = fixture([['STFOR'], ['FORDO'], ['IF'], ['THEN'], ['EXIT']]);
   assignControlFlow(open.networks);
   assert.ok(ranges(open.networks).every((range) => range.end === undefined));
-  assert.equal(open.instructions[4].controlFlow?.targetId, undefined);
-  assert.ok(open.networks[0].warnings.length);
-  assert.ok(open.networks[2].warnings.length);
-  assert.ok(open.networks[4].warnings.length);
+  assert.equal(requireValue(open.instructions[4]).controlFlow?.targetId, undefined);
+  assert.ok(requireValue(open.networks[0]).warnings.length);
+  assert.ok(requireValue(open.networks[2]).warnings.length);
+  assert.ok(requireValue(open.networks[4]).warnings.length);
   const next = fixture([['ENDIF'], ['ENDFOR'], ['JMP', 'P10']]);
   assignControlFlow(next.networks);
   assert.deepEqual(ranges(next.networks), []);
@@ -349,12 +404,15 @@ test('ranges include networks with grouped boundaries and repeat assignment does
   );
   assignControlFlow(networks);
   assert.equal(ranges(networks).length, 1);
-  assert.ok(networks[0].controlRanges?.length);
-  assert.ok(networks[1].controlRanges?.length);
-  assert.equal(networks[2].controlRanges, undefined);
+  assert.ok(requireValue(networks[0]).controlRanges?.length);
+  assert.ok(requireValue(networks[1]).controlRanges?.length);
+  assert.equal(requireValue(networks[2]).controlRanges, undefined);
   const before = warnings(networks);
   assignControlFlow(networks);
   assert.deepEqual(warnings(networks), before);
   assert.equal(ranges(networks).length, 1);
-  assert.equal(instructions[1].controlFlow?.targetId, instructions[3].id);
+  assert.equal(
+    requireValue(instructions[1]).controlFlow?.targetId,
+    requireValue(instructions[3]).id,
+  );
 });

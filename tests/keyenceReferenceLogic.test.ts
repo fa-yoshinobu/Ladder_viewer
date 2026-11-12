@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -39,9 +40,13 @@ test('word bit, work and calculation contacts retain their join and negation', (
       'OUT MR9399',
     ]);
     const [network] = buildKeyenceNetworks(p),
-      condition = network.actions[0].condition!;
-    assert.deepEqual(network.warnings, []);
-    assert.equal(network.actions.length, 1, 'contacts must not become output commands');
+      condition = requireValue(requireValue(network).actions[0]).condition!;
+    assert.deepEqual(requireValue(network).warnings, []);
+    assert.equal(
+      requireValue(network).actions.length,
+      1,
+      'contacts must not become output commands',
+    );
     assert.equal(condition.kind, 'or');
     if (condition.kind !== 'or') continue;
     assert.equal(condition.left.kind, 'and');
@@ -51,7 +56,7 @@ test('word bit, work and calculation contacts retain their join and negation', (
       assert.equal(contact.kind, 'contact');
       if (contact.kind !== 'contact') return;
       assert.equal(contact.comparison, comparison);
-      assert.equal(contact.negated, /B(?:\.D)?$/.test(p.instructions[index].opcode));
+      assert.equal(contact.negated, /B(?:\.D)?$/.test(requireValue(p.instructions[index]).opcode));
       assert.equal(contact.instruction, p.instructions[index]);
     });
   }
@@ -68,7 +73,7 @@ test('contact diff keys ignore join role but preserve bit width and contact pola
       keyenceContactKey(load, [...operands]),
       keyenceContactKey(negated, [...operands]),
     );
-    const instruction = program([`${load} ${operands.join(' ')}`]).instructions[0];
+    const instruction = requireValue(program([`${load} ${operands.join(' ')}`]).instructions[0]);
     const difference = {
       kind: 'changed' as const,
       opChanged: true,
@@ -104,10 +109,10 @@ test('STG starts a stage contact and retains the following condition on its outp
     [['STP'], ['STG', 'AND', 'ENDS'], ['STG', 'ANB', 'JMP'], ['STE']],
   );
   assert.deepEqual(
-    networks.map((n) => expression(n.actions[0].condition)),
+    networks.map((n) => expression(requireValue(n.actions[0]).condition)),
     ['TRUE', '(MR9401 & MR9402)', '(MR9403 & !MR9404)', 'TRUE'],
   );
-  const stage = networks[1].actions[0].condition!;
+  const stage = requireValue(requireValue(networks[1]).actions[0]).condition!;
   assert.equal(stage.kind, 'and');
   if (stage.kind === 'and' && stage.left.kind === 'contact')
     assert.equal(stage.left.comparison, 'STG');
@@ -129,7 +134,7 @@ test('three-input commands consume and preserve every independent condition', ()
     const p = program(['LD MR9501', 'AND MR9502', 'LD MR9503', 'OR MR9504', 'LD MR9505', command]);
     const before = structuredClone(p),
       networks = buildKeyenceNetworks(p),
-      action = networks[0].actions[0];
+      action = requireValue(requireValue(networks[0]).actions[0]);
     assert.deepEqual(
       action.inputConditions?.map((input) => input.name),
       names,
@@ -138,7 +143,7 @@ test('three-input commands consume and preserve every independent condition', ()
       action.inputConditions?.map((input) => expression(input.condition)),
       ['(MR9501 & MR9502)', '(MR9503 | MR9504)', 'MR9505'],
     );
-    assert.equal(action.condition, action.inputConditions?.[0].condition);
+    assert.equal(action.condition, action.inputConditions?.[0]?.condition);
     assert.deepEqual(
       networks.flatMap((n) => n.warnings),
       [],
@@ -164,12 +169,17 @@ test('three-input commands preserve deeper logic blocks and diagnose missing inp
       'OUT MR9899',
     ]),
   );
-  assert.deepEqual(network.warnings, []);
-  assert.equal(expression(network.actions[1].condition), '(MR9800 & MR9801)');
-  const missing = buildKeyenceNetworks(program(['LD MR9804', 'SFT MR9805 MR9810']))[0];
+  assert.deepEqual(requireValue(network).warnings, []);
+  assert.equal(
+    expression(requireValue(requireValue(network).actions[1]).condition),
+    '(MR9800 & MR9801)',
+  );
+  const missing = requireValue(
+    buildKeyenceNetworks(program(['LD MR9804', 'SFT MR9805 MR9810']))[0],
+  );
   assert.match(missing.warnings.join('\n'), /SFT.*D\/CLK\/RES.*不足/);
   assert.deepEqual(
-    missing.actions[0].inputConditions?.map((input) => expression(input.condition)),
+    requireValue(missing.actions[0]).inputConditions?.map((input) => expression(input.condition)),
     ['TRUE', 'TRUE', 'MR9804'],
   );
 });
@@ -194,8 +204,8 @@ test('independent control markers never inherit a preceding circuit condition', 
     const p = program(['LD MR9901', 'OUT MR9902', command, 'LD MR9903', 'OUT MR9904']),
       networks = buildKeyenceNetworks(p);
     assert.equal(networks.length, 3, command);
-    assert.equal(networks[1].instructions.length, 1, command);
-    assert.equal(networks[1].actions[0].condition, null, command);
+    assert.equal(requireValue(networks[1]).instructions.length, 1, command);
+    assert.equal(requireValue(requireValue(networks[1]).actions[0]).condition, null, command);
     assert.deepEqual(
       networks.flatMap((n) => n.instructions),
       p.instructions,
@@ -211,8 +221,16 @@ test('conditional jump, call, return and break commands keep their input conditi
   for (const command of ['CJ #780', 'NCJ #781', 'SCJ #782', 'CALL #783', 'RETURN', 'BREAK']) {
     const networks = buildKeyenceNetworks(program(['LD MR9701', command, 'OUT MR9702']));
     assert.equal(networks.length, 1, command);
-    assert.equal(expression(networks[0].actions[0].condition), 'MR9701', command);
-    assert.equal(networks[0].actions[1].condition, networks[0].actions[0].condition, command);
+    assert.equal(
+      expression(requireValue(requireValue(networks[0]).actions[0]).condition),
+      'MR9701',
+      command,
+    );
+    assert.equal(
+      requireValue(requireValue(networks[0]).actions[1]).condition,
+      requireValue(requireValue(networks[0]).actions[0]).condition,
+      command,
+    );
   }
 });
 

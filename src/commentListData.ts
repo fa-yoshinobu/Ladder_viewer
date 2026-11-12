@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { addressParts } from './address';
 import type { DeviceComments } from './comments';
 import { keyenceCommentAddress } from './keyence/comments';
@@ -30,11 +31,13 @@ function compareAddresses(
   const left = deviceParts[manufacturer].exec(a),
     right = deviceParts[manufacturer].exec(b);
   if (left && right && left[1] === right[1]) {
-    const radix = (manufacturer === 'mitsubishi' ? /^(X|Y|DX|DY|B|W)$/ : /^(B|W)$/).test(left[1])
+    const radix = (manufacturer === 'mitsubishi' ? /^(X|Y|DX|DY|B|W)$/ : /^(B|W)$/).test(
+      requireValue(left[1]),
+    )
       ? 16
       : 10;
     const result =
-      parseInt(left[2], radix) - parseInt(right[2], radix) ||
+      parseInt(requireValue(left[2]), radix) - parseInt(requireValue(right[2]), radix) ||
       parseInt(left[3] ?? '0', 16) - parseInt(right[3] ?? '0', 16);
     if (Number.isFinite(result) && result) return result;
   }
@@ -106,9 +109,12 @@ export function mitsubishiCommentList(
 export function keyenceCommentList(program: KeyenceProgram, title = program.name): CommentListData {
   const inline = program.instructions
     .filter(
-      (i) => i.operands.length === 1 && i.comment && commentListAddress(i.operands[0], 'keyence'),
+      (i) =>
+        i.operands.length === 1 &&
+        i.comment &&
+        commentListAddress(requireValue(i.operands[0]), 'keyence'),
     )
-    .map((i) => ({ address: i.operands[0], comment: i.comment }));
+    .map((i) => ({ address: requireValue(i.operands[0]), comment: i.comment }));
   return {
     title,
     manufacturer: 'keyence',

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { programFormat } from '../src/programFormat.ts';
@@ -29,10 +30,10 @@ test('MNM uses its own model and preserves device code, module headers, ENDH and
     program.instructions.map((i) => i.opcode),
     ['LD', 'OUT', 'END', 'ENDH'],
   );
-  assert.deepEqual(program.instructions[0].operands, ['CR1234']);
-  assert.equal(program.instructions[0].sourceLine, 5);
+  assert.deepEqual(requireValue(program.instructions[0]).operands, ['CR1234']);
+  assert.equal(requireValue(program.instructions[0]).sourceLine, 5);
   assert.equal(program.text, mnm);
-  assert.equal(program.comments[0].text, 'synthetic comment');
+  assert.equal(requireValue(program.comments[0]).text, 'synthetic comment');
   assert.equal('networks' in program, false);
   assert.equal('cpu' in program, false);
 });
@@ -65,9 +66,9 @@ test('mixed batch keeps manufacturer models and Mitsubishi comments separate', (
     p.keyencePrograms.map((i) => i.name),
     ['kv.mnm'],
   );
-  assert.equal(p.commentsByProgram['gx.csv'].Y20, '出力');
+  assert.equal(requireValue(p.commentsByProgram['gx.csv']).Y20, '出力');
   assert.equal(p.commentsByProgram['kv.mnm'], undefined);
-  assert.equal('pins' in p.keyencePrograms[0].instructions[0], false);
+  assert.equal('pins' in requireValue(requireValue(p.keyencePrograms[0]).instructions[0]), false);
 });
 test('a renamed CSV never falls through from MNM to the Mitsubishi parser', () => {
   const p = parseCsvBatch([
@@ -76,20 +77,23 @@ test('a renamed CSV never falls through from MNM to the Mitsubishi parser', () =
   ]);
   assert.equal(p.keyencePrograms.length, 0);
   assert.equal(p.programs.length, 1);
-  assert.match(p.errors[0].message, /キーエンスMNM.*DEVICE/);
+  assert.match(requireValue(p.errors[0]).message, /キーエンスMNM.*DEVICE/);
 });
 
 test('MNM separates inline comments outside quoted strings and preserves raw source', () => {
   const source =
     'DEVICE:99\n;MODULE:Example\n; First section\n; Second line\nMOV "part;one ""quoted""" DM001; inline comment\nOUT R001 ; output note\n';
   const p = parseKeyenceMnm(utf8(source), 'example.mnm');
-  assert.deepEqual(p.instructions[0].operands, ['"part;one ""quoted"""', 'DM001']);
-  assert.equal(p.instructions[0].comment, 'inline comment');
-  assert.equal(p.instructions[0].statement, 'First section\nSecond line');
-  assert.equal(p.instructions[0].sourceLine, 5);
-  assert.equal(p.instructions[0].raw, 'MOV "part;one ""quoted""" DM001; inline comment');
-  assert.equal(p.instructions[1].comment, 'output note');
-  assert.equal(p.instructions[1].statement, '');
+  assert.deepEqual(requireValue(p.instructions[0]).operands, ['"part;one ""quoted"""', 'DM001']);
+  assert.equal(requireValue(p.instructions[0]).comment, 'inline comment');
+  assert.equal(requireValue(p.instructions[0]).statement, 'First section\nSecond line');
+  assert.equal(requireValue(p.instructions[0]).sourceLine, 5);
+  assert.equal(
+    requireValue(p.instructions[0]).raw,
+    'MOV "part;one ""quoted""" DM001; inline comment',
+  );
+  assert.equal(requireValue(p.instructions[1]).comment, 'output note');
+  assert.equal(requireValue(p.instructions[1]).statement, '');
   assert.equal(p.comments.length, 2);
   assert.equal(p.text, source);
   assert.deepEqual(p.deviceComments, {});
@@ -120,7 +124,7 @@ test('MNM external comments remain independent from inline comments and other pr
     comments,
   );
   const b = parseKeyenceMnm(utf8('DEVICE:99\nLD R001\nOUT R002\n'), 'b.mnm');
-  assert.equal(a.instructions[0].comment, '命令自身のコメント');
+  assert.equal(requireValue(a.instructions[0]).comment, '命令自身のコメント');
   assert.equal(keyenceDeviceComment('R001', a.deviceComments), '外部コメント');
   assert.equal(keyenceDeviceComment('R002', a.deviceComments), '');
   assert.equal(keyenceDeviceComment('R001', b.deviceComments), '');
@@ -148,8 +152,8 @@ test('batch assigns Keyence comment tables only within their folder before parsi
   assert.equal(keyenceDeviceComment('CR1234', program('a/00.mnm').deviceComments), 'フォルダーA');
   assert.equal(keyenceDeviceComment('CR1234', program('b/00.mnm').deviceComments), 'フォルダーB');
   assert.equal(keyenceDeviceComment('CR1234', program('c/00.mnm').deviceComments), '');
-  assert.equal(p.commentsByProgram['a/gx.csv'].Y20, '三菱の出力');
-  assert.equal(p.commentsByProgram['a/gx.csv'].CR1234, undefined);
+  assert.equal(requireValue(p.commentsByProgram['a/gx.csv']).Y20, '三菱の出力');
+  assert.equal(requireValue(p.commentsByProgram['a/gx.csv']).CR1234, undefined);
   assert.equal(p.programs.length, 1);
   assert.equal(p.keyencePrograms.length, 3);
 });
@@ -167,9 +171,9 @@ test('batch honors named comment tables separately for each manufacturer', () =>
     },
   ]);
   assert.deepEqual(p.errors, []);
-  assert.equal(p.commentsByProgram['gx.csv'].Y20, '採用');
+  assert.equal(requireValue(p.commentsByProgram['gx.csv']).Y20, '採用');
   assert.equal(
-    keyenceDeviceComment('CR1234', p.keyencePrograms[0].deviceComments),
+    keyenceDeviceComment('CR1234', requireValue(p.keyencePrograms[0]).deviceComments),
     'キーエンスのみ',
   );
 });
@@ -197,7 +201,10 @@ test('batch reports one progress event per file and one error per malformed inpu
     p.errors.map((error) => error.name),
     ['bad.mnm', 'ignored.txt'],
   );
-  assert.equal(keyenceDeviceComment('CR1234', p.keyencePrograms[0].deviceComments), '架空コメント');
+  assert.equal(
+    keyenceDeviceComment('CR1234', requireValue(p.keyencePrograms[0]).deviceComments),
+    '架空コメント',
+  );
 });
 
 test('malformed Keyence comment body is identified by its header and never routed to GX', () => {
@@ -213,8 +220,8 @@ test('malformed Keyence comment body is identified by its header and never route
     (_done, _total, name) => events.push(name),
   );
   assert.equal(p.errors.length, 1);
-  assert.equal(p.errors[0].name, 'comment.csv');
-  assert.match(p.errors[0].message, /キーエンスのコメントCSV/);
+  assert.equal(requireValue(p.errors[0]).name, 'comment.csv');
+  assert.match(requireValue(p.errors[0]).message, /キーエンスのコメントCSV/);
   assert.equal(p.programs.length, 0);
   assert.equal(p.keyencePrograms.length, 1);
   assert.deepEqual(events, ['comment.csv', 'program.mnm']);

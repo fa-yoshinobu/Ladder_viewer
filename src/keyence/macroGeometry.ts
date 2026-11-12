@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import { CELL } from '../ladderMetrics';
 import { commentLines } from '../textLayout';
 import type { KeyenceInstruction } from './model';
@@ -15,7 +16,11 @@ export function keyenceMacroGeometry(instruction: KeyenceInstruction, showCommen
       operandIndex: index + 1,
       comment,
       commentLines: showComments
-        ? commentLines(comment, Math.max(4, Math.floor((spans[index] * CELL - 12) / 6)), 2)
+        ? commentLines(
+            comment,
+            Math.max(4, Math.floor((requireValue(spans[index]) * CELL - 12) / 6)),
+            2,
+          )
         : [],
     };
   });

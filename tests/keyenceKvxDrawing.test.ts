@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -48,20 +49,24 @@ const texts = (s: KeyenceSymbol) =>
     .map((n) => ({ value: textContent(n), x: n.props.x, y: n.props.y }));
 
 test('KV-X functions place confirmed input, output and inout arguments on their own sides', () => {
-  const d = drawings([
-    'LD MR7',
-    'FUN AryShiftL DummySamples +5 +2',
-    'FUN MOVE DummyInput DummyOutput',
-    'END',
-  ])[0];
+  const d = requireValue(
+    drawings([
+      'LD MR7',
+      'FUN AryShiftL DummySamples +5 +2',
+      'FUN MOVE DummyInput DummyOutput',
+      'END',
+    ])[0],
+  );
   const shift = d.symbols.find((s) => s.instruction.fb?.name === 'AryShiftL')!,
     move = d.symbols.find((s) => s.instruction.fb?.name === 'MOVE')!;
   assert.equal(shift.instruction.fb!.knownSignature, true);
   const g = keyenceBlockGeometry(shift.instruction.fb!),
     fields = texts(shift).filter((t) => t.value === 'DummySamples');
   assert.equal(fields.length, 2);
-  assert.ok(fields[0].x < shift.x + g.left && fields[1].x > shift.x + g.right);
-  assert.equal(fields[0].y, fields[1].y);
+  assert.ok(
+    requireValue(fields[0]).x < shift.x + g.left && requireValue(fields[1]).x > shift.x + g.right,
+  );
+  assert.equal(requireValue(fields[0]).y, requireValue(fields[1]).y);
   assert.ok(texts(shift).some((t) => t.value === 'EN'));
   assert.ok(texts(shift).some((t) => t.value === 'ENO'));
   const mg = keyenceBlockGeometry(move.instruction.fb!),
@@ -79,10 +84,12 @@ test('KV-X functions place confirmed input, output and inout arguments on their 
     'start',
   );
   assert.ok(move.y > shift.y + g.bottom, 'the following block clears every pin row');
-  const socket = drawings([
-    'LD MR5',
-    'FBEXEC SocketTCP_ActiveOpen DummyLink +1 +0 DummyHost +12345 DummySocket ??? ??? ???',
-  ])[0].symbols.find((s) => s.kind === 'fb')!;
+  const socket = requireValue(
+    drawings([
+      'LD MR5',
+      'FBEXEC SocketTCP_ActiveOpen DummyLink +1 +0 DummyHost +12345 DummySocket ??? ??? ???',
+    ])[0],
+  ).symbols.find((s) => s.kind === 'fb')!;
   assert.deepEqual(
     keyenceBlockGeometry(socket.instruction.fb!).pins.find((p) => p.pin.name === 'EthernetPort')!
       .nameLines,
@@ -91,18 +98,20 @@ test('KV-X functions place confirmed input, output and inout arguments on their 
 });
 
 test('KV-X condition blocks keep EN/Result and In/Q wiring, with an unwired FUNLD input', () => {
-  const d = drawings([
-    'FUNLD DegToRad DummyRadians DummyDegrees',
-    'FUNAND EQ DummyLeft DummyRight',
-    'FBEAND TON DummyTimer T#125ms ???',
-    'OUT DummyResult',
-  ])[0];
+  const d = requireValue(
+    drawings([
+      'FUNLD DegToRad DummyRadians DummyDegrees',
+      'FUNAND EQ DummyLeft DummyRight',
+      'FBEAND TON DummyTimer T#125ms ???',
+      'OUT DummyResult',
+    ])[0],
+  );
   const blocks = d.symbols.filter((s) => s.kind === 'fb');
   assert.equal(blocks.length, 3);
   assert.ok(blocks.every((s) => s.condition));
   for (const [index, expected] of ['ENO', 'Result', 'Q'].entries())
-    assert.ok(texts(blocks[index]).some((t) => t.value === expected));
-  const first = blocks[0],
+    assert.ok(texts(requireValue(blocks[index])).some((t) => t.value === expected));
+  const first = requireValue(blocks[0]),
     g = keyenceBlockGeometry(first.instruction.fb!);
   assert.ok(texts(first).some((t) => t.value === 'EN'));
   assert.ok(
@@ -115,10 +124,12 @@ test('KV-X condition blocks keep EN/Result and In/Q wiring, with an unwired FUNL
     ),
   );
   assert.ok(
-    texts(blocks[2]).some(
+    texts(requireValue(blocks[2])).some(
       (t) =>
         t.value === 'DummyTimer' &&
-        t.y < blocks[2].y + keyenceBlockGeometry(blocks[2].instruction.fb!).bodyTop,
+        t.y <
+          requireValue(blocks[2]).y +
+            keyenceBlockGeometry(requireValue(blocks[2]).instruction.fb!).bodyTop,
     ),
   );
   for (const mode of ['wrap', 'scroll'] as const) {
@@ -135,13 +146,15 @@ test('KV-X condition blocks keep EN/Result and In/Q wiring, with an unwired FUNL
 test('FB instances and long original arguments wrap without truncation and enlarge only their network', () => {
   const instance = 'DummyInstance_' + 'LongName_'.repeat(8),
     value = 'DummyArgument_' + 'FullIdentifier_'.repeat(12);
-  const d = drawings(['LD MR8', `FBEXEC UnknownBlock ${instance} ${value} #9`, 'OUT MR9'])[0];
+  const d = requireValue(
+    drawings(['LD MR8', `FBEXEC UnknownBlock ${instance} ${value} #9`, 'OUT MR9'])[0],
+  );
   const s = d.symbols.find((s) => s.kind === 'fb')!,
     g = keyenceBlockGeometry(s.instruction.fb!);
   assert.equal(g.known, false);
   assert.equal(s.width, 6 * CELL);
   assert.ok(g.instanceLines.length > 1);
-  assert.ok(g.pins[0].valueLines.length > 2);
+  assert.ok(requireValue(g.pins[0]).valueLines.length > 2);
   assert.ok(texts(s).some((t) => t.value === instance));
   assert.ok(texts(s).some((t) => t.value === value));
   assert.ok(!texts(s).some((t) => t.value.includes('…')));
@@ -149,16 +162,15 @@ test('FB instances and long original arguments wrap without truncation and enlar
   assert.ok(s.y + g.top >= d.headerHeight);
   assert.ok(s.y + g.bottom < d.height);
   assert.ok(d.symbols.find((symbol) => symbol.instruction.opcode === 'OUT')!.y > s.y + g.bottom);
-  const normal = drawings(['LD MR1', 'OUT MR2'])[0];
+  const normal = requireValue(drawings(['LD MR1', 'OUT MR2'])[0]);
   assert.equal(normal.baseline, BASELINE);
   assert.equal(normal.rowHeight, ROW);
 });
 
 test('declared asymmetric pin rows and instance-only difference colors survive block rendering', () => {
-  const fifo = drawings([
-    'LD MR3',
-    'FUN FIFORead DummyTable +13 DummyCount DummyReadValue',
-  ])[0].symbols.find((s) => s.kind === 'fb')!;
+  const fifo = requireValue(
+    drawings(['LD MR3', 'FUN FIFORead DummyTable +13 DummyCount DummyReadValue'])[0],
+  ).symbols.find((s) => s.kind === 'fb')!;
   const g = keyenceBlockGeometry(fifo.instruction.fb!),
     fields = texts(fifo),
     right = fields.filter((t) => t.x > fifo.x + g.right);
@@ -172,8 +184,8 @@ test('declared asymmetric pin rows and instance-only difference colors survive b
   );
   for (const value of ['DummyTable', 'DummyCount'])
     assert.equal(
-      fields.filter((t) => t.value === value)[0].y,
-      fields.filter((t) => t.value === value)[1].y,
+      requireValue(fields.filter((t) => t.value === value)[0]).y,
+      requireValue(fields.filter((t) => t.value === value)[1]).y,
     );
   const before = ['LD MR4', 'FBEXEC StoragePrint DummyWriter "dummy.txt" DummyPayload ??? ??? ???'];
   const comparison = compareKeyencePrograms(

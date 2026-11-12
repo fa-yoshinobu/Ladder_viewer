@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 export type StTokenKind =
   'plain' | 'keyword' | 'type' | 'number' | 'string' | 'comment' | 'function';
 export interface StToken {
@@ -104,13 +105,14 @@ export function highlightStRows(
   const tokens = stTokens(source);
   let tokenIndex = 0;
   return rows.map((row, index) => {
-    const start = offsets[index],
+    const start = requireValue(offsets[index]),
       end = start + row.text.length,
       parts: { text: string; kind: StTokenKind }[] = [];
     if (start === end) return parts;
-    while (tokenIndex < tokens.length && tokens[tokenIndex].end <= start) tokenIndex++;
-    for (let n = tokenIndex; n < tokens.length && tokens[n].start < end; n++) {
-      const token = tokens[n];
+    while (tokenIndex < tokens.length && requireValue(tokens[tokenIndex]).end <= start)
+      tokenIndex++;
+    for (let n = tokenIndex; n < tokens.length && requireValue(tokens[n]).start < end; n++) {
+      const token = requireValue(tokens[n]);
       parts.push({
         text: source.slice(Math.max(start, token.start), Math.min(end, token.end)),
         kind: token.kind,

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram } from '../src/model.ts';
@@ -31,15 +32,15 @@ test('ST boundaries isolate branch bodies while THEN retains its contact conditi
     'OUT\tY10',
   ]);
   const gate = p.networks.find((n) => n.instructions.some((i) => i.op === 'THEN'))!;
-  assert.equal(gate.actions[0].condition?.kind, 'contact');
+  assert.equal(requireValue(gate.actions[0]).condition?.kind, 'contact');
   for (const address of ['Y8', 'Y9']) {
     const n = p.networks.find((n) => n.instructions.some((i) => i.operands.includes(address)))!;
-    assert.equal(n.actions[0].condition, null);
-    assert.equal(n.controlRanges?.[0].kind, 'IF');
+    assert.equal(requireValue(n.actions[0]).condition, null);
+    assert.equal(n.controlRanges?.[0]?.kind, 'IF');
   }
   const ordinary = p.networks.at(-1)!;
   assert.equal(ordinary.controlRanges, undefined);
-  assert.equal(ordinary.actions[0].condition?.kind, 'contact');
+  assert.equal(requireValue(ordinary.actions[0]).condition?.kind, 'contact');
   assert.equal(gridLayout(ordinary).pages, 1);
   assert.equal(gridLayout(ordinary).symbols.at(-1)!.col, COLUMNS - 1);
 });
@@ -47,12 +48,12 @@ test('ST boundaries isolate branch bodies while THEN retains its contact conditi
 test('standalone ST markers have no invented rung wiring or right-rail return', () => {
   const p = program(['STPUSH', 'IF', 'LD\tX8', 'THEN', 'OUT\tY8', 'ENDIF', 'STPOP', 'FBRET']);
   for (const n of p.networks.filter(
-    (n) => n.instructions.length === 1 && n.instructions[0].op !== 'OUT',
+    (n) => n.instructions.length === 1 && requireValue(n.instructions[0]).op !== 'OUT',
   )) {
     const grid = gridLayout(n);
-    assert.equal(grid.wires.length, 0, n.instructions[0].op);
-    assert.equal(grid.symbols[0].col, 0);
-    assert.equal(drawingPages(grid, 56, 'wrap')[0].outputs.length, 0);
+    assert.equal(grid.wires.length, 0, requireValue(n.instructions[0]).op);
+    assert.equal(requireValue(grid.symbols[0]).col, 0);
+    assert.equal(requireValue(drawingPages(grid, 56, 'wrap')[0]).outputs.length, 0);
   }
 });
 
@@ -92,7 +93,7 @@ test('scratch loads inside ST do not become unfinished ordinary ladder branches'
   const p = program(['STPUSH', 'IF', 'LD\tX8', 'LD\tX9', 'THEN', 'OUT\tY8', 'ENDIF', 'STPOP']);
   assert.equal(p.networks.flatMap((n) => n.warnings).length, 0);
   const gate = p.networks.find((n) => n.instructions.some((i) => i.op === 'THEN'))!;
-  assert.deepEqual(gate.actions[0].condition, {
+  assert.deepEqual(requireValue(gate.actions[0]).condition, {
     kind: 'contact',
     instruction: p.instructions.find((i) => i.op === 'LD' && i.operands[0] === 'X9'),
   });

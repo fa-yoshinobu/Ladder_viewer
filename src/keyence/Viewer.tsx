@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import { DetailPanel } from '../DetailPanel';
 import { blockRangeMenu, blockRangeText } from '../blockRangeCopy';
 import { openCommentList, showInstructionMenu, closeInstructionMenu } from '../CommentList';
@@ -32,6 +33,8 @@ import { fitZoom } from '../zoom';
 import { VirtualNetworkList } from '../VirtualNetworkList';
 import { visibleRange } from '../visibleRange';
 import { useSetting } from '../settings';
+import { MessageBanner } from '../MessageBanner';
+import { useDebouncedValue } from '../useDebouncedValue';
 
 interface Props {
   program: KeyenceProgram;
@@ -39,6 +42,9 @@ interface Props {
   busy: boolean;
   progress: string;
   error: string;
+  warning: string;
+  dismissError: () => void;
+  dismissWarning: () => void;
   dark: boolean;
   palette: string;
   changePalette: (value: string) => void;
@@ -56,6 +62,9 @@ export function KeyenceViewer({
   busy,
   progress,
   error,
+  warning,
+  dismissError,
+  dismissWarning,
   dark,
   palette,
   changePalette,
@@ -76,6 +85,7 @@ export function KeyenceViewer({
     [selectedNetwork, setSelectedNetwork] = useState('');
   const [query, setQuery] = useState(''),
     [searchIndex, setSearchIndex] = useState(-1);
+  const settledQuery = useDebouncedValue(query);
   const [viewMode, setViewMode] = useSetting('viewMode');
   const [searchMode, setSearchMode] = useState<'partial' | 'exact'>('partial');
   const [pendingTarget, setPendingTarget] = useState<KeyenceInstruction | null>(null);
@@ -133,7 +143,7 @@ export function KeyenceViewer({
       end = scrollTop + size.height * 2;
     const [first, last] = visibleRange(
       offsets.length,
-      (index) => ({ top: offsets[index], height: heights[index] }),
+      (index) => ({ top: requireValue(offsets[index]), height: requireValue(heights[index]) }),
       start,
       end,
     );
@@ -183,11 +193,11 @@ export function KeyenceViewer({
     }));
   }, [program]);
   const matches = useMemo(() => {
-    const needle = normalize(query);
+    const needle = normalize(settledQuery);
     return searchEntries
       .filter((entry) => searchTextMatches(entry.fields, needle, searchMode))
       .map((entry) => entry.item);
-  }, [searchEntries, query, searchMode]);
+  }, [searchEntries, settledQuery, searchMode]);
   const searchResults = useMemo(
     () =>
       matches.map((item) => ({
@@ -230,11 +240,11 @@ export function KeyenceViewer({
       setPendingTarget(null);
       return;
     }
-    const symbol = drawings[index].symbols.find((symbol) =>
+    const symbol = requireValue(drawings[index]).symbols.find((symbol) =>
       keyenceSymbolOwns(symbol, pendingTarget.id),
     );
     const networkElement = element.querySelector<HTMLElement>(
-      '[data-network="' + networks[index].id + '"]',
+      '[data-network="' + requireValue(networks[index]).id + '"]',
     );
     if (!symbol) {
       setPendingTarget(null);
@@ -255,13 +265,13 @@ export function KeyenceViewer({
     setPendingTarget(null);
   }, [pendingTarget, visible, drawings, zoom]);
   const moveTo = (index: number, item?: KeyenceInstruction) => {
-    const script = networks[index].script;
+    const script = requireValue(networks[index]).script;
     if (item && script && !script.expanded && script.instructionIds.includes(item.id)) {
       setExpandedScripts((old) => new Set([...old, script.id]));
       setScriptTarget(item);
       return;
     }
-    setSelectedNetwork(networks[index].id);
+    setSelectedNetwork(requireValue(networks[index]).id);
     if (item) {
       setSelected(item.id);
       setPendingTarget(item);
@@ -269,9 +279,10 @@ export function KeyenceViewer({
     const element = viewport.current;
     if (element) {
       const symbol =
-        item && drawings[index].symbols.find((symbol) => keyenceSymbolOwns(symbol, item.id));
+        item &&
+        requireValue(drawings[index]).symbols.find((symbol) => keyenceSymbolOwns(symbol, item.id));
       const stLine =
-        drawings[index].st && item?.st && normalize(query)
+        requireValue(drawings[index]).st && item?.st && normalize(query)
           ? item.st.lines.find((line) =>
               searchTextMatches(
                 [
@@ -286,10 +297,12 @@ export function KeyenceViewer({
             )
           : undefined;
       const stRow = stLine
-        ? (drawings[index].stRows?.findIndex((row) => row.sourceLine === stLine.sourceLine) ?? 0)
+        ? (requireValue(drawings[index]).stRows?.findIndex(
+            (row) => row.sourceLine === stLine.sourceLine,
+          ) ?? 0)
         : 0;
       const target =
-        dimensions.offsets[index] +
+        requireValue(dimensions.offsets[index]) +
         (stLine
           ? Math.max(0, (ST_HEADER_HEIGHT + Math.max(0, stRow) * ST_ROW_HEIGHT) * zoom - 60)
           : symbol
@@ -325,14 +338,14 @@ export function KeyenceViewer({
       setSelectedNetwork(instructionId);
     }
     if (viewport.current) {
-      viewport.current.scrollTop = Math.min(viewport.current.scrollTop, top);
+      viewport.current.scrollTop = Math.min(viewport.current.scrollTop, requireValue(top));
       setScrollTop(viewport.current.scrollTop);
     }
   };
   const select = (item: KeyenceInstruction) => {
     setSelected(item.id);
     const index = instructionNetworks.get(item.id);
-    if (index !== undefined) setSelectedNetwork(networks[index].id);
+    if (index !== undefined) setSelectedNetwork(requireValue(networks[index]).id);
   };
   const searchMove = (direction: number) => {
     if (!matches.length) return;
@@ -343,7 +356,7 @@ export function KeyenceViewer({
           : 0
         : (searchIndex + direction + matches.length) % matches.length;
     setSearchIndex(index);
-    const item = matches[index],
+    const item = requireValue(matches[index]),
       networkIndex = instructionNetworks.get(item.id);
     if (networkIndex !== undefined) moveTo(networkIndex, item);
   };
@@ -353,12 +366,35 @@ export function KeyenceViewer({
       index = item && instructionNetworks.get(item.id);
     if (item && index !== undefined) moveTo(index, item);
   }, [matches]);
+  const previousGeometry = useRef({ program, dimensions, networks });
   useLayoutEffect(() => {
     const index = viewAnchor.current,
       element = viewport.current;
-    if (index === null || !element) return;
+    const previous = previousGeometry.current;
+    previousGeometry.current = { program, dimensions, networks };
+    if (!element) return;
     viewAnchor.current = null;
-    element.scrollTop = dimensions.offsets[index] ?? 0;
+    if (index !== null) element.scrollTop = dimensions.offsets[index] ?? 0;
+    else if (previous.program === program && previous.dimensions !== dimensions) {
+      const old = previous.dimensions;
+      const [first] = visibleRange(
+        old.offsets.length,
+        (index) => ({
+          top: requireValue(old.offsets[index]),
+          height: requireValue(old.heights[index]),
+        }),
+        scrollTop + 2,
+        scrollTop + size.height,
+      );
+      const id = previous.networks[first]?.id;
+      const next = networks.findIndex((network) => network.id === id);
+      if (next >= 0)
+        element.scrollTop =
+          requireValue(dimensions.offsets[next]) +
+          (Math.max(0, scrollTop - requireValue(old.offsets[first])) /
+            Math.max(1, requireValue(old.heights[first]))) *
+            requireValue(dimensions.heights[next]);
+    }
     setScrollTop(element.scrollTop);
   }, [viewMode, dimensions]);
   const changeViewMode = (next: 'wrap' | 'scroll') => {
@@ -366,14 +402,16 @@ export function KeyenceViewer({
     const selectedIndex = networks.findIndex((network) => network.id === selectedNetwork);
     const selectedVisible =
       selectedIndex >= 0 &&
-      dimensions.offsets[selectedIndex] < scrollTop + size.height &&
-      dimensions.offsets[selectedIndex] + dimensions.heights[selectedIndex] > scrollTop;
+      requireValue(dimensions.offsets[selectedIndex]) < scrollTop + size.height &&
+      requireValue(dimensions.offsets[selectedIndex]) +
+        requireValue(dimensions.heights[selectedIndex]) >
+        scrollTop;
     viewAnchor.current = selectedVisible
       ? selectedIndex
       : Math.max(
           0,
           dimensions.offsets.findIndex(
-            (offset, index) => offset + dimensions.heights[index] > scrollTop,
+            (offset, index) => offset + requireValue(dimensions.heights[index]) > scrollTop,
           ),
         );
     setViewMode(next);
@@ -449,11 +487,14 @@ export function KeyenceViewer({
           </ViewerToolbar>
         </div>
       </div>
-      {(error || copyError) && (
-        <div class="error" role="alert">
-          {error || copyError}
-        </div>
-      )}
+      <MessageBanner
+        text={error || copyError}
+        dismiss={() => {
+          setCopyError('');
+          dismissError();
+        }}
+      />
+      <MessageBanner text={warning} warning dismiss={dismissWarning} />
       <div class="workspace">
         <aside class="navigation">
           <div class="panel-title">
@@ -474,7 +515,7 @@ export function KeyenceViewer({
                 <div>
                   <strong>
                     {network.statement.split('\n')[0] ||
-                      `元ファイル ${network.instructions[0].sourceLine}行`}
+                      `元ファイル ${requireValue(network.instructions[0]).sourceLine}行`}
                   </strong>
                   <small>
                     {network.actions
@@ -507,20 +548,20 @@ export function KeyenceViewer({
           >
             {visible.map((index) => (
               <section
-                key={networks[index].id}
+                key={requireValue(networks[index]).id}
                 class="kv-network"
-                data-network={networks[index].id}
+                data-network={requireValue(networks[index]).id}
                 style={{ top: dimensions.offsets[index], height: dimensions.heights[index] }}
               >
                 <HorizontalScroll
-                  enabled={scrolling[index]}
+                  enabled={requireValue(scrolling[index])}
                   width={LADDER_WIDTH * zoom}
-                  contentWidth={drawings[index].width * zoom}
-                  height={dimensions.heights[index]}
-                  label={`回路 元ファイル ${networks[index].instructions[0].sourceLine}行 横スクロール`}
+                  contentWidth={requireValue(drawings[index]).width * zoom}
+                  height={requireValue(dimensions.heights[index])}
+                  label={`回路 元ファイル ${requireValue(requireValue(networks[index]).instructions[0]).sourceLine}行 横スクロール`}
                 >
                   <KeyenceLadder
-                    drawing={drawings[index]}
+                    drawing={requireValue(drawings[index])}
                     zoom={zoom}
                     selected={selected}
                     onSelect={select}

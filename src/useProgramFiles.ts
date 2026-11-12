@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { BatchResult, CsvInput } from './batch';
 import { type DeviceComments } from './comments';
@@ -20,6 +21,7 @@ export function useProgramFiles({
   const [commentsByProgram, setCommentsByProgram] = useState<Record<string, DeviceComments>>({});
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
+  const [warning, setWarning] = useState('');
   const [busy, setBusy] = useState(false);
   const token = useRef(0);
   const inputWarnings = useRef<string[]>([]);
@@ -54,13 +56,14 @@ export function useProgramFiles({
       setPrograms(result.programs);
       setKeyencePrograms(result.keyencePrograms);
       setCommentsByProgram(result.commentsByProgram);
-      setError(failures.join('\n'));
+      setError('');
+      setWarning(failures.join('\n'));
 
-      if (result.programs.length) showProgram(result.programs[0]);
+      if (result.programs.length) showProgram(requireValue(result.programs[0]));
       else
         showKeyenceProgram(
           result.keyencePrograms.find((p) => /^Main$/i.test(p.moduleName)) ??
-            result.keyencePrograms[0],
+            requireValue(result.keyencePrograms[0]),
         );
     };
     worker.onerror = () => {
@@ -121,6 +124,7 @@ export function useProgramFiles({
     setBusy(true);
     setProgress(progress);
     setError('');
+    setWarning('');
     return request;
   }
   function submitFiles(inputs: CsvInput[], request: number) {
@@ -181,6 +185,9 @@ export function useProgramFiles({
     commentsByProgram,
     busy,
     error,
+    warning,
+    dismissError: () => setError(''),
+    dismissWarning: () => setWarning(''),
     progress,
     load,
     openSelection,

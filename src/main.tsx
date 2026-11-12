@@ -52,6 +52,9 @@ function App() {
         busy={busy}
         progress={progress}
         error={error}
+        warning={workspace.warning}
+        dismissError={workspace.dismissError}
+        dismissWarning={workspace.dismissWarning}
         dark={theme === 'dark'}
         toggleTheme={toggleTheme}
         openFiles={() => openSelection('open-csv')}

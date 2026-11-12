@@ -700,7 +700,7 @@ export function keyenceKvxFunction(opcode: string, fb: KeyenceFb): KeyenceFb {
     powerInput: op === 'FUNLD' ? null : signature[2],
     powerOutput: signature[3],
     pins: fb.pins.map((pin, index) => {
-      const [name, inputRow, outputRow, constant] = signature[4][index];
+      const [name, inputRow, outputRow, constant] = requireValue(signature[4][index]);
       return {
         ...pin,
         name,
@@ -718,3 +718,4 @@ export function keyenceKvxFunction(opcode: string, fb: KeyenceFb): KeyenceFb {
     }),
   };
 }
+import { requireValue } from '../requireValue';

@@ -1,3 +1,4 @@
+import { requireValue } from '../../src/requireValue';
 import { test, expect, type Page } from '@playwright/test';
 import { gx, mnm, comments, script, drop, comparison } from './fixtures';
 
@@ -71,7 +72,9 @@ for (const keyence of [false, true]) {
       }),
     );
     for (let i = 1; i < bounds.length; i++)
-      expect(bounds[i].top).toBeGreaterThanOrEqual(bounds[i - 1].bottom - 1);
+      expect(requireValue(bounds[i]).top).toBeGreaterThanOrEqual(
+        requireValue(bounds[i - 1]).bottom - 1,
+      );
     await page.locator(symbol).click({ button: 'right' });
     const opened = context.waitForEvent('page');
     await page.getByRole('menuitem', { name: 'コメントリスト', exact: true }).click();

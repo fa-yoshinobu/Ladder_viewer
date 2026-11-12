@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram, instructionKey } from '../src/model.ts';
@@ -35,7 +36,7 @@ test('all four instruction spellings normalize to the same command for tab and c
       [['0', '', 'MOV D20', 'D21']],
     ]) {
       const p = parseProgram(csv([...rows, ['2', '', 'END', '']], delimiter), 'synthetic.csv');
-      assert.equal(instructionKey(p.instructions[0]), '["MOV",["D20","D21"]]');
+      assert.equal(instructionKey(requireValue(p.instructions[0])), '["MOV",["D20","D21"]]');
       assert.deepEqual(
         p.networks.flatMap((n) => n.warnings),
         [],
@@ -60,17 +61,17 @@ test('statement and five note spellings retain the right owner and quoted semico
       csv([['', '', ';*head\\r\\nnext', ''], ...rows, ['2', '', 'END', '']]),
       'synthetic.csv',
     );
-    assert.equal(p.instructions[0].note, 'note');
-    assert.equal(p.instructions[0].statement, 'head\nnext');
-    assert.equal(p.instructions[0].op, 'OUT');
-    assert.deepEqual(p.instructions[0].operands, ['Y20']);
+    assert.equal(requireValue(p.instructions[0]).note, 'note');
+    assert.equal(requireValue(p.instructions[0]).statement, 'head\nnext');
+    assert.equal(requireValue(p.instructions[0]).op, 'OUT');
+    assert.deepEqual(requireValue(p.instructions[0]).operands, ['Y20']);
   }
   const p = parseProgram(
     csv([['0', '', 'MOV "value; with ""quotes"""', 'D21;*memo']]),
     'strings.csv',
   );
-  assert.deepEqual(p.instructions[0].operands, ['"value; with ""quotes"""', 'D21']);
-  assert.equal(p.instructions[0].note, 'memo');
+  assert.deepEqual(requireValue(p.instructions[0]).operands, ['"value; with ""quotes"""', 'D21']);
+  assert.equal(requireValue(p.instructions[0]).note, 'memo');
 });
 test('four PI statement spellings stay on the pointer rather than the following instruction', () => {
   for (const rows of [
@@ -89,10 +90,10 @@ test('four PI statement spellings stay on the pointer rather than the following 
       csv([...rows, ['1', '', 'LD', 'X21'], ['2', '', 'OUT', 'Y21']]),
       'pi.csv',
     );
-    assert.equal(p.instructions[0].piStatement, 'pointer');
-    assert.equal(p.networks[0].title, 'pointer');
-    assert.equal(p.instructions[1].statement, '');
-    assert.match(instructionCopyText(p.instructions[0], {}), /pointer/);
+    assert.equal(requireValue(p.instructions[0]).piStatement, 'pointer');
+    assert.equal(requireValue(p.networks[0]).title, 'pointer');
+    assert.equal(requireValue(p.instructions[1]).statement, '');
+    assert.match(instructionCopyText(requireValue(p.instructions[0]), {}), /pointer/);
   }
 });
 test('inline ST text after END retains whitespace, ST comments, title, search and copy', () => {
@@ -110,18 +111,21 @@ test('inline ST text after END retains whitespace, ST comments, title, search an
     'inline.csv',
   );
   assert.equal(p.instructions.length, 3);
-  const st = p.instructions[1];
+  const st = requireValue(p.instructions[1]);
   assert.equal(st.inlineST?.text, text);
   assert.equal(st.note, 'title');
   assert.equal(st.sourceRow, 5);
   assert.equal(
-    searchInstructions(buildSearchIndex(p, {}, 'both'), 'synthetic ST comment', 'partial')[0]
-      .instruction,
+    requireValue(
+      searchInstructions(buildSearchIndex(p, {}, 'both'), 'synthetic ST comment', 'partial')[0],
+    ).instruction,
     st,
   );
   assert.ok(instructionCopyText(st, {}).includes(text.replaceAll('\n', '\r\n')));
-  assert.ok(networkSize(p.networks[0]).height > 56);
-  assert.ok(Number.isFinite(instructionDrawingOffset(p.networks[0], st.id, 56, 1, 'wrap')));
+  assert.ok(networkSize(requireValue(p.networks[0])).height > 56);
+  assert.ok(
+    Number.isFinite(instructionDrawingOffset(requireValue(p.networks[0]), st.id, 56, 1, 'wrap')),
+  );
 });
 test('malformed or ambiguous inline ST bodies fail clearly instead of disappearing', () => {
   for (const rows of [
@@ -154,7 +158,7 @@ const fbRows = (kind: 'FB' | 'FUN' = 'FB'): string[][] => {
 test('FB and FUN group only explicit boundaries and preserve every original circuit instruction', () => {
   for (const kind of ['FB', 'FUN'] as const) {
     const p = parseProgram(csv(fbRows(kind)), 'blocks.csv'),
-      n = p.networks[0],
+      n = requireValue(p.networks[0]),
       fb = n.functionBlock!;
     assert.ok(fb);
     assert.equal(fb.kind, kind);
@@ -171,7 +175,7 @@ test('FB and FUN group only explicit boundaries and preserve every original circ
     assert.ok(grid.symbols.some((s) => s.value === 'D21'));
     assert.equal(grid.symbols.find((s) => s.instruction.operands[0] === 'X21')?.row, 1);
     assert.equal(grid.symbols.find((s) => s.instruction.operands[0] === 'Y21')?.row, 1);
-    const port = fb.inputs[1].definition;
+    const port = requireValue(fb.inputs[1]).definition;
     assert.ok(instructionDrawingOffset(n, port.id, 56, 1, 'wrap') > 0);
   }
 });
@@ -209,7 +213,7 @@ test('batch detects comma-separated UTF-16LE program and comments and keeps fold
     },
   ]);
   assert.deepEqual(p.errors, []);
-  assert.equal(p.commentsByProgram['MAIN.csv'].Y21, 'synthetic comment');
+  assert.equal(requireValue(p.commentsByProgram['MAIN.csv']).Y21, 'synthetic comment');
 });
 test('comparison keeps FB calls and mixed-case pin definitions as commands', () => {
   const lines = ['FBCALL SyntheticBlock (Unit1)', 'Enable IN:BOOL', 'Result OUT:BOOL', 'END'];
@@ -227,7 +231,7 @@ test('comparison keeps FB calls and mixed-case pin definitions as commands', () 
     ]),
     'comparison.csv',
   );
-  assert.equal(p.instructions[0].pins?.length, 2);
-  assert.equal(p.comparison?.target.instructions[0].pins?.length, 2);
+  assert.equal(requireValue(p.instructions[0]).pins?.length, 2);
+  assert.equal(p.comparison?.target.instructions[0]?.pins?.length, 2);
   assert.equal(p.comparison?.differentRows, 0);
 });

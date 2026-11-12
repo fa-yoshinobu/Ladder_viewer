@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { blockRangeMenu, blockRangeText, comparisonRangeText } from './blockRangeCopy';
 import { DifferenceToolbar } from './DifferenceToolbar';
 import { Fragment } from 'preact';
@@ -82,6 +83,7 @@ export function ComparisonView({
   showComments,
   viewMode = 'wrap',
   navigationTarget,
+  onPosition,
 }: {
   program: Program;
   zoom: number;
@@ -93,6 +95,7 @@ export function ComparisonView({
   showComments: boolean;
   viewMode?: LadderViewMode;
   navigationTarget?: { instructionId: string; side: CompareSide; request: number };
+  onPosition?: (instruction: Instruction, side: CompareSide) => void;
 }) {
   const comparison = program.comparison!;
   const commentLists = useMemo(
@@ -159,7 +162,7 @@ export function ComparisonView({
           scopeTop += contentHeight;
           return overlay;
         });
-        const last = networks[networks.length - 1];
+        const last = requireValue(networks[networks.length - 1]);
         carry[side] = {
           network: last,
           ranges: (last.masterControlRanges ?? []).filter(
@@ -201,12 +204,16 @@ export function ComparisonView({
   const previousGeometry = useRef({ viewMode, blocks });
   useLayoutEffect(() => {
     const previous = previousGeometry.current;
-    if (previous.viewMode !== viewMode && blocks.length) {
+    if (previous.blocks !== blocks && previous.blocks.length && blocks.length) {
       const index = Math.max(
         0,
         previous.blocks.findIndex((block) => block.top + block.height > viewport.top),
       );
-      const top = blocks[Math.min(index, blocks.length - 1)].top;
+      const before = requireValue(previous.blocks[index]);
+      const after = requireValue(blocks[Math.min(index, blocks.length - 1)]);
+      const top =
+        after.top +
+        (Math.max(0, viewport.top - before.top) / Math.max(1, before.height)) * after.height;
       sourceScroll.current?.scrollTo({ top });
       targetScroll.current?.scrollTo({ top });
       setActive(index);
@@ -288,9 +295,12 @@ export function ComparisonView({
     if (other && Math.abs(other.scrollTop - element.scrollTop) > 1)
       other.scrollTop = element.scrollTop;
     setViewport({ top: element.scrollTop, height: element.clientHeight });
+    const block = blocks.find((item) => item.top + item.height > element.scrollTop + 2);
+    const instruction = block?.[side][0]?.instructions[0];
+    if (instruction) onPosition?.(instruction, side);
   }
   function jump(index: number) {
-    const top = blocks[index].top;
+    const top = requireValue(blocks[index]).top;
     sourceScroll.current?.scrollTo({ top });
     targetScroll.current?.scrollTo({ top });
     const element = sourceScroll.current;
@@ -308,14 +318,14 @@ export function ComparisonView({
     const source = sourceScroll.current,
       target = targetScroll.current;
     if (blockIndex < 0 || !source || !target) return false;
-    const block = blocks[blockIndex],
+    const block = requireValue(blocks[blockIndex]),
       networks = block[side];
     const networkIndex = networks.findIndex(
       (network) =>
         network.pointer?.id === instructionId ||
         network.instructions.some((instruction) => instruction.id === instructionId),
     );
-    const network = networks[networkIndex];
+    const network = requireValue(networks[networkIndex]);
     const instruction =
       network.pointer?.id === instructionId
         ? network.pointer
@@ -345,7 +355,7 @@ export function ComparisonView({
     jump(index);
     setCurrentBlock(index);
     lastJump.current = index;
-    const change = blocks[index].changes[0];
+    const change = requireValue(requireValue(blocks[index]).changes[0]);
     const row = change.noteOwnerRow ?? change.alignmentRow;
     const target = comparison.target.instructions.find((i) => i.comparisonRow === row),
       source = program.instructions.find((i) => i.comparisonRow === row);
@@ -388,7 +398,7 @@ export function ComparisonView({
         </div>
         <div class="nav-list">
           {blocks.map((block, index) => {
-            const n = block.source[0] ?? block.target[0];
+            const n = requireValue(block.source[0] ?? block.target[0]);
             return (
               <button
                 key={index}
@@ -425,8 +435,8 @@ export function ComparisonView({
           onNext={() => moveDifference(1)}
           onChoose={goDifferenceBlock}
           options={differenceBlocks.map((index) => {
-            const block = blocks[index],
-              n = block.source[0] ?? block.target[0];
+            const block = requireValue(blocks[index]),
+              n = requireValue(block.source[0] ?? block.target[0]);
             return {
               index,
               label:

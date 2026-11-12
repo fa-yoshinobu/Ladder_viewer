@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -13,9 +14,9 @@ const instruction = (text: string) =>
     .instructions[0];
 const symbol = (text: string, extra: Partial<KeyenceSymbol> = {}): KeyenceSymbol => {
   const i = instruction(text),
-    s = keyenceOutputStyle(i);
+    s = keyenceOutputStyle(requireValue(i));
   return {
-    instruction: i,
+    instruction: requireValue(i),
     x: 100,
     y: 40,
     width: (s.columns ?? 1) * CELL,
@@ -84,20 +85,20 @@ test('KEYENCE reference symbol families keep operation, operands and native box 
   ];
   for (const [text, kind, columns] of cases) {
     const i = instruction(text),
-      s = keyenceOutputStyle(i);
+      s = keyenceOutputStyle(requireValue(i));
     assert.equal(s.kind, kind, text);
     assert.equal(s.columns, columns, text);
     const visible = texts(symbol(text))
       .map((t) => t.text)
       .join(' ');
-    for (const operand of i.operands)
+    for (const operand of requireValue(i).operands)
       assert.ok(
-        visible.includes(operand) || s.bodyOperand === i.operands.indexOf(operand),
+        visible.includes(operand) || s.bodyOperand === requireValue(i).operands.indexOf(operand),
         `${text}: ${operand}`,
       );
   }
-  assert.equal(keyenceNumberedDevice(instruction('TMU #4 #50')), 'T4');
-  assert.equal(keyenceNumberedDevice(instruction('C #5 #60 MR2')), 'C5');
+  assert.equal(keyenceNumberedDevice(requireValue(instruction('TMU #4 #50'))), 'T4');
+  assert.equal(keyenceNumberedDevice(requireValue(instruction('C #5 #60 MR2'))), 'C5');
 });
 
 test('native boxes render all operands across columns and a second row without losing their order', () => {
@@ -107,19 +108,24 @@ test('native boxes render all operands across columns and a second row without l
     fields.map((t) => t.text),
     ['DM10', 'DM20', 'DM30', 'DM40', 'DM50'],
   );
-  assert.equal(fields[0].y, fields[2].y);
-  assert.ok(fields[0].x < fields[1].x && fields[1].x < fields[2].x);
-  assert.equal(fields[0].x, fields[3].x);
-  assert.equal(fields[1].x, fields[4].x);
-  assert.ok(fields[3].y > fields[0].y);
+  assert.equal(requireValue(fields[0]).y, requireValue(fields[2]).y);
+  assert.ok(
+    requireValue(fields[0]).x < requireValue(fields[1]).x &&
+      requireValue(fields[1]).x < requireValue(fields[2]).x,
+  );
+  assert.equal(requireValue(fields[0]).x, requireValue(fields[3]).x);
+  assert.equal(requireValue(fields[1]).x, requireValue(fields[4]).x);
+  assert.ok(requireValue(fields[3]).y > requireValue(fields[0]).y);
   const calculation = texts(symbol('CAL+.S DM10 +2 DM20'));
   assert.deepEqual(
     calculation.map((t) => t.text),
     ['+.S', 'DM10', '+2', 'DM20'],
   );
-  assert.ok(calculation.every((t, index) => index === 0 || t.x > calculation[index - 1].x));
+  assert.ok(
+    calculation.every((t, index) => index === 0 || t.x > requireValue(calculation[index - 1]).x),
+  );
   const control = texts(symbol('MC', { controlLevel: 7 }));
-  assert.equal(control[0].text, 'MC 7');
+  assert.equal(requireValue(control[0]).text, 'MC 7');
 });
 
 test('native SVG includes execution arrows, negation and each independently wired input', () => {
@@ -185,7 +191,7 @@ test('comparisons render both operands above and below the operator and highligh
     fields.map((t) => t.text),
     ['=', 'DM10', '#2'],
   );
-  assert.ok(fields[1].y < s.y && fields[2].y > s.y);
+  assert.ok(requireValue(fields[1]).y < s.y && requireValue(fields[2]).y > s.y);
   assert.deepEqual(
     draw(s)
       .filter((n) => n.type === 'tspan' && n.props.class === 'diff-value')

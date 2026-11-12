@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { CsvInput } from './batch';
 import { programFormat } from './programFormat';
 export async function droppedInputs(transfer: DataTransfer): Promise<CsvInput[]> {
@@ -7,8 +8,8 @@ export async function droppedInputs(transfer: DataTransfer): Promise<CsvInput[]>
     files = Array.from(transfer.files),
     inputs: CsvInput[] = [];
   const root =
-    entries.length === 1 && entries[0].isDirectory
-      ? entries[0].fullPath.replace(/^\//, '') + '/'
+    entries.length === 1 && requireValue(entries[0]).isDirectory
+      ? requireValue(entries[0]).fullPath.replace(/^\//, '') + '/'
       : '';
   const visit = async (entry: FileSystemEntry) => {
     if (entry.isDirectory) {

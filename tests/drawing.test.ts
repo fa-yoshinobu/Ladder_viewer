@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { strokeCoordinates } from '../src/drawing.ts';
@@ -103,7 +104,7 @@ test('synthetic nested branches keep every visible instruction without repeated 
     );
     for (let i = 0; i < g.wires.length; i++)
       for (let j = i + 1; j < g.wires.length; j++)
-        assert.ok(!overlap(g.wires[i], g.wires[j]), n.step);
+        assert.ok(!overlap(requireValue(g.wires[i]), requireValue(g.wires[j])), n.step);
     for (const instruction of n.instructions.filter(
       (i) => !['MPS', 'MPP', 'ANB', 'ORB'].includes(i.op),
     )) {
@@ -117,21 +118,23 @@ test('synthetic nested branches keep every visible instruction without repeated 
 });
 
 function placedNetwork(commands: string[]) {
-  return buildProgram(
-    commands.map((command, index) => {
-      const [op, ...operands] = command.split(' ');
-      return {
-        id: `synthetic-${index}`,
-        sourceRow: index + 1,
-        step: String(index),
-        op,
-        operands,
-        note: '',
-        statement: '',
-      };
-    }),
-    'synthetic-placement',
-  ).networks[0];
+  return requireValue(
+    buildProgram(
+      commands.map((command, index) => {
+        const [op, ...operands] = command.split(' ');
+        return {
+          id: `synthetic-${index}`,
+          sourceRow: index + 1,
+          step: String(index),
+          op: requireValue(op),
+          operands,
+          note: '',
+          statement: '',
+        };
+      }),
+      'synthetic-placement',
+    ).networks[0],
+  );
 }
 function syntheticComparison(source: string[], target: string[]) {
   const rows = [
@@ -159,7 +162,7 @@ function assertNetConnections(n: Network, g: GridLayout, nets: string[][]) {
         x: row ? col + 1 : col,
         y: row,
         key,
-        instruction: key.split(':')[0],
+        instruction: requireValue(key.split(':')[0]),
         input: key.endsWith(':in'),
       })),
     ),
@@ -211,18 +214,18 @@ test('comparison keeps a new series branch and its output on the same row', () =
         i.comparisonRow =
           commands[index] === 'AND X8'
             ? longer.indexOf('AND X7') * 2 + 2
-            : longer.indexOf(commands[index]) * 2 + 1;
+            : longer.indexOf(requireValue(commands[index])) * 2 + 1;
       });
       return n;
     });
-    alignCircuitRows([networks[0]], [networks[1]]);
+    alignCircuitRows([requireValue(networks[0])], [requireValue(networks[1])]);
     const grids = networks.map(gridLayout);
     for (const g of grids) {
       const contacts = g.symbols.filter(
         (s) =>
           s.contact &&
           s.instruction.op === 'AND' &&
-          ['X6', 'X7', 'X8'].includes(s.instruction.operands[0]),
+          ['X6', 'X7', 'X8'].includes(requireValue(s.instruction.operands[0])),
       );
       const output = g.symbols.find(
         (s) => s.instruction.op === 'MOV' && s.instruction.operands[0] === 'K2',
@@ -235,14 +238,17 @@ test('comparison keeps a new series branch and its output on the same row', () =
       assert.equal(output.row, 4, 'matching output branches retain vertical comparison alignment');
       assert.deepEqual(
         g.symbols
-          .filter((s) => s.contact && ['X1', 'X2', 'X3'].includes(s.instruction.operands[0]))
+          .filter(
+            (s) =>
+              s.contact && ['X1', 'X2', 'X3'].includes(requireValue(s.instruction.operands[0])),
+          )
           .map((s) => s.row),
         [0, 1, 2],
         'the existing parallel inputs must not stretch',
       );
     }
     const natural = gridLayout({
-      ...networks[reverse ? 0 : 1],
+      ...requireValue(networks[reverse ? 0 : 1]),
       rowAlignment: undefined,
       branchRowAlignment: undefined,
       outputRowAlignment: undefined,
@@ -279,8 +285,8 @@ test('a branch starts below right-side obstacles without waiting for the taller 
       for (const side of ['source', 'target'] as const) {
         const program = side === 'source' ? p : p.comparison!.target;
         for (const n of [program.networks[0], comparisonDisplayProgram(p, side).networks[0]]) {
-          const g = gridLayout(n),
-            commands = n.instructions.map((i) => [i.op, ...i.operands].join(' '));
+          const g = gridLayout(requireValue(n)),
+            commands = requireValue(n).instructions.map((i) => [i.op, ...i.operands].join(' '));
           const shared = commands.filter((command) => prefix.includes(command));
           assert.deepEqual(
             g.symbols
@@ -299,14 +305,16 @@ test('a branch starts below right-side obstacles without waiting for the taller 
           ])
             assert.deepEqual(
               g.symbols
-                .filter((s) => s.contact && devices.includes(s.instruction.operands[0]))
+                .filter(
+                  (s) => s.contact && devices.includes(requireValue(s.instruction.operands[0])),
+                )
                 .map((s) => s.row),
               [0, 1, 2],
             );
           const terminal = (command: string, side: 'in' | 'out') =>
             `${commands.indexOf(command)}:${side}`;
           const right = ['LDI X10', 'ORI X11', 'ORI X12'];
-          assertNetConnections(n, g, [
+          assertNetConnections(requireValue(n), g, [
             shared.map((command) => terminal(command, 'in')),
             [
               ...shared.map((command) => terminal(command, 'out')),
@@ -353,8 +361,8 @@ test('a new suffix uses the free right side of a shared parallel condition witho
     p.networks[0],
     comparisonDisplayProgram(p, 'source').networks[0],
   ]) {
-    const g = gridLayout(n);
-    assert.deepEqual(n.warnings, []);
+    const g = gridLayout(requireValue(n));
+    assert.deepEqual(requireValue(n).warnings, []);
     assert.deepEqual(
       g.symbols.filter((s) => !s.contact).map((s) => s.row),
       [0, 1, 2, 3],
@@ -362,7 +370,10 @@ test('a new suffix uses the free right side of a shared parallel condition witho
     assert.equal(g.rows, 6);
     assert.deepEqual(
       g.symbols
-        .filter((s) => s.contact && ['X2', 'X3', 'X4', 'X5'].includes(s.instruction.operands[0]))
+        .filter(
+          (s) =>
+            s.contact && ['X2', 'X3', 'X4', 'X5'].includes(requireValue(s.instruction.operands[0])),
+        )
         .map((s) => s.row),
       [0, 1, 2, 3],
     );
@@ -377,7 +388,7 @@ test('a new suffix uses the free right side of a shared parallel condition witho
       ['15:out', '16:in'],
       ['18:out', '19:out', '20:out', '22:in'],
     ];
-    assertNetConnections(n, g, nets);
+    assertNetConnections(requireValue(n), g, nets);
   }
 });
 
@@ -392,7 +403,9 @@ test('outputs sharing a three-row condition use its first and second rows', () =
   );
   assert.deepEqual(
     g.symbols
-      .filter((s) => s.contact && ['X11', 'X12', 'X13'].includes(s.instruction.operands[0]))
+      .filter(
+        (s) => s.contact && ['X11', 'X12', 'X13'].includes(requireValue(s.instruction.operands[0])),
+      )
       .map((s) => s.row),
     [0, 1, 2],
   );
@@ -410,7 +423,7 @@ test('outputs sharing a three-row condition use its first and second rows', () =
 
 test('an FB reserves its full output height while sharing parallel-condition height', () => {
   const n = placedNetwork(sharedParallel),
-    fb = n.actions[0].instruction;
+    fb = requireValue(n.actions[0]).instruction;
   fb.op = 'FBCALL Synthetic';
   fb.operands = [];
   fb.pins = Array.from({ length: 4 }, (_, index) => ({
@@ -430,8 +443,8 @@ test('an FB reserves its full output height while sharing parallel-condition hei
     'the second output starts after the three-row FB',
   );
   assert.equal(g.rows, 4);
-  assert.equal(outputs[0].span, 5);
-  assert.equal(outputs[0].instruction.pins, fb.pins);
+  assert.equal(requireValue(outputs[0]).span, 5);
+  assert.equal(requireValue(outputs[0]).instruction.pins, fb.pins);
   assert.deepEqual(
     g.symbols.filter((s) => s.contact && s.col === 1).map((s) => s.row),
     [0, 1, 2],
@@ -468,8 +481,8 @@ test('restoring a shared condition packs the coil beside its branches in normal 
       comparison.networks[0],
       comparison.comparison!.target.networks[0],
     ]) {
-      const g = gridLayout(n);
-      assert.deepEqual(n.warnings, []);
+      const g = gridLayout(requireValue(n));
+      assert.deepEqual(requireValue(n).warnings, []);
       assert.equal(g.rows, branchRows);
       assert.deepEqual(
         g.symbols.filter((s) => !s.contact).map((s) => s.row),
@@ -477,7 +490,7 @@ test('restoring a shared condition packs the coil beside its branches in normal 
       );
       assert.deepEqual(
         g.symbols
-          .filter((s) => s.contact && s.instruction.operands[0].startsWith('X'))
+          .filter((s) => s.contact && requireValue(s.instruction.operands[0]).startsWith('X'))
           .map((s) => s.row),
         Array.from({ length: branchRows }, (_, index) => index),
       );
@@ -485,9 +498,9 @@ test('restoring a shared condition packs the coil beside its branches in normal 
         g.wires.every((w) => !w.difference),
         'changing a MOV value does not change the shared output connections',
       );
-      if (n.rowAlignment)
+      if (requireValue(n).rowAlignment)
         assert.deepEqual(
-          n.rowAlignment,
+          requireValue(n).rowAlignment,
           Array.from({ length: branchRows }, (_, index) => index),
         );
     }
@@ -556,12 +569,15 @@ test('different MPS/MRD conditions clear earlier parallel branches without dupli
   assert.equal(g.symbols.filter((s) => s.instruction.operands[0] === 'X0').length, 1);
   assert.deepEqual(
     g.symbols
-      .filter((s) => s.contact && ['X4', 'X5', 'X6'].includes(s.instruction.operands[0]))
+      .filter(
+        (s) => s.contact && ['X4', 'X5', 'X6'].includes(requireValue(s.instruction.operands[0])),
+      )
       .map((s) => s.row),
     [3, 4, 5],
   );
   for (let i = 0; i < g.wires.length; i++)
-    for (let j = i + 1; j < g.wires.length; j++) assert.ok(!overlap(g.wires[i], g.wires[j]));
+    for (let j = i + 1; j < g.wires.length; j++)
+      assert.ok(!overlap(requireValue(g.wires[i]), requireValue(g.wires[j])));
 });
 
 test('packed outputs retain comparison alignment and do not invent an operand-only wire difference', () => {
@@ -578,11 +594,13 @@ test('packed outputs retain comparison alignment and do not invent an operand-on
       '不一致',
     ]),
   ]
-    .map((row) => row.map((value) => '"' + value.replaceAll('"', '""') + '"').join('\t'))
+    .map((row) =>
+      row.map((value) => '"' + requireValue(value).replaceAll('"', '""') + '"').join('\t'),
+    )
     .join('\n');
   const p = parseComparison(csv, 'synthetic-placement-comparison');
   for (const side of [p, p.comparison!.target]) {
-    const n = side.networks[0],
+    const n = requireValue(side.networks[0]),
       g = gridLayout(n);
     assert.equal(g.rows, 3);
     assert.deepEqual(n.rowAlignment, [0, 1, 2]);
@@ -597,7 +615,7 @@ test('packed outputs retain comparison alignment and do not invent an operand-on
     n.connectionDifferences = {
       kind: 'removed',
       wires: [0],
-      inputs: [n.actions[1].instruction.id],
+      inputs: [requireValue(n.actions[1]).instruction.id],
       outputs: [],
     };
     const padded = gridLayout(n);
@@ -606,12 +624,18 @@ test('packed outputs retain comparison alignment and do not invent an operand-on
       padded.symbols.filter((s) => !s.contact).map((s) => s.row),
       [0, 2],
     );
-    assert.equal(padded.wires[0].difference, 'removed');
+    assert.equal(requireValue(padded.wires[0]).difference, 'removed');
     for (let index = 0; index < g.wires.length; index++) {
-      assert.equal(padded.wires[index].x1, g.wires[index].x1);
-      assert.equal(padded.wires[index].x2, g.wires[index].x2);
-      assert.equal(padded.wires[index].y1, n.rowAlignment[g.wires[index].y1]);
-      assert.equal(padded.wires[index].y2, n.rowAlignment[g.wires[index].y2]);
+      assert.equal(requireValue(padded.wires[index]).x1, requireValue(g.wires[index]).x1);
+      assert.equal(requireValue(padded.wires[index]).x2, requireValue(g.wires[index]).x2);
+      assert.equal(
+        requireValue(padded.wires[index]).y1,
+        n.rowAlignment[requireValue(g.wires[index]).y1],
+      );
+      assert.equal(
+        requireValue(padded.wires[index]).y2,
+        n.rowAlignment[requireValue(g.wires[index]).y2],
+      );
     }
     assert.equal(JSON.stringify(g), original, 'the earlier grid result is not mutated');
   }
@@ -639,7 +663,7 @@ test('an inserted shared output keeps the existing timer aligned and branch inpu
     ['added'],
   );
   const grids = [p, p.comparison!.target].map((side) => {
-    const n = side.networks[0],
+    const n = requireValue(side.networks[0]),
       g = gridLayout(n);
     assert.deepEqual(n.warnings, []);
     assert.ok(
@@ -649,12 +673,14 @@ test('an inserted shared output keeps the existing timer aligned and branch inpu
     assert.ok(
       n.connectionDifferences!.wires.every((index) => index >= 0 && index < g.wires.length),
     );
-    assert.ok(n.rowAlignment!.every((row, index, all) => index === 0 || row > all[index - 1]));
+    assert.ok(
+      n.rowAlignment!.every((row, index, all) => index === 0 || row > requireValue(all[index - 1])),
+    );
     return g;
   });
   const timerRow = (g: ReturnType<typeof gridLayout>) =>
     g.symbols.find((s) => !s.contact && s.instruction.operands[0] === 'T41')!.row;
-  assert.equal(timerRow(grids[0]), timerRow(grids[1]));
+  assert.equal(timerRow(requireValue(grids[0])), timerRow(requireValue(grids[1])));
 });
 
 test('one-sided coils align independently without stretching unchanged parallel contacts', () => {
@@ -715,13 +741,13 @@ test('one-sided coils align independently without stretching unchanged parallel 
         .join('\n');
       const p = parseComparison(csv, 'synthetic-independent-output-rows');
       for (const [index, side] of [p, p.comparison!.target].entries()) {
-        const n = side.networks[0],
+        const n = requireValue(side.networks[0]),
           g = gridLayout(n),
           snapshot = JSON.stringify(g);
         assert.deepEqual(n.warnings, []);
         assert.deepEqual(
           g.symbols
-            .filter((s) => s.contact && s.instruction.operands[0].startsWith('X'))
+            .filter((s) => s.contact && requireValue(s.instruction.operands[0]).startsWith('X'))
             .map((s) => s.row),
           [0, 1, 2, 3, 4, 5, 6],
         );
@@ -749,7 +775,7 @@ test('one-sided coils align independently without stretching unchanged parallel 
             );
         }
         const natural = gridLayout(
-          comparisonDisplayProgram(p, index === 0 ? 'source' : 'target').networks[0],
+          requireValue(comparisonDisplayProgram(p, index === 0 ? 'source' : 'target').networks[0]),
         );
         assert.equal(
           natural.symbols.find(
@@ -764,7 +790,7 @@ test('one-sided coils align independently without stretching unchanged parallel 
         );
         assert.ok(
           g.symbols
-            .filter((s) => s.contact && s.instruction.operands[0].startsWith('X'))
+            .filter((s) => s.contact && requireValue(s.instruction.operands[0]).startsWith('X'))
             .every((s) => !s.inputDifference),
           'the parallel contact inputs stay unchanged',
         );
@@ -776,7 +802,9 @@ test('one-sided coils align independently without stretching unchanged parallel 
           );
       }
       const natural = ['source', 'target'].map((side) =>
-        gridLayout(comparisonDisplayProgram(p, side as 'source' | 'target').networks[0]),
+        gridLayout(
+          requireValue(comparisonDisplayProgram(p, side as 'source' | 'target').networks[0]),
+        ),
       );
       const comparisonTerminals = (grid: (typeof natural)[number]) => {
         const graph = terminals(grid);
@@ -789,13 +817,13 @@ test('one-sided coils align independently without stretching unchanged parallel 
         return graph;
       };
       const differences = compareConnectionGraphs(
-        [comparisonTerminals(natural[0])],
-        [comparisonTerminals(natural[1])],
+        [comparisonTerminals(requireValue(natural[0]))],
+        [comparisonTerminals(requireValue(natural[1]))],
       );
       for (const [side, grid] of natural.entries())
         assert.deepEqual(
           grid.wires.flatMap((w, index) => (w.difference ? [index] : [])),
-          differences[side][0].wires,
+          requireValue(requireValue(differences[side])[0]).wires,
           'single-side colors follow its natural wire geometry',
         );
     }

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram } from '../src/model.ts';
@@ -12,19 +13,22 @@ import { continuationText } from '../src/continuation.ts';
 test('ordinary Mitsubishi and Keyence diagrams share the same 100 percent dimensions and glyph coordinates', () => {
   const csv = 'ステップ番号\t命令\tI/O(デバイス)\n0\tLD\tX0\n1\tANI\tX1\n2\tOUT\tY0';
   const mitsubishi = parseProgram(csv, 'synthetic.csv'),
-    grid = displayGrid(mitsubishi.networks[0], 'scroll');
+    grid = displayGrid(requireValue(mitsubishi.networks[0]), 'scroll');
   const keyence = parseKeyenceMnm(
     new TextEncoder().encode('DEVICE:99\nLD R0\nANB R1\nOUT MR0').buffer,
     'synthetic.mnm',
   );
   const drawing = keyenceViewDrawing(
-    layoutKeyenceNetwork(buildKeyenceNetworks(keyence)[0], keyence),
+    layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(keyence)[0]), keyence),
     'scroll',
   );
   assert.equal(CELL, 74);
   assert.equal(COLUMNS, 12);
   assert.equal(LADDER_WIDTH, 986);
-  assert.equal(networkSize(mitsubishi.networks[0], ROW, 'scroll').width, drawing.width);
+  assert.equal(
+    networkSize(requireValue(mitsubishi.networks[0]), ROW, 'scroll').width,
+    drawing.width,
+  );
   assert.equal(drawing.width, LADDER_WIDTH);
   assert.equal(drawing.rowHeight, ROW);
   assert.equal(drawing.baseline, BASELINE);

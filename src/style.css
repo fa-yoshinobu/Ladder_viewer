@@ -735,6 +735,27 @@ header {
   background: var(--surface);
   color: var(--text);
 }
+.warning {
+  white-space: pre-wrap;
+  background: #fff4cc;
+  color: #6b4900;
+  border-left: 4px solid #b8860b;
+  padding: 10px 16px;
+}
+.message-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.message-banner > span {
+  flex: 1;
+}
+.message-banner > button {
+  flex-shrink: 0;
+  padding: 0 6px;
+  color: inherit;
+  background: transparent;
+}
 .error {
   white-space: pre-wrap;
   background: var(--danger-bg);

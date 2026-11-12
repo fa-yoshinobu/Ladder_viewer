@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceInstruction, KeyenceProgram } from './model';
 import type { KeyenceDeviceComments } from './comments';
 import { decodeKeyenceText } from './encoding';
@@ -11,7 +12,7 @@ function instructionParts(line: string): { tokens: string[]; comment: string } {
     quote = '',
     comment = '';
   for (let index = 0; index < line.length; index++) {
-    const char = line[index];
+    const char = requireValue(line[index]);
     if (quote) {
       token += char;
       if (char === quote) {
@@ -50,7 +51,7 @@ export function parseKeyenceMnm(
   const program: KeyenceProgram = {
     format: 'keyence-mnm',
     name,
-    deviceCode: device[1].trim(),
+    deviceCode: requireValue(device[1]).trim(),
     moduleName: '',
     moduleType: '',
     instructions: [],
@@ -81,9 +82,13 @@ export function parseKeyenceMnm(
     if (metadata) {
       annotation = undefined;
       const [, key, value] = metadata;
-      program.metadata.push({ sourceLine: index + 1, key, value });
-      if (key === 'MODULE') program.moduleName = value;
-      if (key === 'MODULE_TYPE') program.moduleType = value;
+      program.metadata.push({
+        sourceLine: index + 1,
+        key: requireValue(key),
+        value: requireValue(value),
+      });
+      if (key === 'MODULE') program.moduleName = requireValue(value);
+      if (key === 'MODULE_TYPE') program.moduleType = requireValue(value);
     } else if (line.startsWith(';')) {
       const comment = line.slice(1).replace(/<h[1-6]\s*\/>/gi, '');
       program.comments.push({ sourceLine: index + 1, text: comment });

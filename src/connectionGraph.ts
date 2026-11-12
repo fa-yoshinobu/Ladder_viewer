@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 export interface ConnectionWire {
   x1: number;
   y1: number;
@@ -45,7 +46,7 @@ function graph(input: ConnectionInput) {
     }
   const parents = points.map((_, index) => index);
   const find = (index: number): number =>
-    parents[index] === index ? index : (parents[index] = find(parents[index]));
+    parents[index] === index ? index : (parents[index] = find(requireValue(parents[index])));
   const union = (a: number, b: number) => {
     parents[find(a)] = find(b);
   };
@@ -56,8 +57,8 @@ function graph(input: ConnectionInput) {
     });
   }
   const rail = points.flatMap((p, index) => (p.x === input.railX ? [index] : []));
-  for (const index of rail.slice(1)) union(rail[0], index);
-  const railRoot = rail.length ? find(rail[0]) : -1,
+  for (const index of rail.slice(1)) union(requireValue(rail[0]), index);
+  const railRoot = rail.length ? find(requireValue(rail[0])) : -1,
     members = new Map<number, Set<string>>();
   for (const t of terminals) {
     const root = find(t.point);
@@ -83,7 +84,7 @@ function graph(input: ConnectionInput) {
 export function compareConnectionGraphs(source: ConnectionInput[], target: ConnectionInput[]) {
   const sides = [source.map(graph), target.map(graph)];
   return sides.map((nets, side) => {
-    const other = sides[1 - side],
+    const other = requireValue(sides[1 - side]),
       signatures = new Set(other.flatMap((n) => [...n.signatures.values()])),
       railKeys = new Set(other.flatMap((n) => [...n.railKeys]));
     return nets.map((net) => {
@@ -103,7 +104,9 @@ export function compareConnectionGraphs(source: ConnectionInput[], target: Conne
         return changed(root) ||
           (root === net.railRoot &&
             w.y1 === w.y2 &&
-            net.terminals.some((t) => onWire(net.points[t.point], w) && !railKeys.has(t.key)))
+            net.terminals.some(
+              (t) => onWire(requireValue(net.points[t.point]), w) && !railKeys.has(t.key),
+            ))
           ? [index]
           : [];
       });

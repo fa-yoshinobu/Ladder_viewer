@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import { blockRangeMenu, blockRangeText } from '../blockRangeCopy';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { strokeCoordinates } from '../drawing';
@@ -261,7 +262,7 @@ export function KeyenceLadder({
     <svg
       ref={root}
       class={'kv-ladder' + (drawing.network.disabled ? ' kv-disabled' : '')}
-      aria-label={`キーエンス ${drawing.network.disabled ? '無効' : ''}回路 元ファイル${drawing.network.instructions[0].sourceLine}行`}
+      aria-label={`キーエンス ${drawing.network.disabled ? '無効' : ''}回路 元ファイル${requireValue(drawing.network.instructions[0]).sourceLine}行`}
       width={drawing.width * zoom}
       height={drawing.height * zoom}
       viewBox={`0 0 ${drawing.width} ${drawing.height}`}

@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { csvRows, instructionFields, pinDefinition, isFunctionCall } from './gxFormat';
 import { diffArrays } from 'diff';
 import { gridLayout, layoutGrid, drawingPages, drawingMetrics, ROW } from './layout';
@@ -31,17 +32,18 @@ export function comparisonComment(
   if (/^\s/.test(raw))
     return { kind: 'note', text: text.replace(/^\*/, '').replace(/^<(.*)>$/, '$1') };
   // Keep uppercase mnemonics (including unknown ones) and pointers; lowercase headings are text.
-  if (/^[*[]/.test(text) || /[a-z]|[^\x00-\x7f]/.test(text.split(/\s/)[0]))
+  if (/^[*[]/.test(text) || /[a-z]|[^\x00-\x7f]/.test(requireValue(text.split(/\s/)[0])))
     return { kind: 'statement', text: text.replace(/^\*/, '') };
   return null;
 }
 
 export function parseComparison(text: string, name: string): Program {
   const parsed = csvRows(text);
-  if (parsed.errors.length) throw new Error(`CSV形式エラー: ${parsed.errors[0].message}`);
+  if (parsed.errors.length)
+    throw new Error(`CSV形式エラー: ${requireValue(parsed.errors[0]).message}`);
   const header = parsed.data.findIndex(isComparisonHeader);
   if (header < 0) throw new Error('照合元・照合先の列がありません。');
-  const columns = parsed.data[header],
+  const columns = requireValue(parsed.data[header]),
     sourceColumn = columns.indexOf('照合元'),
     targetColumn = columns.indexOf('照合先'),
     legacy = columns.includes('比較結果');
@@ -61,24 +63,24 @@ export function parseComparison(text: string, name: string): Program {
     return (
       /^\s*->\s*(.+?)\s*$/
         .exec(metadataRows[index + 1] ?? '')?.[1]
-        .split(/[\\/]/)
+        ?.split(/[\\/]/)
         .at(-1)
         ?.trim() ?? ''
     );
   };
   const rows = parsed.data.slice(header + 1);
   if (!rows.length) throw new Error('照合データがありません。');
-  if (rows.some((row) => row.length !== columns.length || !/^\d+$/.test(row[0])))
+  if (rows.some((row) => row.length !== columns.length || !/^\d+$/.test(requireValue(row[0]))))
     throw new Error('照合行の列数または行番号が不正です。');
   const tokens = (text: string) => text.match(/"(?:[^"]|"")*"|\S+/g) ?? [];
   const records = (column: number) =>
     rows.flatMap((row, index) =>
-      row[column].trim()
+      requireValue(row[column]).trim()
         ? [
             {
-              text: row[column].trim(),
+              text: requireValue(row[column]).trim(),
               raw: row[column],
-              step: row[column - 1].trim(),
+              step: requireValue(row[column - 1]).trim(),
               csvRow: header + index + 2,
             },
           ]
@@ -90,7 +92,7 @@ export function parseComparison(text: string, name: string): Program {
   const aligned: { source?: RecordLine; target?: RecordLine }[] = [];
   const describe = (records: RecordLine[]) => {
     const instructions: Instruction[] = records.flatMap((record, index) => {
-      if (comparisonComment(record.raw, legacy)) return [];
+      if (comparisonComment(requireValue(record.raw), legacy)) return [];
       const { op, operands } = instructionFields(record.text);
       return [
         {
@@ -120,7 +122,7 @@ export function parseComparison(text: string, name: string): Program {
     }
     const descriptors = new Map(
       records.map((record, index) => {
-        const comment = comparisonComment(record.raw, legacy);
+        const comment = comparisonComment(requireValue(record.raw), legacy);
         const { op, operands } = instructionFields(record.text);
         const role = comment ? comment.kind : (roles.get(index) ?? 'structure');
         const family = ['MPS', 'MRD', 'MPP'].includes(op)
@@ -174,7 +176,7 @@ export function parseComparison(text: string, name: string): Program {
   // Anchor complete unchanged circuits before matching individual commands with repeated prefixes.
   const circuits = (networks: Network[]) => {
     return networks.map((network) => ({
-      start: Number(network.instructions[0].id),
+      start: Number(requireValue(network.instructions[0]).id),
       end: Number(network.instructions.at(-1)!.id) + 1,
       key: JSON.stringify(
         network.instructions.map((instruction) => [instruction.op, ...instruction.operands]),
@@ -200,8 +202,8 @@ export function parseComparison(text: string, name: string): Program {
       continue;
     }
     for (let index = 0; index < chunk.count; index++) {
-      const source = sourceCircuits[sourceCircuit++],
-        target = targetCircuits[targetCircuit++];
+      const source = requireValue(sourceCircuits[sourceCircuit++]),
+        target = requireValue(targetCircuits[targetCircuit++]);
       alignRecords(
         sourceRecords.slice(sourceStart, source.start),
         targetRecords.slice(targetStart, target.start),
@@ -248,7 +250,7 @@ export function parseComparison(text: string, name: string): Program {
       const record = pair[which];
       if (!record) return;
       const value = record.text;
-      const comment = comparisonComment(record.raw, legacy);
+      const comment = comparisonComment(requireValue(record.raw), legacy);
       if (comment) {
         const previous = instructions.at(-1);
         if (comment.kind === 'note' && previous) {
@@ -367,23 +369,32 @@ export function alignCircuitRows(source: Network[], target: Network[]) {
     if (
       group.source.length === 1 &&
       group.target.length === 1 &&
-      !group.source[0].functionBlock &&
-      !group.target[0].functionBlock
+      !requireValue(group.source[0]).functionBlock &&
+      !requireValue(group.target[0]).functionBlock
     ) {
       const networks = [group.source[0], group.target[0]];
-      const { drawings, hints } = alignBranches(networks.map((n) => (rows) => layoutGrid(n, rows)));
+      const { drawings, hints } = alignBranches(
+        networks.map((n) => (rows) => layoutGrid(requireValue(n), rows)),
+      );
       networks.forEach((n, side) => {
-        n.branchRowAlignment = Object.keys(hints[side]).length ? hints[side] : undefined;
-        n.rowAlignment = Array.from({ length: drawings[side].rows }, (_, row) => row);
+        requireValue(n).branchRowAlignment = Object.keys(requireValue(hints[side])).length
+          ? hints[side]
+          : undefined;
+        requireValue(n).rowAlignment = Array.from(
+          { length: requireValue(drawings[side]).rows },
+          (_, row) => row,
+        );
       });
-      const padding = Math.max(...networks.map((n) => drawingMetrics(n, ROW).padding));
-      for (const n of networks) n.comparisonNotePadding = padding;
+      const padding = Math.max(
+        ...networks.map((n) => drawingMetrics(requireValue(n), ROW).padding),
+      );
+      for (const n of networks) requireValue(n).comparisonNotePadding = padding;
       const pages = drawings.map((d) => drawingPages(d)),
         count = Math.min(...pages.map((p) => p.length));
       if (count > 1)
         for (const n of networks)
-          n.comparisonPageRows = Array.from({ length: count }, (_, page) =>
-            Math.max(...pages.map((p) => p[page].rows)),
+          requireValue(n).comparisonPageRows = Array.from({ length: count }, (_, page) =>
+            Math.max(...pages.map((p) => requireValue(p[page]).rows)),
           );
       continue;
     }
@@ -411,7 +422,7 @@ export function alignCircuitRows(source: Network[], target: Network[]) {
       positionsB: number[] = [];
     let slot = 0;
     for (let index = 0; index < changes.length; index++) {
-      const part = changes[index];
+      const part = requireValue(changes[index]);
       if (!part.added && !part.removed) {
         for (let i = 0; i < part.count; i++) {
           positionsA.push(slot);
@@ -421,9 +432,12 @@ export function alignCircuitRows(source: Network[], target: Network[]) {
       }
       let removed = 0,
         added = 0;
-      while (index < changes.length && (changes[index].added || changes[index].removed)) {
-        if (changes[index].removed) removed += changes[index].count;
-        else added += changes[index].count;
+      while (
+        index < changes.length &&
+        (requireValue(changes[index]).added || requireValue(changes[index]).removed)
+      ) {
+        if (requireValue(changes[index]).removed) removed += requireValue(changes[index]).count;
+        else added += requireValue(changes[index]).count;
         index++;
       }
       index--;
@@ -444,19 +458,24 @@ export function alignCircuitRows(source: Network[], target: Network[]) {
       let start = 0,
         previous: Network | undefined;
       rows.forEach((descriptor, index) => {
-        if (previous && previous !== descriptor.network) start = positions[index - 1] + 1;
-        (descriptor.network.rowAlignment ??= [])[descriptor.row] = positions[index] - start;
+        if (previous && previous !== descriptor.network)
+          start = requireValue(positions[index - 1]) + 1;
+        (descriptor.network.rowAlignment ??= [])[descriptor.row] =
+          requireValue(positions[index]) - start;
         previous = descriptor.network;
       });
     }
     if (group.source.length === 1 && group.target.length === 1) {
       const pages = [group.source[0], group.target[0]].map((network) =>
-        drawingPages(gridLayout(network)),
+        drawingPages(gridLayout(requireValue(network))),
       );
-      const sharedPages = Math.min(pages[0].length, pages[1].length);
+      const sharedPages = Math.min(requireValue(pages[0]).length, requireValue(pages[1]).length);
       if (sharedPages > 1) {
         const rows = Array.from({ length: sharedPages }, (_, index) =>
-          Math.max(pages[0][index].rows, pages[1][index].rows),
+          Math.max(
+            requireValue(requireValue(pages[0])[index]).rows,
+            requireValue(requireValue(pages[1])[index]).rows,
+          ),
         );
         for (const network of networks) network.comparisonPageRows = rows;
       }

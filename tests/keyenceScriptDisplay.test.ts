@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -56,24 +57,32 @@ test('folded scripts show original source and guards without altering any parsed
     networks = keyenceScriptNetworks(program);
   assert.equal(regions.length, 2);
   assert.equal(networks.filter((n) => n.script).length, 2);
-  const first = networks[0],
+  const first = requireValue(networks[0]),
     box = first.instructions.find((i) => i.st)!;
   assert.equal(first.statement, 'Dummy section');
   assert.equal(box.st?.lines.map((l) => l.text).join('\n'), source);
-  assert.equal(first.instructions[0].opcode, 'LD');
-  assert.equal(first.actions[0].instruction, box);
-  assert.equal(first.actions[0].condition?.kind, 'contact');
+  assert.equal(requireValue(first.instructions[0]).opcode, 'LD');
+  assert.equal(requireValue(first.actions[0]).instruction, box);
+  assert.equal(requireValue(first.actions[0]).condition?.kind, 'contact');
   assert.deepEqual(
     networks.flatMap((n) => keyenceVisibleInstructions(n, program).map((i) => i.id)),
     program.instructions.map((i) => i.id),
   );
   assert.equal(keyenceInstructionCopyText(box, program), source.replaceAll('\n', '\r\n'));
   assert.ok(
-    blockRangeText([first]).includes(String(program.instructions[regions[0].endIndex].sourceLine)),
+    blockRangeText([first]).includes(
+      String(requireValue(program.instructions[requireValue(regions[0]).endIndex]).sourceLine),
+    ),
   );
   const drawing = layoutKeyenceNetwork(first, program),
     symbol = drawing.symbols.find((s) => s.instruction.st)!;
-  assert.equal(keyenceSymbolOwns(symbol, program.instructions[regions[0].jumpIndex + 3].id), true);
+  assert.equal(
+    keyenceSymbolOwns(
+      symbol,
+      requireValue(program.instructions[requireValue(regions[0]).jumpIndex + 3]).id,
+    ),
+    true,
+  );
   for (const mode of ['wrap', 'scroll'] as const) {
     const d = keyenceViewDrawing(drawing, mode);
     assert.ok(
@@ -86,17 +95,20 @@ test('folded scripts show original source and guards without altering any parsed
 test('expansion is independent per script and preserves the following ordinary circuit', () => {
   const program = p(),
     [first, second] = keyenceScriptRegions(program),
-    expanded = keyenceScriptNetworks(program, new Set([first.id]));
+    expanded = keyenceScriptNetworks(program, new Set([requireValue(first).id]));
   assert.equal(expanded.filter((n) => n.script?.expanded).length, 1);
   assert.equal(expanded.filter((n) => n.script && !n.script.expanded).length, 1);
   assert.ok(expanded.some((n) => n.instructions.some((i) => i.raw === 'ADD #17')));
   assert.ok(expanded.some((n) => n.instructions.some((i) => i.raw === 'OUT MR834')));
-  const all = keyenceScriptNetworks(program, new Set([first.id, second.id]));
+  const all = keyenceScriptNetworks(
+    program,
+    new Set([requireValue(first).id, requireValue(second).id]),
+  );
   assert.deepEqual(
     all.flatMap((n) => n.instructions.map((i) => i.raw)),
     program.instructions.map((i) => i.raw),
   );
-  assert.equal(all[0].statement, 'Dummy section');
+  assert.equal(requireValue(all[0]).statement, 'Dummy section');
   const folded = keyenceScriptNetworks(program);
   assert.ok(folded.length < all.length);
   assert.equal(folded.filter((n) => n.script?.expanded).length, 0);
@@ -109,13 +121,15 @@ test('expanded range markers cover each complete script and stop before ordinary
     snapshot = JSON.stringify(program);
   assert.ok(keyenceScriptNetworks(program).every((n) => !n.scriptRange));
   for (const active of [[regions[0]], [regions[1]], regions]) {
-    const networks = keyenceScriptNetworks(program, new Set(active.map((r) => r.id)));
+    const networks = keyenceScriptNetworks(program, new Set(active.map((r) => requireValue(r).id)));
     for (const region of active) {
-      const marked = networks.filter((n) => n.scriptRange?.id === region.id);
+      const marked = networks.filter((n) => n.scriptRange?.id === requireValue(region).id);
       assert.ok(marked.length > 1);
       assert.deepEqual(
         marked.flatMap((n) => n.instructions.map((i) => i.id)),
-        program.instructions.slice(region.guardStartIndex, region.endIndex + 1).map((i) => i.id),
+        program.instructions
+          .slice(requireValue(region).guardStartIndex, requireValue(region).endIndex + 1)
+          .map((i) => i.id),
       );
       assert.deepEqual(
         marked.map((n) => n.scriptRange!.start),
@@ -139,7 +153,7 @@ test('expanded range markers cover each complete script and stop before ordinary
   }
   const comparison = compareKeyencePrograms(program, program),
     folded = keyenceScriptComparison(comparison, new Set());
-  const id = folded.groups[0].source[0].script!.id,
+  const id = requireValue(requireValue(folded.groups[0]).source[0]).script!.id,
     expanded = keyenceScriptComparison(comparison, new Set([id]));
   for (const side of ['source', 'target'] as const) {
     const marked = expanded.groups.flatMap((g) => g[side]).filter((n) => n.scriptRange);
@@ -169,7 +183,7 @@ test('comparison folds complete script groups, synchronizes expansion, and retai
     b = group.target.find((n) => n.script)!;
   assert.equal(a.script!.id, b.script!.id);
   assert.equal(a.script?.hiddenDifference, true);
-  assert.equal(a.actions[0].instruction.difference?.kind, 'changed');
+  assert.equal(requireValue(a.actions[0]).instruction.difference?.kind, 'changed');
   assert.equal(folded.groups.flatMap((g) => g.changes).length, comparison.changes.length);
   for (const side of ['source', 'target'] as const) {
     const ids = folded.groups.flatMap((g) =>
@@ -195,7 +209,7 @@ test('comparison folds complete script groups, synchronizes expansion, and retai
             [d.height, ...d.symbols.flatMap((s) => [s.x, s.y, s.width])].every(Number.isFinite),
           );
   const drawing = keyenceCompareDrawing(comparison, true, 1, 'wrap', 'both');
-  const changedId = comparison.changes[0].source!.id;
+  const changedId = requireValue(comparison.changes[0]).source!.id;
   assert.ok(drawing.some((g) => g.source.some((c) => c.locations.some((l) => l.id === changedId))));
   assert.equal(JSON.stringify(comparison), snapshot);
 });
@@ -204,12 +218,12 @@ test('source-only changes highlight the script without coloring the unchanged gu
   const left = parse(script()),
     right = parse(script('#831', source.replaceAll('DummyTotal', 'DummySum')));
   const compared = keyenceScriptComparison(compareKeyencePrograms(left, right), new Set());
-  const network = compared.groups[0].source[0];
-  assert.equal(network.instructions[0].difference, undefined);
-  assert.equal(network.actions[0].instruction.difference?.kind, 'changed');
+  const network = requireValue(requireValue(compared.groups[0]).source[0]);
+  assert.equal(requireValue(network.instructions[0]).difference, undefined);
+  assert.equal(requireValue(network.actions[0]).instruction.difference?.kind, 'changed');
   assert.equal(network.script?.hiddenDifference, false);
   assert.equal(
-    network.actions[0].instruction.difference?.otherText,
+    requireValue(network.actions[0]).instruction.difference?.otherText,
     source.replaceAll('DummyTotal', 'DummySum'),
   );
 });
@@ -236,7 +250,7 @@ test('three versus two script regions toggle independently inside a merged compa
     [three, two],
     [two, three],
   ]) {
-    const comparison = compareKeyencePrograms(left, right),
+    const comparison = compareKeyencePrograms(requireValue(left), requireValue(right)),
       folded = keyenceScriptComparison(comparison, new Set());
     assert.ok(
       folded.groups.some((group) =>
@@ -253,7 +267,7 @@ test('three versus two script regions toggle independently inside a merged compa
         'neighboring scripts must have different toggle identities',
       );
     assert.ok(
-      keys[0].some((id) => keys[1].includes(id)),
+      requireValue(keys[0]).some((id) => requireValue(keys[1]).includes(id)),
       'confirmed counterparts share a toggle identity',
     );
     for (const id of new Set(keys.flat())) {
@@ -262,7 +276,7 @@ test('three versus two script regions toggle independently inside a merged compa
         const networks = expanded.groups.flatMap((g) => g[side]);
         assert.deepEqual(
           networks.filter((n) => n.script?.expanded).map((n) => n.script!.id),
-          keys[index].includes(id) ? [id] : [],
+          requireValue(keys[index]).includes(id) ? [id] : [],
         );
         assert.deepEqual(
           networks.flatMap((n) => keyenceVisibleInstructions(n, comparison[side]).map((i) => i.id)),
@@ -284,7 +298,7 @@ test('a script on only one comparison side stays complete and ordinary ST remain
     [before, after],
     [after, before],
   ]) {
-    const c = compareKeyencePrograms(a, b),
+    const c = compareKeyencePrograms(requireValue(a), requireValue(b)),
       d = keyenceScriptComparison(c, new Set());
     assert.equal(d.groups.flatMap((g) => g.changes).length, c.changes.length);
     for (const side of ['source', 'target'] as const)

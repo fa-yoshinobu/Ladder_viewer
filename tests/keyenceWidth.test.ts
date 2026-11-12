@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -17,7 +18,7 @@ const program = (lines: string[]) =>
   );
 const drawing = (lines: string[]) => {
   const p = program(lines);
-  return layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p, false);
+  return layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p, false);
 };
 const last = (lines: string[]) => drawing(lines).symbols.at(-1)!;
 function nodes(value: any): any[] {
@@ -37,13 +38,19 @@ test('stacked native comparisons and calculations keep short labels within one c
     'LDCAL "27/02/03" "27/04/05"',
   ]) {
     const d = drawing([command, 'OUT MR8399']);
-    assert.equal(d.symbols[0].width, CELL, command);
+    assert.equal(requireValue(d.symbols[0]).width, CELL, command);
   }
   for (const command of ['DFLOAT.D', 'DROUND.S'])
     assert.equal(last(['LD R8300', command]).width, CELL, command);
   const long = drawing(['LD= VeryLongSyntheticRegisterName #42', 'OUT MR8399']);
-  assert.ok(long.symbols[0].width > CELL, 'a label that cannot fit still gets enough space');
-  assert.equal(long.symbols[0].instruction.operands[0], 'VeryLongSyntheticRegisterName');
+  assert.ok(
+    requireValue(long.symbols[0]).width > CELL,
+    'a label that cannot fit still gets enough space',
+  );
+  assert.equal(
+    requireValue(long.symbols[0]).instruction.operands[0],
+    'VeryLongSyntheticRegisterName',
+  );
 });
 
 test('native commands expand only the column containing a long field', () => {

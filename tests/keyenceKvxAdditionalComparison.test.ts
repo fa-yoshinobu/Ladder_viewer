@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -21,7 +22,7 @@ test('a BOX_ST edit highlights its source change without changing surrounding co
     b = parse(['LD MR83', 'BOX_ST', ';DummyTotal := 9;', ';DummyValid := TRUE;', ...tail]);
   const comparison = compareKeyencePrograms(a, b);
   assert.equal(comparison.changes.length, 1);
-  const change = comparison.changes[0];
+  const change = requireValue(comparison.changes[0]);
   assert.equal(change.source?.opcode, 'BOX_ST');
   assert.deepEqual([...keyenceStChangedLines(change.source!)], [4]);
   assert.equal(

@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { DirectBlock, DirectInstruction } from '../directDrawing';
 import { HorizontalScroll } from '../HorizontalScroll';
 import { LADDER_WIDTH, SCROLLBAR_HEIGHT } from '../ladderMetrics';
@@ -47,12 +48,13 @@ export function keyenceCompareDrawing(
     return {
       id: drawing.network.id,
       title:
-        drawing.network.statement || `元ファイル ${drawing.network.instructions[0].sourceLine}行`,
+        drawing.network.statement ||
+        `元ファイル ${requireValue(drawing.network.instructions[0]).sourceLine}行`,
       height,
       instructions,
       script: drawing.network.script,
       locations: instructions.map((i, index) => {
-        const original = visible[index];
+        const original = requireValue(visible[index]);
         const symbol =
           drawing.symbols.find((s) => keyenceSymbolOwns(s, i.id)) ??
           [...drawing.symbols].sort(
@@ -77,7 +79,7 @@ export function keyenceCompareDrawing(
           width={LADDER_WIDTH * zoom}
           contentWidth={drawing.width * zoom}
           height={height}
-          label={`回路 元ファイル ${drawing.network.instructions[0].sourceLine}行 横スクロール`}
+          label={`回路 元ファイル ${requireValue(drawing.network.instructions[0]).sourceLine}行 横スクロール`}
         >
           <KeyenceLadder
             drawing={drawing}

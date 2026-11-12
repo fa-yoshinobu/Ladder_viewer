@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -28,8 +29,8 @@ const scriptCommands = [
 for (const opcode of ['FB', 'FUN'])
   test(opcode + ' uses only MNM names and every argument in a vertical block', () => {
     const p = parse(['LD MR1', opcode + ' Sample DM1 #2 DM3', 'END']),
-      network = buildKeyenceNetworks(p)[0];
-    const fb = p.instructions[1].fb!;
+      network = requireValue(buildKeyenceNetworks(p)[0]);
+    const fb = requireValue(p.instructions[1]).fb!;
     assert.equal(fb.name, 'Sample');
     assert.deepEqual(
       fb.pins.map((pin) => [pin.name, pin.value]),
@@ -43,7 +44,7 @@ for (const opcode of ['FB', 'FUN'])
       symbol = drawing.symbols.find((s) => s.kind === 'fb')!;
     assert.ok(symbol.blockRows! > 1);
     assert.equal(symbol.width, 6 * 74);
-    assert.match(keyenceInstructionCopyText(p.instructions[1], p), /引数3: DM3/);
+    assert.match(keyenceInstructionCopyText(requireValue(p.instructions[1]), p), /引数3: DM3/);
   });
 
 test('MNM script comments and expanded commands remain visible and copyable without supplemental files', () => {
@@ -59,10 +60,10 @@ test('MNM script comments and expanded commands remain visible and copyable with
       symbols.some((s) => s.instruction.opcode === op),
       op,
     );
-  assert.match(networks[0].statement, /DM1 = 2\nDM2 = 3/);
+  assert.match(requireValue(networks[0]).statement, /DM1 = 2\nDM2 = 3/);
   const move = p.instructions.find((i) => i.opcode === 'MOV')!;
   assert.match(keyenceInstructionCopyText(move, p), /MOV #2 DM1/);
-  const projected = projectKeyenceInstruction(p.instructions[0], p);
+  const projected = projectKeyenceInstruction(requireValue(p.instructions[0]), p);
   assert.match(projected.statement, /DM2 = 3/);
 });
 
@@ -72,12 +73,12 @@ test('MNM-only comparisons detect expanded script and FB argument changes withou
   const before = structuredClone(source),
     comparison = compareKeyencePrograms(source, target);
   assert.equal(comparison.changes.length, 1);
-  assert.equal(comparison.changes[0].target?.opcode, 'MOV');
+  assert.equal(requireValue(comparison.changes[0]).target?.opcode, 'MOV');
   assert.deepEqual(source, before);
   const fb = compareKeyencePrograms(
     parse(['LD MR1', 'FB Sample DM1 DM2', 'END']),
     parse(['LD MR1', 'FB Sample DM1 DM3', 'END']),
   );
   assert.equal(fb.changes.length, 1);
-  assert.deepEqual(fb.changes[0].target?.difference?.operandChanges, [2]);
+  assert.deepEqual(requireValue(fb.changes[0]).target?.difference?.operandChanges, [2]);
 });

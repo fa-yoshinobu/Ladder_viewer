@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { csvRows } from './gxFormat';
 import { detectCommentFormat } from './commentFormat';
 import { programFormat } from './programFormat';
@@ -61,14 +62,16 @@ export function parseCsvBatch(
       const headers = csvRows(text, 10).data;
       if (commentFormat === 'mitsubishi') {
         const parsed = csvRows(text);
-        if (parsed.errors.length) throw new Error(parsed.errors[0].message);
+        if (parsed.errors.length) throw new Error(requireValue(parsed.errors[0]).message);
         const head = parsed.data.findIndex(
           (row) =>
             row[0]?.trim() === 'デバイス名' &&
             row.length > 1 &&
             !row.some((value) => value.trim() === '命令'),
         );
-        const japanese = parsed.data[head].findIndex((column) => /Japanese|日本語/.test(column));
+        const japanese = requireValue(parsed.data[head]).findIndex((column) =>
+          /Japanese|日本語/.test(column),
+        );
         const column = japanese > 0 ? japanese : 1,
           comments: DeviceComments = Object.create(null);
         for (const row of parsed.data.slice(head + 1)) {

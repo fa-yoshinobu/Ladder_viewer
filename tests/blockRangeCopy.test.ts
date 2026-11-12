@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { blockRangeMenu, blockRangeText, comparisonRangeText } from '../src/blockRangeCopy.ts';
@@ -13,11 +14,15 @@ test('STEP ranges cover the whole circuit block, including zero and its last out
     'range.csv',
   );
   assert.equal(p.networks.length, 2);
-  assert.equal(blockRangeText([p.networks[0]]), 'STEP 0～6');
-  assert.equal(blockRangeText([p.networks[1]]), 'STEP 10～11');
+  assert.equal(blockRangeText([requireValue(p.networks[0])]), 'STEP 0～6');
+  assert.equal(blockRangeText([requireValue(p.networks[1])]), 'STEP 10～11');
   assert.equal(
     blockRangeText([
-      { instructions: p.networks[0].instructions.map((i) => projectMitsubishiInstruction(i, {})) },
+      {
+        instructions: requireValue(p.networks[0]).instructions.map((i) =>
+          projectMitsubishiInstruction(i, {}),
+        ),
+      },
     ]),
     'STEP 0～6',
   );
@@ -46,14 +51,18 @@ test('KEYENCE copies original file line ranges rather than inventing STEP number
     'range.mnm',
   );
   const networks = buildKeyenceNetworks(p);
-  assert.equal(blockRangeText([networks[0]]), '元ファイル 2～5行');
+  assert.equal(blockRangeText([requireValue(networks[0])]), '元ファイル 2～5行');
   assert.equal(
     blockRangeText([
-      { instructions: networks[0].instructions.map((i) => projectKeyenceInstruction(i, p)) },
+      {
+        instructions: requireValue(networks[0]).instructions.map((i) =>
+          projectKeyenceInstruction(i, p),
+        ),
+      },
     ]),
     '元ファイル 2～5行',
   );
-  assert.equal(blockRangeText([networks[1]]), '元ファイル 6～7行');
+  assert.equal(blockRangeText([requireValue(networks[1])]), '元ファイル 6～7行');
 });
 
 test('right-click opens the existing native Copy menu with only the block range', () => {

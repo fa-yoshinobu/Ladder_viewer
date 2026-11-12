@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -46,15 +47,18 @@ test('FUNLD starts a fresh function chain and keeps its result ahead of the foll
     ],
   );
   assert.deepEqual(
-    networks[1].actions.map((a) => a.instruction.fb?.name),
+    requireValue(networks[1]).actions.map((a) => a.instruction.fb?.name),
     ['SIN', 'COS'],
   );
   assert.deepEqual(
-    networks[1].actions.map((a) => condition(a.condition)),
+    requireValue(networks[1]).actions.map((a) => condition(a.condition)),
     ['FUNLD:DegToRad', 'FUNLD:DegToRad'],
   );
-  assert.equal(networks[1].actions[0].condition, networks[1].actions[1].condition);
-  const input = networks[1].actions[0].condition!;
+  assert.equal(
+    requireValue(requireValue(networks[1]).actions[0]).condition,
+    requireValue(requireValue(networks[1]).actions[1]).condition,
+  );
+  const input = requireValue(requireValue(networks[1]).actions[0]).condition!;
   assert.equal(input.kind, 'contact');
   if (input.kind === 'contact') assert.equal(input.instruction, p.instructions[2]);
   assert.deepEqual(
@@ -77,15 +81,21 @@ test('FUNAND and FBEAND remain serial boolean conditions feeding the later outpu
     'FBEXEC StoragePrint dummyWriter dummyPath dummyText dummyBusy dummyError dummyErrorCode',
   ]);
   const networks = buildKeyenceNetworks(p),
-    network = networks[0];
+    network = requireValue(networks[0]);
   assert.equal(networks.length, 1);
   assert.deepEqual(
     network.actions.map((a) => a.instruction.opcode),
     ['OUT', 'FBEXEC'],
   );
-  assert.equal(condition(network.actions[0].condition), '((R9830 & FUNAND:EQ) & FBEAND:TON)');
-  assert.equal(network.actions[1].condition, network.actions[0].condition);
-  assert.equal(network.actions[1].instruction.fb?.instance, 'dummyWriter');
+  assert.equal(
+    condition(requireValue(network.actions[0]).condition),
+    '((R9830 & FUNAND:EQ) & FBEAND:TON)',
+  );
+  assert.equal(
+    requireValue(network.actions[1]).condition,
+    requireValue(network.actions[0]).condition,
+  );
+  assert.equal(requireValue(network.actions[1]).instruction.fb?.instance, 'dummyWriter');
   assert.deepEqual(network.warnings, []);
   assert.deepEqual(network.instructions, p.instructions);
 });
@@ -108,7 +118,7 @@ test('MPS MRD and MPP restore the same prefix across function and function-block
   ]);
   const before = structuredClone(p),
     networks = buildKeyenceNetworks(p),
-    actions = networks[0].actions;
+    actions = requireValue(networks[0]).actions;
   assert.equal(networks.length, 2);
   assert.deepEqual(
     actions.map((a) => condition(a.condition)),
@@ -118,7 +128,7 @@ test('MPS MRD and MPP restore the same prefix across function and function-block
     actions.map((a) => a.instruction.fb?.name ?? a.instruction.opcode),
     ['MOVE', 'OUT', 'SIN'],
   );
-  const first = actions[0].condition!;
+  const first = requireValue(actions[0]).condition!;
   assert.equal(first.kind, 'and');
   if (first.kind === 'and')
     for (const action of actions.slice(1)) {
@@ -126,7 +136,7 @@ test('MPS MRD and MPP restore the same prefix across function and function-block
       if (action.condition?.kind === 'and')
         assert.equal(action.condition.left, first.left, 'restored prefixes retain object identity');
     }
-  assert.equal(condition(networks[1].actions[0].condition), 'R9842');
+  assert.equal(condition(requireValue(requireValue(networks[1]).actions[0]).condition), 'R9842');
   assert.deepEqual(
     networks.flatMap((n) => n.warnings),
     [],
@@ -148,11 +158,11 @@ test('ST and annotation markers become independent networks without inheriting a
       'OUT MR9851',
       'AREA_ST',
       ';\tuiDummy := 47;',
-      bookmark,
+      requireValue(bookmark),
       ';Dummy section',
       'LD R9852',
       'OUT MR9853',
-      comment,
+      requireValue(comment),
       ';Dummy first note',
       ';Dummy second note',
       'LD R9854',
@@ -175,22 +185,22 @@ test('ST and annotation markers become independent networks without inheriting a
         ['ENDH'],
       ],
     );
-    assert.equal(networks[1].actions[0].condition, null);
-    assert.equal(networks[1].actions[0].instruction, p.instructions[2]);
+    assert.equal(requireValue(requireValue(networks[1]).actions[0]).condition, null);
+    assert.equal(requireValue(requireValue(networks[1]).actions[0]).instruction, p.instructions[2]);
     assert.deepEqual(
-      networks[1].instructions[0].st?.lines.map((line) => line.text),
+      requireValue(requireValue(networks[1]).instructions[0]).st?.lines.map((line) => line.text),
       ['\tuiDummy := 47;'],
     );
-    assert.equal(networks[2].statement, 'Dummy section');
-    assert.equal(networks[4].statement, 'Dummy first note\nDummy second note');
+    assert.equal(requireValue(networks[2]).statement, 'Dummy section');
+    assert.equal(requireValue(networks[4]).statement, 'Dummy first note\nDummy second note');
     for (const index of [2, 4]) {
-      assert.deepEqual(networks[index].actions, []);
-      assert.equal(networks[index].condition, null);
+      assert.deepEqual(requireValue(networks[index]).actions, []);
+      assert.equal(requireValue(networks[index]).condition, null);
     }
-    assert.equal(networks[3].statement, '');
-    assert.equal(networks[5].statement, '');
-    assert.equal(condition(networks[3].actions[0].condition), 'R9852');
-    assert.equal(condition(networks[5].actions[0].condition), 'R9854');
+    assert.equal(requireValue(networks[3]).statement, '');
+    assert.equal(requireValue(networks[5]).statement, '');
+    assert.equal(condition(requireValue(requireValue(networks[3]).actions[0]).condition), 'R9852');
+    assert.equal(condition(requireValue(requireValue(networks[5]).actions[0]).condition), 'R9854');
     assert.deepEqual(
       networks.flatMap((n) => n.warnings),
       [],
@@ -215,11 +225,11 @@ test('known terminal function and stateful block calls are complete without a fo
       [],
     );
     assert.equal(
-      networks[0].actions.length,
+      requireValue(networks[0]).actions.length,
       0,
       'an inline function does not create a duplicate output action',
     );
-    assert.ok(networks[0].condition);
+    assert.ok(requireValue(networks[0]).condition);
     assert.deepEqual(
       networks.flatMap((n) => n.instructions),
       p.instructions,
@@ -228,7 +238,7 @@ test('known terminal function and stateful block calls are complete without a fo
   for (const lines of [['LD R9861'], ['LD R9862', 'FUNAND EQ dummyLeft dummyRight']]) {
     const networks = buildKeyenceNetworks(program([...lines, 'END']));
     assert.ok(
-      networks[0].warnings.some((w) => w.includes('出力命令がありません')),
+      requireValue(networks[0]).warnings.some((w) => w.includes('出力命令がありません')),
       'a pure condition still needs a destination',
     );
   }
@@ -241,7 +251,7 @@ test('malformed KV-X function branches keep their instructions and report missin
   ]) {
     const p = program([command, 'OUT MR9870']),
       networks = buildKeyenceNetworks(p);
-    assert.ok(networks[0].warnings.some((w) => w.includes('前にLD接点がありません')));
+    assert.ok(requireValue(networks[0]).warnings.some((w) => w.includes('前にLD接点がありません')));
     assert.deepEqual(
       networks.flatMap((n) => n.instructions),
       p.instructions,
@@ -258,9 +268,9 @@ test('malformed KV-X function branches keep their instructions and report missin
     'OUT MR9873',
   ]);
   const networks = buildKeyenceNetworks(p);
-  assert.ok(networks[0].warnings.some((w) => w.includes('対応するMPPがありません')));
+  assert.ok(requireValue(networks[0]).warnings.some((w) => w.includes('対応するMPPがありません')));
   assert.ok(
-    networks[2].warnings.some((w) => w.includes('対応するMPSがありません')),
+    requireValue(networks[2]).warnings.some((w) => w.includes('対応するMPSがありません')),
     'a branch stack cannot leak through an independent ST block',
   );
   assert.deepEqual(

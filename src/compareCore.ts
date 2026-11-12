@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { diffArrays } from 'diff';
 export type CompareSide = 'source' | 'target';
 export type ChangeKind = 'changed' | 'added' | 'removed';
@@ -42,10 +43,10 @@ function changedPairs<T>(a: T[], b: T[], score: (a: T, b: T) => number): Aligned
   for (let x = 1; x <= a.length; x++)
     for (let y = 1; y <= b.length; y++) {
       const index = x * width + y,
-        left = values[index - 1],
-        up = values[index - width],
-        similarity = score(a[x - 1], b[y - 1]);
-      const paired = similarity > 0 ? values[index - width - 1] + similarity : -1;
+        left = requireValue(values[index - 1]),
+        up = requireValue(values[index - width]),
+        similarity = score(requireValue(a[x - 1]), requireValue(b[y - 1]));
+      const paired = similarity > 0 ? requireValue(values[index - width - 1]) + similarity : -1;
       if (paired > Math.max(left, up)) {
         values[index] = paired;
         moves[index] = 3;
@@ -79,18 +80,21 @@ export function alignSequence<T>(
     y = 0;
   const chunks = diffArrays(a.map(key), b.map(key));
   for (let index = 0; index < chunks.length; index++) {
-    const chunk = chunks[index];
+    const chunk = requireValue(chunks[index]);
     if (!chunk.added && !chunk.removed) {
       for (let n = 0; n < chunk.count; n++) result.push({ source: a[x++], target: b[y++] });
       continue;
     }
     const removed: T[] = [],
       added: T[] = [];
-    while (index < chunks.length && (chunks[index].added || chunks[index].removed)) {
-      const part = chunks[index];
+    while (
+      index < chunks.length &&
+      (requireValue(chunks[index]).added || requireValue(chunks[index]).removed)
+    ) {
+      const part = requireValue(chunks[index]);
       for (let n = 0; n < part.count; n++)
-        if (part.removed) removed.push(a[x++]);
-        else added.push(b[y++]);
+        if (part.removed) removed.push(requireValue(a[x++]));
+        else added.push(requireValue(b[y++]));
       index++;
     }
     index--;
@@ -109,22 +113,25 @@ export function alignInstructions(
     y = 0;
   const chunks = diffArrays(source.map(networkKey), target.map(networkKey));
   for (let index = 0; index < chunks.length; index++) {
-    const chunk = chunks[index];
+    const chunk = requireValue(chunks[index]);
     if (!chunk.added && !chunk.removed) {
       for (let n = 0; n < chunk.count; n++) {
-        const a = source[x++],
-          b = target[y++];
+        const a = requireValue(source[x++]),
+          b = requireValue(target[y++]);
         result.push(...a.map((instruction, index) => ({ source: instruction, target: b[index] })));
       }
       continue;
     }
     const a: CompareInstruction[] = [],
       b: CompareInstruction[] = [];
-    while (index < chunks.length && (chunks[index].added || chunks[index].removed)) {
-      const part = chunks[index];
+    while (
+      index < chunks.length &&
+      (requireValue(chunks[index]).added || requireValue(chunks[index]).removed)
+    ) {
+      const part = requireValue(chunks[index]);
       for (let n = 0; n < part.count; n++)
-        if (part.removed) a.push(...source[x++]);
-        else b.push(...target[y++]);
+        if (part.removed) a.push(...requireValue(source[x++]));
+        else b.push(...requireValue(target[y++]));
       index++;
     }
     index--;
@@ -196,7 +203,9 @@ export function adjacentDifferenceBlock(
   }
   return (
     differences
-      .filter((index) => (anchor >= 0 ? index < anchor : blocks[index].top < scrollTop - 1))
+      .filter((index) =>
+        anchor >= 0 ? index < anchor : requireValue(blocks[index]).top < scrollTop - 1,
+      )
       .at(-1) ?? -1
   );
 }

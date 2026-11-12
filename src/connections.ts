@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { isControlMarker } from './controlFlow';
 import type { Network } from './model';
 import { gridLayout } from './layout';
@@ -48,10 +49,13 @@ export function compareConnections(source: Network[], target: Network[]): void {
       : undefined;
   for (const [side, networks] of [source, target].entries())
     networks.forEach((network, index) => {
-      const difference = differences[side][index];
+      const difference = requireValue(differences[side])[index];
       network.connectionDifferences =
         network.outputRowAlignment || network.branchRowAlignment
-          ? { ...difference, naturalWires: natural![side][index].wires }
+          ? {
+              ...requireValue(difference),
+              naturalWires: requireValue(requireValue(natural![side])[index]).wires,
+            }
           : difference;
     });
 }

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -18,7 +19,7 @@ const st = (lines: string[]) =>
 test('ST preserves source whitespace for copying and includes its final source line in the block range', () => {
   const lines = ['IF DummyReady THEN', '\tDummyTotal := 31;', '', 'END_IF;'],
     p = st(lines),
-    i = p.instructions[0];
+    i = requireValue(p.instructions[0]);
   assert.equal(keyenceInstructionCopyText(i, p), lines.join('\r\n'));
   assert.equal(blockRangeText([{ instructions: [i] }]), '元ファイル 2～6行');
   assert.deepEqual(
@@ -29,7 +30,7 @@ test('ST preserves source whitespace for copying and includes its final source l
 
 test('ST wrapping retains all characters and source locations while scroll mode retains complete lines', () => {
   const lines = ['\tDummyText := ' + '仮の文字列'.repeat(60) + ';', '', 'DummyFlag := FALSE;'],
-    i = st(lines).instructions[0];
+    i = requireValue(st(lines).instructions[0]);
   const wrapped = keyenceStLayout(i, true),
     scroll = keyenceStLayout(i, false);
   assert.ok(wrapped.rows.length > scroll.rows.length);
@@ -37,7 +38,7 @@ test('ST wrapping retains all characters and source locations while scroll mode 
   for (const line of i.st!.lines) {
     const fragments = wrapped.rows.filter((row) => row.sourceLine === line.sourceLine);
     assert.equal(fragments.map((row) => row.text).join(''), line.text.replace('\t', '    '));
-    assert.equal(fragments[0].continuation, false);
+    assert.equal(requireValue(fragments[0]).continuation, false);
     assert.ok(fragments.slice(1).every((row) => row.continuation));
   }
   assert.ok(wrapped.height > scroll.height);
@@ -49,7 +50,7 @@ test('ST comparison highlights only changed or inserted source lines, with uncha
   const b = st(['DummyA := 2;', '', 'DummyB := 9;', 'DummyInserted := TRUE;', 'DummyC := 4;']);
   const comparison = compareKeyencePrograms(a, b);
   assert.equal(comparison.changes.length, 1);
-  const change = comparison.changes[0];
+  const change = requireValue(comparison.changes[0]);
   assert.equal(change.kind, 'changed');
   assert.deepEqual([...keyenceStChangedLines(change.source!)], [5]);
   assert.deepEqual([...keyenceStChangedLines(change.target!)], [5, 6]);

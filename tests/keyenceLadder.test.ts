@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -34,12 +35,12 @@ test('Keyence ANB and ORB are inverted contacts and never Mitsubishi block joins
   const networks = buildKeyenceNetworks(p),
     actions = outputs(networks);
   assert.equal(actions.length, 1);
-  assert.equal(expression(actions[0].condition), '((CR9001 & !MR11) | !MR12)');
+  assert.equal(expression(requireValue(actions[0]).condition), '((CR9001 & !MR11) | !MR12)');
   assert.deepEqual(
     networks.flatMap((network) => network.warnings),
     [],
   );
-  const logic = actions[0].condition!;
+  const logic = requireValue(actions[0]).condition!;
   assert.equal(logic.kind, 'or');
   if (logic.kind === 'or') {
     assert.equal(logic.right.kind, 'contact');
@@ -60,7 +61,7 @@ test('Keyence ANL joins two loaded blocks with AND and ORL joins them with OR', 
     const p = program(['LD MR1', 'OR MR2', 'LD MR3', 'AND MR4', join, 'OUT MR20', 'END', 'ENDH']);
     const networks = buildKeyenceNetworks(p);
     assert.equal(
-      expression(outputs(networks)[0].condition),
+      expression(requireValue(outputs(networks)[0]).condition),
       `((MR1 | MR2) ${operator} (MR3 & MR4))`,
     );
     assert.deepEqual(
@@ -112,7 +113,7 @@ test('a normal LD after an output starts a separate Keyence network', () => {
       network.actions.some((action) => action.instruction.opcode === 'OUT'),
     );
   assert.equal(rungs.length, 2);
-  assert.notEqual(rungs[0].id, rungs[1].id);
+  assert.notEqual(requireValue(rungs[0]).id, requireValue(rungs[1]).id);
   assert.deepEqual(
     outputs(rungs).map((action) => expression(action.condition)),
     ['MR1', 'MR2'],
@@ -139,11 +140,11 @@ test('Keyence network building retains raw commands, comments, source rows and E
     networks.flatMap((network) => network.instructions).map((i) => i.id),
     p.instructions.map((i) => i.id),
   );
-  assert.equal(networks[0].statement, 'synthetic heading');
-  assert.equal(p.instructions[0].raw, '  LD CR9001 ; synthetic inline comment');
-  assert.equal(p.instructions[0].comment, 'synthetic inline comment');
-  assert.equal(p.instructions[0].sourceLine, 5);
-  assert.deepEqual(p.instructions[1].operands, ['"A B"', 'DM200']);
+  assert.equal(requireValue(networks[0]).statement, 'synthetic heading');
+  assert.equal(requireValue(p.instructions[0]).raw, '  LD CR9001 ; synthetic inline comment');
+  assert.equal(requireValue(p.instructions[0]).comment, 'synthetic inline comment');
+  assert.equal(requireValue(p.instructions[0]).sourceLine, 5);
+  assert.deepEqual(requireValue(p.instructions[1]).operands, ['"A B"', 'DM200']);
   assert.deepEqual(
     networks
       .flatMap((network) => network.instructions)
@@ -198,7 +199,7 @@ function finiteDrawing(drawing: ReturnType<typeof layoutKeyenceNetwork>): void {
 
 test('Keyence shared conditions draw once and feed two separate output rows', () => {
   const p = program(['LD MR1', 'OUT MR20', 'OUT MR21', 'END', 'ENDH']);
-  const network = buildKeyenceNetworks(p)[0],
+  const network = requireValue(buildKeyenceNetworks(p)[0]),
     before = structuredClone({ p, network });
   const drawing = layoutKeyenceNetwork(network, p);
   const contacts = drawing.symbols.filter((s) => s.kind === 'contact'),
@@ -206,12 +207,16 @@ test('Keyence shared conditions draw once and feed two separate output rows', ()
   assert.equal(contacts.length, 1);
   assert.equal(coils.length, 2);
   assert.equal(drawing.rows, 2);
-  assert.notEqual(coils[0].y, coils[1].y);
-  const end = contacts[0].x + contacts[0].width;
+  assert.notEqual(requireValue(coils[0]).y, requireValue(coils[1]).y);
+  const end = requireValue(contacts[0]).x + requireValue(contacts[0]).width;
   assert.ok(coils.every((s) => s.x >= end));
   assert.ok(
     drawing.wires.some(
-      (w) => w.x1 === end && w.x2 === end && w.y1 === coils[0].y && w.y2 === coils[1].y,
+      (w) =>
+        w.x1 === end &&
+        w.x2 === end &&
+        w.y1 === requireValue(coils[0]).y &&
+        w.y2 === requireValue(coils[1]).y,
     ),
   );
   finiteDrawing(drawing);
@@ -220,23 +225,29 @@ test('Keyence shared conditions draw once and feed two separate output rows', ()
 
 test('Keyence OR branches merge before the following serial contact and output', () => {
   const p = program(['LD MR1', 'OR MR2', 'AND MR3', 'OUT MR20', 'END', 'ENDH']);
-  const drawing = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p);
+  const drawing = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p);
   const [a, b, c] = drawing.symbols.filter((s) => s.kind === 'contact'),
     out = drawing.symbols.find((s) => s.kind === 'coil')!;
-  assert.equal(a.x, b.x);
-  assert.ok(b.y > a.y);
-  assert.equal(c.y, a.y);
-  assert.equal(c.x, a.x + a.width);
-  assert.ok(out.x >= c.x + c.width);
+  assert.equal(requireValue(a).x, requireValue(b).x);
+  assert.ok(requireValue(b).y > requireValue(a).y);
+  assert.equal(requireValue(c).y, requireValue(a).y);
+  assert.equal(requireValue(c).x, requireValue(a).x + requireValue(a).width);
+  assert.ok(out.x >= requireValue(c).x + requireValue(c).width);
   assert.ok(
-    drawing.wires.some((w) => w.x1 === c.x && w.x2 === c.x && w.y1 === a.y && w.y2 === b.y),
+    drawing.wires.some(
+      (w) =>
+        w.x1 === requireValue(c).x &&
+        w.x2 === requireValue(c).x &&
+        w.y1 === requireValue(a).y &&
+        w.y2 === requireValue(b).y,
+    ),
   );
   finiteDrawing(drawing);
 });
 
 test('Keyence inverted ANB and ORB remain contact symbols in layout', () => {
   const p = program(['LD MR1', 'ANB MR2', 'ORB MR3', 'OUT MR20', 'END', 'ENDH']);
-  const drawing = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p);
+  const drawing = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p);
   assert.deepEqual(
     drawing.symbols
       .filter((s) => s.kind === 'contact')
@@ -253,7 +264,7 @@ test('Keyence inverted ANB and ORB remain contact symbols in layout', () => {
 test('long Keyence command labels reserve space after every condition without backward output wires', () => {
   const label = 'SYNTHETIC_PROCESSING_COMMAND_WITH_A_LONG_LABEL_' + 'X'.repeat(100);
   const p = program(['LD MR1', 'AND MR2', label + ' DM100 DM200', 'END', 'ENDH']);
-  const drawing = layoutKeyenceNetwork(buildKeyenceNetworks(p)[0], p);
+  const drawing = layoutKeyenceNetwork(requireValue(buildKeyenceNetworks(p)[0]), p);
   const command = drawing.symbols.find((s) => s.kind === 'command')!,
     contacts = drawing.symbols.filter((s) => s.kind === 'contact');
   assert.equal(command.label, label + ' DM100 DM200');
@@ -272,7 +283,7 @@ test('Keyence comment visibility preserves instructions and models while reducin
     'END',
     'ENDH',
   ]);
-  const network = buildKeyenceNetworks(p)[0],
+  const network = requireValue(buildKeyenceNetworks(p)[0]),
     before = structuredClone({ p, network });
   const shown = layoutKeyenceNetwork(network, p, true),
     hidden = layoutKeyenceNetwork(network, p, false);
@@ -312,14 +323,14 @@ test('Keyence LD after MPP restores a final loaded block inside the same output 
     rungs = networks.filter((n) => n.actions.some((a) => a.instruction.opcode === 'OUT'));
   assert.equal(rungs.length, 2);
   assert.deepEqual(
-    rungs[0].actions.map((a) => a.instruction.operands[0]),
+    requireValue(rungs[0]).actions.map((a) => a.instruction.operands[0]),
     ['MR20', 'MR21', 'MR22'],
   );
   assert.deepEqual(
-    rungs[0].actions.map((a) => expression(a.condition)),
+    requireValue(rungs[0]).actions.map((a) => expression(a.condition)),
     ['(MR1 & MR2)', '(MR1 & MR3)', '(MR1 & MR4)'],
   );
-  assert.equal(expression(rungs[1].actions[0].condition), 'MR5');
+  assert.equal(expression(requireValue(requireValue(rungs[1]).actions[0]).condition), 'MR5');
   assert.deepEqual(
     networks.flatMap((n) => n.warnings),
     [],
@@ -333,22 +344,22 @@ test('Keyence LD after MPP restores a final loaded block inside the same output 
 test('Keyence layout preserves output order when a shared condition reappears after another branch', () => {
   const p = program(['LD MR1', 'AND MR2', 'OUT MR20', 'LD MR3', 'OUT MR21', 'OUT MR22']);
   const [first, second] = buildKeyenceNetworks(p),
-    ab = first.actions[0].condition!;
+    ab = requireValue(requireValue(first).actions[0]).condition!;
   assert.equal(ab.kind, 'and');
   if (ab.kind !== 'and') return;
-  const ac: Expression = { kind: 'and', left: ab.left, right: second.condition! };
+  const ac: Expression = { kind: 'and', left: ab.left, right: requireValue(second).condition! };
   const network = {
-    ...first,
+    ...requireValue(first),
     instructions: p.instructions,
     actions: [
-      { ...first.actions[0], condition: ab },
-      { ...second.actions[0], condition: ac },
-      { ...second.actions[1], condition: ab },
+      { ...requireValue(requireValue(first).actions[0]), condition: ab },
+      { ...requireValue(requireValue(second).actions[0]), condition: ac },
+      { ...requireValue(requireValue(second).actions[1]), condition: ab },
     ],
   };
   assert.equal(
-    network.actions[0].condition,
-    network.actions[2].condition,
+    requireValue(network.actions[0]).condition,
+    requireValue(network.actions[2]).condition,
     'the nonconsecutive prefix deliberately has object identity',
   );
   const before = structuredClone({ p, network }),
@@ -358,7 +369,10 @@ test('Keyence layout preserves output order when a shared condition reappears af
     coils.map((s) => s.label),
     ['MR20', 'MR21', 'MR22'],
   );
-  assert.ok(coils[0].y < coils[1].y && coils[1].y < coils[2].y);
+  assert.ok(
+    requireValue(coils[0]).y < requireValue(coils[1]).y &&
+      requireValue(coils[1]).y < requireValue(coils[2]).y,
+  );
   assert.equal(drawing.symbols.filter((s) => s.kind === 'contact' && s.label === 'MR2').length, 2);
   finiteDrawing(drawing);
   assert.deepEqual({ p, network }, before);
@@ -391,14 +405,14 @@ for (const [name, branch, expected] of [
     const rungs = networks.filter((n) => n.actions.some((a) => a.instruction.opcode === 'OUT'));
     assert.equal(rungs.length, 2);
     assert.deepEqual(
-      rungs[0].actions.map((a) => a.instruction.operands[0]),
+      requireValue(rungs[0]).actions.map((a) => a.instruction.operands[0]),
       ['MR20', 'MR21'],
     );
     assert.deepEqual(
-      rungs[0].actions.map((a) => expression(a.condition)),
+      requireValue(rungs[0]).actions.map((a) => expression(a.condition)),
       ['(MR1 & MR2)', expected],
     );
-    assert.equal(expression(rungs[1].actions[0].condition), 'MR6');
+    assert.equal(expression(requireValue(requireValue(rungs[1]).actions[0]).condition), 'MR6');
     assert.deepEqual(
       networks.flatMap((n) => n.warnings),
       [],
@@ -456,9 +470,9 @@ for (const [opcode, operation] of [
         networks = buildKeyenceNetworks(p);
       const rung = networks.find((n) => n.actions.some((a) => a.instruction.opcode === 'OUT'))!;
       assert.equal(rung.actions.length, 1);
-      assert.equal(rung.actions[0].instruction.opcode, 'OUT');
+      assert.equal(requireValue(rung.actions[0]).instruction.opcode, 'OUT');
       assert.equal(
-        expression(rung.actions[0].condition),
+        expression(requireValue(rung.actions[0]).condition),
         `((${operation}(MR1) & (MR2 | MR3)) & MR4)`,
       );
       assert.deepEqual(
@@ -472,8 +486,8 @@ for (const [opcode, operation] of [
       const drawing = layoutKeyenceNetwork(rung, p),
         inline = drawing.symbols.filter((s) => s.kind === 'inline');
       assert.equal(inline.length, 1);
-      assert.equal(inline[0].instruction.opcode, opcode);
-      assert.equal(inline[0].operation, operation);
+      assert.equal(requireValue(inline[0]).instruction.opcode, opcode);
+      assert.equal(requireValue(inline[0]).operation, operation);
       assert.equal(drawing.symbols.filter((s) => s.kind === 'contact').length, 4);
       const out = drawing.symbols.find((s) => s.kind === 'coil')!;
       assert.ok(
@@ -500,10 +514,10 @@ test('Keyence bit operations are contacts while LDA and ANDA remain commands', (
         : ['LD CR9001', opcode + ' DM200 #3', 'OUT MR20'];
     const p = program(lines),
       networks = buildKeyenceNetworks(p),
-      rung = networks[0];
+      rung = requireValue(networks[0]);
     assert.equal(rung.actions.length, 1);
-    assert.equal(rung.actions[0].instruction.opcode, 'OUT');
-    const condition = rung.actions[0].condition!;
+    assert.equal(requireValue(rung.actions[0]).instruction.opcode, 'OUT');
+    const condition = requireValue(rung.actions[0]).condition!;
     const bit = condition.kind === 'and' || condition.kind === 'or' ? condition.right : condition;
     assert.equal(bit.kind, 'contact');
     if (bit.kind === 'contact') {
@@ -527,7 +541,7 @@ test('Keyence bit operations are contacts while LDA and ANDA remain commands', (
     finiteDrawing(drawing);
   }
   const p = program(['LD MR1', 'LDA DM100', 'ANDA DM101', 'OUT MR20']);
-  const rung = buildKeyenceNetworks(p)[0];
+  const rung = requireValue(buildKeyenceNetworks(p)[0]);
   assert.deepEqual(
     rung.actions.map((a) => a.instruction.opcode),
     ['LDA', 'ANDA', 'OUT'],
@@ -554,20 +568,20 @@ test('Keyence CON command chain survives STA and leaves an unconnected output as
   ]);
   const before = structuredClone(p),
     networks = buildKeyenceNetworks(p),
-    rung = networks[0];
+    rung = requireValue(networks[0]);
   assert.deepEqual(
     rung.actions.map((a) => a.instruction.opcode),
     ['LDA', 'OUT'],
   );
-  const chain = rung.actions[0];
+  const chain = requireValue(rung.actions[0]);
   assert.deepEqual(
     chain.continuations?.map((i) => i.opcode),
     ['TBCD', 'STA', 'MOV'],
   );
   assert.deepEqual(chain.continuations?.at(-1)?.operands, ['DM9172', 'DM9173']);
   assert.equal(expression(chain.condition), 'MR9170');
-  assert.equal(expression(rung.actions[1].condition), 'MR9170');
-  assert.ok(!rung.actions[1].continuations?.length);
+  assert.equal(expression(requireValue(rung.actions[1]).condition), 'MR9170');
+  assert.ok(!requireValue(rung.actions[1]).continuations?.length);
   assert.deepEqual(
     networks.flatMap((n) => n.instructions).map((i) => i.id),
     p.instructions.map((i) => i.id),
@@ -584,16 +598,20 @@ test('Keyence CON command chain survives STA and leaves an unconnected output as
     commands.map((s) => s.instruction.opcode),
     ['LDA', 'TBCD', 'STA', 'MOV'],
   );
-  assert.ok(commands.every((s) => s.y === commands[0].y));
-  assert.ok(commands.slice(1).every((s, i) => s.x >= commands[i].x + commands[i].width));
-  assert.notEqual(out.y, commands[0].y);
+  assert.ok(commands.every((s) => s.y === requireValue(commands[0]).y));
+  assert.ok(
+    commands
+      .slice(1)
+      .every((s, i) => s.x >= requireValue(commands[i]).x + requireValue(commands[i]).width),
+  );
+  assert.notEqual(out.y, requireValue(commands[0]).y);
   finiteDrawing(drawing);
   assert.deepEqual(p, before);
 });
 
 test('Keyence KEEP draws the SET and RES input branches independently with SET above RES', () => {
   const p = program(['LD MR1', 'LD MR2', 'KEEP MR20', 'END', 'ENDH']);
-  const network = buildKeyenceNetworks(p)[0],
+  const network = requireValue(buildKeyenceNetworks(p)[0]),
     before = structuredClone({ p, network });
   const drawing = layoutKeyenceNetwork(network, p),
     keep = drawing.symbols.find((s) => s.kind === 'keep')!;
@@ -603,12 +621,14 @@ test('Keyence KEEP draws the SET and RES input branches independently with SET a
     ['SET', 'RES'],
   );
   const [set, res] = keep.ports!;
-  assert.ok(set.y < res.y);
-  assert.ok(Number.isFinite(keep.height) && keep.height! > res.y - set.y);
+  assert.ok(requireValue(set).y < requireValue(res).y);
+  assert.ok(
+    Number.isFinite(keep.height) && keep.height! > requireValue(res).y - requireValue(set).y,
+  );
   const setContact = drawing.symbols.find((s) => s.label === 'MR1')!,
     resContact = drawing.symbols.find((s) => s.label === 'MR2')!;
-  assert.equal(setContact.y, set.y);
-  assert.equal(resContact.y, res.y);
+  assert.equal(setContact.y, requireValue(set).y);
+  assert.equal(resContact.y, requireValue(res).y);
   for (const contact of [setContact, resContact]) {
     assert.ok(contact.x + contact.width <= keep.x);
     assert.ok(
@@ -627,8 +647,8 @@ test('Keyence KEEP draws the SET and RES input branches independently with SET a
         w.x1 === w.x2 &&
         w.x1 > drawing.left &&
         w.x1 <= keep.x &&
-        Math.min(w.y1, w.y2) <= set.y &&
-        Math.max(w.y1, w.y2) >= res.y,
+        Math.min(w.y1, w.y2) <= requireValue(set).y &&
+        Math.max(w.y1, w.y2) >= requireValue(res).y,
     ),
     'the independent SET and RES inputs must not be joined by a vertical wire',
   );

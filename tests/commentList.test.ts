@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import Papa from 'papaparse';
@@ -113,7 +114,7 @@ test('native context menu and list opening carry the chosen device and its own c
       { type: 'show-comment-list', commentList: request },
     ]);
     assert.equal(request.selectedAddress, 'MR92');
-    assert.equal(request.entries[0].comment, 'Dummy target only');
+    assert.equal(requireValue(request.entries[0]).comment, 'Dummy target only');
   } finally {
     if (previous) Object.defineProperty(globalThis, 'window', previous);
     else Reflect.deleteProperty(globalThis, 'window');

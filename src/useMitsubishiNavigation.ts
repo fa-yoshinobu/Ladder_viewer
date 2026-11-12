@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { type DeviceComments } from './comments';
 import { comparisonDisplayProgram, type ComparisonDisplay } from './comparisonDisplay';
@@ -10,6 +11,7 @@ import { buildSearchIndex, searchInstructions, type SearchMode } from './search'
 import { useZoom } from './useZoom';
 import { visibleRange } from './visibleRange';
 import { useSetting } from './settings';
+import { useDebouncedValue } from './useDebouncedValue';
 export function useMitsubishiNavigation(
   program: Program | null,
   keyenceProgram: KeyenceProgram | null,
@@ -20,6 +22,16 @@ export function useMitsubishiNavigation(
   const [selectedSide, setSelectedSide] = useState<CompareSide>('source');
   const [comparisonDisplay, setComparisonDisplay] = useState<ComparisonDisplay>('both');
   const [searchQuery, setSearchQuery] = useState('');
+  const settledQuery = useDebouncedValue(searchQuery);
+  const previousSearch = useRef<{
+    query: string;
+    mode: SearchMode;
+    program: Program | null;
+  } | null>(null);
+  const comparisonPosition = useRef<{ step: string; id: string; side: CompareSide } | null>(null);
+  const pendingDisplayPosition = useRef<{ step: string; id: string; side: CompareSide } | null>(
+    null,
+  );
   const [searchMode, setSearchMode] = useState<SearchMode>('partial');
   const [searchCurrent, setSearchCurrent] = useState(-1);
   const [comparisonNavigation, setComparisonNavigation] = useState<{
@@ -41,6 +53,8 @@ export function useMitsubishiNavigation(
   const [viewport, setViewport] = useState({ top: 0, height: 800 });
   const scroll = useRef<HTMLDivElement>(null);
   function resetKeyence() {
+    comparisonPosition.current = null;
+    pendingDisplayPosition.current = null;
     pendingFit.current = false;
     pendingInstruction.current = null;
     setComparisonNavigation(undefined);
@@ -48,6 +62,8 @@ export function useMitsubishiNavigation(
     setSelected(null);
   }
   function resetProgram(next: Program) {
+    comparisonPosition.current = null;
+    pendingDisplayPosition.current = null;
     pendingFit.current = true;
     setComparisonNavigation(undefined);
     pendingInstruction.current = null;
@@ -89,8 +105,8 @@ export function useMitsubishiNavigation(
     [program, deviceComments, comparisonDisplay],
   );
   const searchResults = useMemo(
-    () => searchInstructions(searchIndex, searchQuery, searchMode),
-    [searchIndex, searchQuery, searchMode],
+    () => searchInstructions(searchIndex, settledQuery, searchMode),
+    [searchIndex, settledQuery, searchMode],
   );
   const searchHeadings = useMemo(
     () =>
@@ -105,9 +121,21 @@ export function useMitsubishiNavigation(
     [searchResults, comparison],
   );
   useEffect(() => {
-    setSearchCurrent(searchResults.length ? 0 : -1);
-    const hit = searchResults[0];
-    if (hit) navigateInstruction(hit.instruction.id, hit.side);
+    const previous = previousSearch.current;
+    previousSearch.current = { query: settledQuery, mode: searchMode, program };
+    if (
+      !previous ||
+      previous.query !== settledQuery ||
+      previous.mode !== searchMode ||
+      previous.program !== program
+    ) {
+      setSearchCurrent(searchResults.length ? 0 : -1);
+      const hit = searchResults[0];
+      if (hit) navigateInstruction(hit.instruction.id, hit.side);
+    } else {
+      const index = searchResults.findIndex((hit) => hit.instruction.step === selected?.step);
+      setSearchCurrent(index);
+    }
   }, [searchResults]);
   useLayoutEffect(() => {
     const pending = pendingInstruction.current,
@@ -124,21 +152,34 @@ export function useMitsubishiNavigation(
   const total = layouts.at(-1);
   const [firstVisible, endVisible] = visibleRange(
     layouts.length,
-    (index) => layouts[index],
+    (index) => requireValue(layouts[index]),
     viewport.top - 400,
     viewport.top + viewport.height + 400,
   );
   const visible = layouts.slice(firstVisible, endVisible);
+  const previousGeometry = useRef({ program, layouts });
   useLayoutEffect(() => {
     const anchor = viewAnchor.current;
     viewAnchor.current = null;
-    const layout = layouts.find((item) => item.n.id === anchor);
+    const previous = previousGeometry.current;
+    const old =
+      previous.program === program
+        ? previous.layouts.find((item) => item.top + item.height > viewport.top)
+        : undefined;
+    const layout = layouts.find((item) => item.n.id === (anchor ?? old?.n.id));
     const element = scroll.current;
     if (layout) {
-      element?.scrollTo({ top: layout.top });
+      element?.scrollTo({
+        top:
+          layout.top +
+          (!anchor && old
+            ? (Math.max(0, viewport.top - old.top) / Math.max(1, old.height)) * layout.height
+            : 0),
+      });
       setActive(layout.n.id);
     }
     if (element) setViewport({ top: element.scrollTop, height: element.clientHeight });
+    previousGeometry.current = { program, layouts };
   }, [layouts]);
   useLayoutEffect(() => {
     const element = scroll.current;
@@ -192,17 +233,40 @@ export function useMitsubishiNavigation(
     setComparisonNavigation(undefined);
     pendingInstruction.current = null;
     if (!program || !comparison || next === comparisonDisplay) return;
-    const side = next === 'target' ? comparison.target : program;
+    const anchor = showComparison
+      ? comparisonPosition.current
+      : (() => {
+          const current = layouts.find((item) => item.top + item.height > viewport.top + 2);
+          const instruction = current?.n.instructions[0];
+          return instruction
+            ? { id: instruction.id, step: instruction.step, side: selectedSide }
+            : null;
+        })();
+    pendingDisplayPosition.current =
+      anchor ?? (selected ? { id: selected.id, step: selected.step, side: selectedSide } : null);
     setComparisonDisplay(next);
-    setSelected(null);
-    setSelectedSide(next === 'target' ? 'target' : 'source');
-    setActive(side.networks[0]?.id ?? '');
-    setZoom(next === 'both' ? 0.5 : 1);
     viewAnchor.current = null;
     pendingFit.current = true;
-    const element = scroll.current;
-    element?.scrollTo(0, 0);
-    setViewport({ top: element?.scrollTop ?? 0, height: element?.clientHeight ?? viewport.height });
+  }
+  useLayoutEffect(() => {
+    const anchor = pendingDisplayPosition.current;
+    if (!anchor || !program) return;
+    const container = showComparison ? comparisonWidth.current : scroll.current;
+    if (container && zoom !== fitLadderZoom(container.clientWidth, showComparison)) return;
+    const side = comparisonDisplay === 'both' ? anchor.side : comparisonDisplay;
+    const original = side === 'target' && comparison ? comparison.target : program;
+    const instruction =
+      original.instructions.find((item) => item.id === anchor.id) ??
+      original.instructions.find((item) => item.step === anchor.step);
+    if (!instruction) {
+      pendingDisplayPosition.current = null;
+      return;
+    }
+    pendingDisplayPosition.current = null;
+    navigateInstruction(instruction.id, side);
+  }, [layouts, comparisonDisplay]);
+  function rememberComparisonPosition(instruction: Instruction, side: CompareSide) {
+    comparisonPosition.current = { id: instruction.id, step: instruction.step, side };
   }
   function chooseDisplayedInstruction(instruction: Instruction) {
     setSelected(instruction);
@@ -269,7 +333,7 @@ export function useMitsubishiNavigation(
           : 0
         : (searchCurrent + delta + searchResults.length) % searchResults.length;
     setSearchCurrent(next);
-    const hit = searchResults[next];
+    const hit = requireValue(searchResults[next]);
     navigateInstruction(hit.instruction.id, hit.side);
   }
   return {
@@ -286,6 +350,7 @@ export function useMitsubishiNavigation(
     setSearchMode,
     searchCurrent,
     comparisonNavigation,
+    rememberComparisonPosition,
     comparisonWidth,
     active,
     zoom,

@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseProgram } from '../src/model.ts';
@@ -126,8 +127,8 @@ test('left and right Mitsubishi comments participate without changing command to
     { X0: 'after' },
   );
   assert.equal(result.comparison!.differentRows, 1);
-  assert.deepEqual(result.instructions[0].difference?.operandChanges, []);
-  assert.equal(result.instructions[0].difference?.opChanged, false);
+  assert.deepEqual(requireValue(result.instructions[0]).difference?.operandChanges, []);
+  assert.equal(requireValue(result.instructions[0]).difference?.opChanged, false);
 });
 test('Keyence inserts use full-rung anchors and preserve original line identities', () => {
   const source = kv(['LD R0', 'AND R1', 'OUT MR0', 'LD R2', 'MOV #1 DM0', 'END']);
@@ -149,7 +150,7 @@ test('Keyence inserts use full-rung anchors and preserve original line identitie
     ['added', 'added', 'added', 'changed'],
   );
   assert.equal(JSON.stringify([source, target]), before);
-  assert.equal(result.source.instructions[0].sourceLine, 2);
+  assert.equal(requireValue(result.source.instructions[0]).sourceLine, 2);
   assert.equal(result.source.instructions.find((i) => i.opcode === 'OUT')?.difference, undefined);
   for (const mode of ['wrap', 'scroll'] as const) {
     const diagrams = keyenceComparisonDrawings(result, true, mode);
@@ -194,13 +195,15 @@ test('Keyence KEEP preserves its two inputs and operand-only changes leave its o
     2,
   );
   assert.equal(result.changes.length, 1);
-  assert.equal(result.changes[0].source?.difference?.opChanged, false);
+  assert.equal(requireValue(result.changes[0]).source?.difference?.opChanged, false);
 });
 test('programs present only on one side remain deletions or additions', () => {
-  const input = directInputs(
-    parseCsvBatch([{ name: 'only.mnm', bytes: bytes('DEVICE:99\nLD R0\nOUT MR0') }]),
-  )[0];
-  const pair = pairDirectPrograms([], [input])[0],
+  const input = requireValue(
+    directInputs(
+      parseCsvBatch([{ name: 'only.mnm', bytes: bytes('DEVICE:99\nLD R0\nOUT MR0') }]),
+    )[0],
+  );
+  const pair = requireValue(pairDirectPrograms([], [input])[0]),
     result = compareDirectPair(pair);
   assert.equal(result.format, 'keyence');
   if (result.format === 'keyence')
@@ -212,7 +215,7 @@ test('folder comparison uses relative paths even when the minimal display names 
   const source = directInputs(batch('MAIN.mnm', 'axis/MAIN.mnm')),
     target = directInputs(batch('axis/MAIN.mnm', 'axis/MAIN.mnm'));
   assert.equal(pairDirectPrograms(source, target).length, 1);
-  assert.ok(pairDirectPrograms(source, target)[0].target);
+  assert.ok(requireValue(pairDirectPrograms(source, target)[0]).target);
   const other = directInputs(batch('MAIN.mnm', 'other/MAIN.mnm'));
   assert.equal(pairDirectPrograms(source, other).length, 2);
 });
@@ -223,7 +226,7 @@ test('native relative identities contain no absolute folder path and invalid typ
     folder: 'opaque',
     base64: Buffer.from('DEVICE:99\nEND').toString('base64'),
   };
-  assert.equal(decodeNativeCsvFiles([file])[0].relativePath, 'nested/MAIN.mnm');
+  assert.equal(requireValue(decodeNativeCsvFiles([file])[0]).relativePath, 'nested/MAIN.mnm');
   assert.throws(() => decodeNativeCsvFiles([{ ...file, relativePath: 3 } as any]), /受信データ/);
 });
 test('different manufacturers are rejected instead of using another parser or renderer', () => {
@@ -282,7 +285,7 @@ test('split and merged Keyence circuits retain both outputs and align their rows
     [separate, shared],
     [shared, separate],
   ]) {
-    const compared = compareKeyencePrograms(source, target);
+    const compared = compareKeyencePrograms(requireValue(source), requireValue(target));
     for (const value of ['#1', '#2']) {
       const a = compared.source.instructions.find(
         (i) => i.opcode === 'MOV' && i.operands[0] === value,

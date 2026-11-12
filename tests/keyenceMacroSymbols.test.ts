@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -15,10 +16,10 @@ import { CELL } from '../src/ladderMetrics.ts';
 
 // Entirely invented instructions, macro names and comments; no supplied program is a fixture.
 function symbol(text: string, parameters?: { name: string; comment: string }[]): KeyenceSymbol {
-  const instruction = parseKeyenceMnm(
-    new TextEncoder().encode('DEVICE:99\n' + text).buffer,
-    'dummy-macro.mnm',
-  ).instructions[0];
+  const instruction = requireValue(
+    parseKeyenceMnm(new TextEncoder().encode('DEVICE:99\n' + text).buffer, 'dummy-macro.mnm')
+      .instructions[0],
+  );
   if (parameters) instruction.macro = { parameters };
   const style = keyenceOutputStyle(instruction);
   return {
@@ -188,8 +189,8 @@ test('MCALL comments follow the display setting with bounded height and full tex
     { name: 'Output', comment: '' },
   ]);
   const geometry = keyenceMacroGeometry(s.instruction, true);
-  assert.equal(geometry.parameters[0].commentLines.length, 2);
-  assert.ok(geometry.parameters[0].commentLines[1].endsWith('…'));
+  assert.equal(requireValue(geometry.parameters[0]).commentLines.length, 2);
+  assert.ok(requireValue(requireValue(geometry.parameters[0]).commentLines[1]).endsWith('…'));
   assert.equal(geometry.top, -32);
   assert.equal(geometry.bottom, 40);
   assert.equal(fields(s, 'device-comment').length, 2);
@@ -214,12 +215,16 @@ test('MCALL headers and comments fit the circuit row, and wide argument lists re
         .buffer,
       'dummy-macro-bounds.mnm',
     );
-    const instruction = program.instructions[1];
+    const instruction = requireValue(program.instructions[1]);
     instruction.macro = {
       parameters: operands.map((_, index) => ({ name: 'Field' + index, comment: 'Invented note' })),
     };
     for (const comments of [false, true]) {
-      const drawing = layoutKeyenceNetwork(buildKeyenceNetworks(program)[0], program, comments);
+      const drawing = layoutKeyenceNetwork(
+        requireValue(buildKeyenceNetworks(program)[0]),
+        program,
+        comments,
+      );
       const s = drawing.symbols.find((s) => s.instruction === instruction)!;
       const geometry = keyenceMacroGeometry(instruction, comments);
       assert.equal(s.blockRows, 1, 'a normal two-line comment does not create an extra empty row');

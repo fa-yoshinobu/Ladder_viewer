@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseCsvBatch } from '../src/batch.ts';
@@ -24,10 +25,13 @@ test('native input never forwards supplemental HTML metadata', () => {
     referenceHtml: '<title>Ignored</title>',
   };
   const decoded = decodeNativeCsvFiles([supplied]);
-  assert.equal(Object.hasOwn(decoded[0], 'referenceHtml'), false);
+  assert.equal(Object.hasOwn(requireValue(decoded[0]), 'referenceHtml'), false);
   const result = parseCsvBatch(decoded);
   assert.deepEqual(result.errors, []);
-  assert.equal(result.keyencePrograms[0].instructions[1].fb?.pins[0].name, '引数1');
+  assert.equal(
+    requireValue(requireValue(result.keyencePrograms[0]).instructions[1]).fb?.pins[0]?.name,
+    '引数1',
+  );
 });
 
 test('native CSV bridge is optional in Node and ordinary browsers and returns the WebView bridge', () => {
@@ -75,10 +79,10 @@ for (const [encoding, programBytes, commentBytes] of [
       encodedFile('COMMENT.csv', commentBytes),
     ]);
     assert.ok(files.every((file) => file.bytes instanceof ArrayBuffer));
-    assert.deepEqual(new Uint8Array(files[0].bytes), programBytes);
-    assert.deepEqual(new Uint8Array(files[1].bytes), commentBytes);
-    assert.equal(files[0].bytes.byteLength, programBytes.length);
-    assert.equal(files[1].bytes.byteLength, commentBytes.length);
+    assert.deepEqual(new Uint8Array(requireValue(files[0]).bytes), programBytes);
+    assert.deepEqual(new Uint8Array(requireValue(files[1]).bytes), commentBytes);
+    assert.equal(requireValue(files[0]).bytes.byteLength, programBytes.length);
+    assert.equal(requireValue(files[1]).bytes.byteLength, commentBytes.length);
     const parsed = parseCsvBatch(files);
     assert.deepEqual(parsed.errors, []);
     assert.deepEqual(
@@ -86,12 +90,15 @@ for (const [encoding, programBytes, commentBytes] of [
       ['架空プログラム.csv'],
     );
     assert.deepEqual(
-      parsed.programs[0].instructions.map((item) => item.operands),
+      requireValue(parsed.programs[0]).instructions.map((item) => item.operands),
       [['X12'], ['Y12']],
     );
     assert.deepEqual(parsed.comments, ['COMMENT.csv']);
-    assert.equal(parsed.commentsByProgram['架空プログラム.csv'].X12, '試験入力');
-    assert.equal(parsed.commentsByProgram[parsed.programs[0].name].Y12, '試験出力');
+    assert.equal(requireValue(parsed.commentsByProgram['架空プログラム.csv']).X12, '試験入力');
+    assert.equal(
+      requireValue(parsed.commentsByProgram[requireValue(parsed.programs[0]).name]).Y12,
+      '試験出力',
+    );
   });
 
 test('native CSV rejects malformed or noncanonical Base64 instead of accepting corrupted input', () => {
@@ -126,7 +133,7 @@ test('native CSV validates canonical padding without re-encoding the decoded byt
       throw new Error('Re-encoding is forbidden in this check');
     };
     const [decoded] = decodeNativeCsvFiles([file]);
-    assert.deepEqual(new Uint8Array(decoded.bytes), bytes);
+    assert.deepEqual(new Uint8Array(requireValue(decoded).bytes), bytes);
   } finally {
     globalThis.btoa = original;
   }
@@ -154,24 +161,27 @@ test('native CSV retains empty CSV errors without discarding valid files and rej
     encodedFile('program.csv', utf8(program)),
     encodedFile('COMMENT.csv', utf8(comments)),
   ]);
-  assert.ok(files[0].bytes instanceof ArrayBuffer);
-  assert.equal(files[0].bytes.byteLength, 0);
+  assert.ok(requireValue(files[0]).bytes instanceof ArrayBuffer);
+  assert.equal(requireValue(files[0]).bytes.byteLength, 0);
   const parsed = parseCsvBatch(files);
   assert.deepEqual(
     parsed.programs.map((item) => item.name),
     ['program.csv'],
   );
   assert.deepEqual(
-    parsed.programs[0].instructions.map((item) => item.operands),
+    requireValue(parsed.programs[0]).instructions.map((item) => item.operands),
     [['X12'], ['Y12']],
   );
   assert.deepEqual(parsed.comments, ['COMMENT.csv']);
-  assert.equal(parsed.commentsByProgram[parsed.programs[0].name].Y12, '試験出力');
+  assert.equal(
+    requireValue(parsed.commentsByProgram[requireValue(parsed.programs[0]).name]).Y12,
+    '試験出力',
+  );
   assert.deepEqual(
     parsed.errors.map((item) => item.name),
     ['empty.csv'],
   );
-  assert.match(parsed.errors[0].message, /対応/);
+  assert.match(requireValue(parsed.errors[0]).message, /対応/);
 });
 
 test('native folder identity survives decoding without exposing or inferring paths', () => {

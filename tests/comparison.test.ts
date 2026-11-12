@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { comparisonComment, parseComparison, pairNetworks } from '../src/comparison.ts';
@@ -34,10 +35,10 @@ test('comparison retains metadata, original CSV rows, quoted operands and statem
   assert.equal(c.rowCount, 4);
   assert.deepEqual(p.instructions.map(instructionKey), c.target.instructions.map(instructionKey));
   assert.deepEqual(p.instructions.at(-1)!.operands, ['"A B"', 'D100Z0']);
-  assert.equal(p.instructions[0].sourceRow, 7);
-  assert.notEqual(p.instructions[0].id, c.target.instructions[0].id);
-  assert.equal(p.networks[0].title, '初期設定');
-  assert.equal(p.networks[0].pointer?.op, 'P100');
+  assert.equal(requireValue(p.instructions[0]).sourceRow, 7);
+  assert.notEqual(requireValue(p.instructions[0]).id, requireValue(c.target.instructions[0]).id);
+  assert.equal(requireValue(p.networks[0]).title, '初期設定');
+  assert.equal(requireValue(p.networks[0]).pointer?.op, 'P100');
   assert.equal(pairNetworks(p.networks, c.target.networks).length, 1);
 });
 
@@ -67,8 +68,8 @@ test('one-sided rows stay on their own side and later matching circuits realign'
     ],
   );
   assert.equal(
-    pairs[2].source[0].instructions[0].sourceRow,
-    pairs[2].target[0].instructions[0].sourceRow,
+    requireValue(requireValue(requireValue(pairs[2]).source[0]).instructions[0]).sourceRow,
+    requireValue(requireValue(requireValue(pairs[2]).target[0]).instructions[0]).sourceRow,
   );
 });
 
@@ -88,11 +89,11 @@ test('batch accepts comparison and normal formats together; float comparisons re
   ]);
   assert.deepEqual(result.errors, []);
   assert.equal(result.programs.length, 2);
-  const p = result.programs[0];
+  const p = requireValue(result.programs[0]);
   assert.ok(p.comparison);
-  assert.equal(p.networks[0].actions.length, 1);
-  assert.deepEqual(p.networks[0].warnings, []);
-  assert.equal(p.networks[0].actions[0].condition?.kind, 'and');
+  assert.equal(requireValue(p.networks[0]).actions.length, 1);
+  assert.deepEqual(requireValue(p.networks[0]).warnings, []);
+  assert.equal(requireValue(requireValue(p.networks[0]).actions[0]).condition?.kind, 'and');
 });
 
 test('malformed comparison data fails visibly and an empty side is allowed', () => {
@@ -138,7 +139,7 @@ test('statements inside a shared branch and edge markers do not split the condit
   );
   assert.equal(p.networks.length, 1);
   assert.deepEqual(
-    p.networks[0].actions.map((a) => a.instruction.operands[0]),
+    requireValue(p.networks[0]).actions.map((a) => a.instruction.operands[0]),
     ['Y0', 'Y1', 'Y2'],
   );
   assert.equal(p.instructions.find((i) => i.op === 'MPS')?.statement, '分岐');
@@ -161,17 +162,17 @@ test('differences classify changed operands, added/deleted rows and step-only sh
     p.comparison!.changes.map((c) => c.kind),
     ['changed', 'changed', 'added', 'removed'],
   );
-  assert.equal(p.instructions[0].difference, undefined);
-  assert.deepEqual(p.instructions[1].difference, {
+  assert.equal(requireValue(p.instructions[0]).difference, undefined);
+  assert.deepEqual(requireValue(p.instructions[1]).difference, {
     kind: 'changed',
     opChanged: false,
     operandChanges: [0],
     otherText: 'OUT Y1',
     otherStep: '1',
   });
-  assert.equal(p.comparison!.target.instructions[1].difference?.otherText, 'OUT Y0');
-  assert.equal(p.instructions[2].difference?.kind, 'changed');
-  assert.equal(p.comparison!.target.instructions[2].difference?.kind, 'changed');
+  assert.equal(requireValue(p.comparison!.target.instructions[1]).difference?.otherText, 'OUT Y0');
+  assert.equal(requireValue(p.instructions[2]).difference?.kind, 'changed');
+  assert.equal(requireValue(p.comparison!.target.instructions[2]).difference?.kind, 'changed');
   assert.equal(p.instructions.at(-1)!.difference, undefined);
   assert.equal(p.comparison!.shiftedSteps, 2);
 });
@@ -190,12 +191,12 @@ test('opcode, quoted operand and control/statement differences retain both origi
     'detail',
   );
   assert.equal(p.comparison!.changes.length, 5);
-  assert.equal(p.instructions[0].difference?.opChanged, true);
-  assert.deepEqual(p.instructions[0].difference?.operandChanges, []);
-  assert.deepEqual(p.instructions[2].difference?.operandChanges, [0]);
-  assert.equal(p.comparison!.changes[0].sourceText, ';元の説明');
+  assert.equal(requireValue(p.instructions[0]).difference?.opChanged, true);
+  assert.deepEqual(requireValue(p.instructions[0]).difference?.operandChanges, []);
+  assert.deepEqual(requireValue(p.instructions[2]).difference?.operandChanges, [0]);
+  assert.equal(requireValue(p.comparison!.changes[0]).sourceText, ';元の説明');
   assert.equal(p.comparison!.changes.at(-1)!.targetText, ';末尾・先');
-  assert.equal(p.instructions[3].difference?.otherText, 'MRD');
+  assert.equal(requireValue(p.instructions[3]).difference?.otherText, 'MRD');
 });
 const independent = (source: string[], target: string[]) =>
   fixture(
@@ -251,7 +252,7 @@ test('an inserted condition does not pair with an output whose operand also chan
       ['changed', 'OUT Y0', 'OUT Y1'],
     ],
   );
-  assert.equal(p.instructions[1].difference?.otherText, 'OUT Y1');
+  assert.equal(requireValue(p.instructions[1]).difference?.otherText, 'OUT Y1');
   assert.ok(p.instructions.slice(2).every((i) => !i.difference));
   assert.ok(p.comparison!.target.instructions.slice(3).every((i) => !i.difference));
 });
@@ -303,8 +304,14 @@ test('an inserted circuit does not turn subsequent matching commands into change
   assert.equal(c.shiftedSteps, 2);
   assert.ok(p.instructions.every((i) => !i.difference));
   assert.ok(c.target.instructions.slice(4).every((i) => !i.difference));
-  assert.notEqual(p.instructions[2].sourceRow, c.target.instructions[4].sourceRow);
-  assert.equal(p.instructions[2].comparisonRow, c.target.instructions[4].comparisonRow);
+  assert.notEqual(
+    requireValue(p.instructions[2]).sourceRow,
+    requireValue(c.target.instructions[4]).sourceRow,
+  );
+  assert.equal(
+    requireValue(p.instructions[2]).comparisonRow,
+    requireValue(c.target.instructions[4]).comparisonRow,
+  );
   assert.deepEqual(
     pairNetworks(p.networks, c.target.networks).map((pair) => [
       pair.source.length,
@@ -331,7 +338,10 @@ test('deletion preserves both source locations and does not cascade differences'
     ['removed', 'removed'],
   );
   assert.equal(p.comparison!.shiftedSteps, 2);
-  assert.equal(p.instructions[4].comparisonRow, p.comparison!.target.instructions[2].comparisonRow);
+  assert.equal(
+    requireValue(p.instructions[4]).comparisonRow,
+    requireValue(p.comparison!.target.instructions[2]).comparisonRow,
+  );
   assert.ok(p.comparison!.target.instructions.every((i) => !i.difference));
 });
 
@@ -358,8 +368,8 @@ test('an inserted branch reserves a blank drawing row before the next matching o
     p.comparison!.target.networks.flatMap((n) => n.warnings),
     [],
   );
-  const left = gridLayout(p.networks[0]),
-    right = gridLayout(p.comparison!.target.networks[0]);
+  const left = gridLayout(requireValue(p.networks[0])),
+    right = gridLayout(requireValue(p.comparison!.target.networks[0]));
   const row = (grid: ReturnType<typeof gridLayout>, operand: string) =>
     grid.symbols.find((s) => s.instruction.op === 'OUT' && s.instruction.operands[0] === operand)!
       .row;
@@ -418,7 +428,9 @@ test('a whole rung inserted among identical contact prefixes stays one added cir
         [kind, kind, kind],
       );
       assert.deepEqual(
-        extended.networks[position].instructions.map((instruction) => instruction.difference?.kind),
+        requireValue(extended.networks[position]).instructions.map(
+          (instruction) => instruction.difference?.kind,
+        ),
         [kind, kind, kind],
       );
       for (const network of unchanged.networks) {
@@ -463,7 +475,7 @@ test('added and removed instructions keep their block status without inline toke
     'changed',
   );
   for (const program of [changed, changed.comparison!.target]) {
-    const difference = program.instructions[1].difference!;
+    const difference = requireValue(program.instructions[1]).difference!;
     assert.equal(difference.kind, 'changed');
     assert.equal(difference.opChanged, false);
     assert.deepEqual(difference.operandChanges, [1]);
@@ -504,9 +516,9 @@ test('GX Works2 comparison lines: plain statements and indented notes are not re
     p.networks.map((n) => n.title),
     ['初期化', '[Title]見出し', ''],
   );
-  assert.equal(p.instructions[1].note, '周辺メモ');
-  assert.equal(p.instructions[3].note, '埋込メモ');
-  assert.equal(p.comparison!.target.instructions[3].note, '埋込メモ');
+  assert.equal(requireValue(p.instructions[1]).note, '周辺メモ');
+  assert.equal(requireValue(p.instructions[3]).note, '埋込メモ');
+  assert.equal(requireValue(p.comparison!.target.instructions[3]).note, '埋込メモ');
 });
 
 test('comparison comment lines: GX Works3 statements keep their text and project-only markers are removed', () => {

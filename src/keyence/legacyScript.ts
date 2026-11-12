@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceProgram } from './model';
 
 export interface KeyenceLegacyScriptRegion {
@@ -31,7 +32,7 @@ export function findKeyenceLegacyScriptRegions(
   const labels = new Map<string, number[]>();
   for (const [index, instruction] of instructions.entries())
     if (instruction.opcode.toUpperCase() === 'LABEL' && instruction.operands.length === 1) {
-      const key = instruction.operands[0].toUpperCase();
+      const key = requireValue(instruction.operands[0]).toUpperCase();
       labels.set(key, [...(labels.get(key) ?? []), index]);
     }
   const comment = (index: number) => {
@@ -42,24 +43,24 @@ export function findKeyenceLegacyScriptRegions(
       : undefined;
   };
   for (let jumpIndex = 1; jumpIndex < instructions.length; jumpIndex++) {
-    const jump = instructions[jumpIndex];
+    const jump = requireValue(instructions[jumpIndex]);
     if (
       jump.opcode.toUpperCase() !== 'NCJ' ||
       jump.operands.length !== 1 ||
-      !/^#\d+$/.test(jump.operands[0])
+      !/^#\d+$/.test(requireValue(jump.operands[0]))
     )
       continue;
-    const destinations = labels.get(jump.operands[0].toUpperCase());
-    if (destinations?.length !== 1 || destinations[0] <= jumpIndex + 1) continue;
-    const endIndex = destinations[0];
+    const destinations = labels.get(requireValue(jump.operands[0]).toUpperCase());
+    if (destinations?.length !== 1 || requireValue(destinations[0]) <= jumpIndex + 1) continue;
+    const endIndex = requireValue(destinations[0]);
     let guardStartIndex = jumpIndex - 1;
     while (
       guardStartIndex > 0 &&
-      extendGuard.test(instructions[guardStartIndex].opcode) &&
-      !instructions[guardStartIndex].statement.trim()
+      extendGuard.test(requireValue(instructions[guardStartIndex]).opcode) &&
+      !requireValue(instructions[guardStartIndex]).statement.trim()
     )
       guardStartIndex--;
-    const guard = instructions[guardStartIndex];
+    const guard = requireValue(instructions[guardStartIndex]);
     if (
       !loadGuard.test(guard.opcode) ||
       instructions.slice(guardStartIndex + 1, jumpIndex + 1).some((i) => i.statement.trim())
@@ -73,7 +74,11 @@ export function findKeyenceLegacyScriptRegions(
     }
     const nonblankHeader = header.filter((line) => line.text.trim());
     const repeated: string[] = [];
-    for (let index = jump.sourceLine; index < instructions[endIndex].sourceLine - 1; index++) {
+    for (
+      let index = jump.sourceLine;
+      index < requireValue(instructions[endIndex]).sourceLine - 1;
+      index++
+    ) {
       const line = comment(index);
       if (line?.text.trim() && !compilerWarning.test(line.text.trim()))
         repeated.push(line.text.trim());
@@ -104,7 +109,7 @@ export function findKeyenceLegacyScriptRegions(
         : regionLabels.has(target);
     });
     if (crossingJump) continue;
-    const start = header.indexOf(sourceHeader[0]);
+    const start = header.indexOf(requireValue(sourceHeader[0]));
     regions.push({
       id: `legacy-script-${jump.id}`,
       guardStartIndex,

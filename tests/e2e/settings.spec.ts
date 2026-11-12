@@ -11,6 +11,8 @@ test('display settings survive reload and are shared across all three screens', 
       { name: 'comment.csv', text: comments(keyence, 'Synthetic ') },
     ]);
   await open(false);
+  await expect(page.locator('.symbol[aria-label="LD M60"]')).toBeVisible();
+  await page.getByRole('button', { name: '幅に合わせる', exact: true }).click();
   const zoom = page.locator('.subbar button').filter({ hasText: /^\d+%$/ });
   const initialZoom = await zoom.textContent();
   await page.getByLabel('長い回路の表示', { exact: true }).selectOption('scroll');

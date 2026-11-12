@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -30,7 +31,7 @@ test('legacy script recognition preserves source whitespace, adjacent notes and 
     before = JSON.stringify(p),
     regions = findKeyenceLegacyScriptRegions(p);
   assert.equal(regions.length, 1);
-  const r = regions[0];
+  const r = requireValue(regions[0]);
   assert.deepEqual([r.guardStartIndex, r.jumpIndex, r.endIndex], [0, 1, 8]);
   assert.equal(r.leadingStatement, 'Dummy section');
   assert.deepEqual(r.sourceLines, [
@@ -40,9 +41,9 @@ test('legacy script recognition preserves source whitespace, adjacent notes and 
       text: '\tDummyTotal = DummyInput + #17',
     },
   ]);
-  assert.equal(p.instructions[r.endIndex + 1].opcode, 'LD');
+  assert.equal(requireValue(p.instructions[r.endIndex + 1]).opcode, 'LD');
   assert.equal(JSON.stringify(p), before);
-  assert.equal(findKeyenceLegacyScriptRegions(p)[0].id, r.id);
+  assert.equal(requireValue(findKeyenceLegacyScriptRegions(p)[0]).id, r.id);
 });
 
 test('nested branches, blank source lines, compiler warnings and chained guards stay within one script', () => {
@@ -92,19 +93,19 @@ test('nested branches, blank source lines, compiler warnings and chained guards 
     r.sourceLines.map((line) => line.text),
     source,
   );
-  assert.equal(p.instructions[r.endIndex].raw, 'LABEL #741');
-  assert.equal(p.instructions[r.endIndex + 1].raw, 'LD MR745');
+  assert.equal(requireValue(p.instructions[r.endIndex]).raw, 'LABEL #741');
+  assert.equal(requireValue(p.instructions[r.endIndex + 1]).raw, 'LD MR745');
 });
 
 test('separate scripts do not capture the circuit between them or metadata', () => {
   const p = parse([...simple(), 'LD MR750', 'OUT MR751', ...simple('#752', 'DummyOther = #31')]);
   const regions = findKeyenceLegacyScriptRegions(p);
   assert.equal(regions.length, 2);
-  assert.notEqual(regions[0].id, regions[1].id);
-  assert.equal(regions[0].leadingStatement, '');
-  assert.equal(regions[0].sourceLines.length, 1);
-  assert.equal(p.instructions[regions[0].endIndex + 1].raw, 'LD MR750');
-  assert.equal(regions[1].guardStartIndex, regions[0].endIndex + 3);
+  assert.notEqual(requireValue(regions[0]).id, requireValue(regions[1]).id);
+  assert.equal(requireValue(regions[0]).leadingStatement, '');
+  assert.equal(requireValue(regions[0]).sourceLines.length, 1);
+  assert.equal(requireValue(p.instructions[requireValue(regions[0]).endIndex + 1]).raw, 'LD MR750');
+  assert.equal(requireValue(regions[1]).guardStartIndex, requireValue(regions[0]).endIndex + 3);
 });
 
 test('ordinary comments, incomplete source, missing metadata and non-load guards remain ladder', () => {

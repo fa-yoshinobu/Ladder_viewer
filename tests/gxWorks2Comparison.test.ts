@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { comparisonGroups, isComparisonHeader, parseComparison } from '../src/comparison.ts';
@@ -37,8 +38,14 @@ test('trailing notes are counted in the owning circuit on both comparison sides'
     groups.map((group) => group.changes.map((change) => [change.sourceStep, change.targetStep])),
     [[['12', '']], [['', '17']], []],
   );
-  assert.equal(groups[0].source[0].instructions.at(-1)?.note, 'source note');
-  assert.equal(groups[1].target[0].instructions.at(-1)?.note, 'target note');
+  assert.equal(
+    requireValue(requireValue(groups[0]).source[0]).instructions.at(-1)?.note,
+    'source note',
+  );
+  assert.equal(
+    requireValue(requireValue(groups[1]).target[0]).instructions.at(-1)?.note,
+    'target note',
+  );
   assert.equal(comparison.shiftedSteps, 6);
 });
 
@@ -71,7 +78,14 @@ test('ASCII statements and uppercase pointers produce the same circuits as a nor
     fixture(
       [],
       '比較結果',
-      commands.map(([step, text], index) => [String(index + 1), step, text, step, text, '一致']),
+      commands.map(([step, text], index) => [
+        String(index + 1),
+        requireValue(step),
+        requireValue(text),
+        requireValue(step),
+        requireValue(text),
+        '一致',
+      ]),
     ),
     'synthetic-comparison.csv',
   );
@@ -139,8 +153,8 @@ test('GX Works2 headers and adjacent arrow metadata retain quoted operands and o
   assert.equal(comparison.targetProject, 'after');
   assert.equal(comparison.sourceName, 'SRC_UNIT');
   assert.equal(comparison.targetName, 'TGT_UNIT');
-  assert.deepEqual(p.instructions[1].operands, ['"AA BB"', 'D901']);
-  assert.deepEqual(comparison.target.instructions[1].operands, ['"CC DD"', 'D901']);
+  assert.deepEqual(requireValue(p.instructions[1]).operands, ['"AA BB"', 'D901']);
+  assert.deepEqual(requireValue(comparison.target.instructions[1]).operands, ['"CC DD"', 'D901']);
   assert.ok(!p.instructions.some((instruction) => instruction.op === 'INC'));
   assert.equal(
     comparison.changes.find((change) => change.kind === 'added')?.targetText,

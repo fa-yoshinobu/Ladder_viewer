@@ -1,3 +1,4 @@
+import { requireValue } from '../src/requireValue';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseKeyenceMnm } from '../src/keyence/parser.ts';
@@ -43,18 +44,14 @@ const render = (s: KeyenceSymbol) =>
 
 test('BOX_ST remains a connected output and preserves all wrapped source rows', () => {
   const code = ['DummyValue := 17;', '\tDummyText := "' + 'z'.repeat(160) + '";', ''];
-  const d = drawing([
-    'LD MR11',
-    'ANB MR12',
-    'BOX_ST',
-    ...code.map((line) => ';' + line),
-    'OUT MR13',
-  ])[0];
+  const d = requireValue(
+    drawing(['LD MR11', 'ANB MR12', 'BOX_ST', ...code.map((line) => ';' + line), 'OUT MR13'])[0],
+  );
   assert.equal(d.st, undefined);
   assert.equal(d.symbols.length, 4);
   const box = d.symbols.find((s) => s.kind === 'st-box')!,
     shape = keyenceStBoxGeometry(box.instruction);
-  assert.equal(box.y, d.symbols[0].y);
+  assert.equal(box.y, requireValue(d.symbols[0]).y);
   assert.ok(shape.rows.length > code.length);
   assert.ok(d.wires.some((w) => w.y1 === box.y && w.y2 === box.y && w.x2 === box.x));
   const displayed = render(box)
@@ -89,14 +86,14 @@ test('disabled ranges retain their circuit symbols while boundary markers never 
     ds.map((d) => !!d.network.disabled),
     [false, true, false],
   );
-  assert.equal(ds[1].statementLines[0], '無効回路');
-  assert.ok(ds[1].symbols.some((s) => s.kind === 'fb'));
-  assert.ok(ds[1].wires.length > 0);
+  assert.equal(requireValue(ds[1]).statementLines[0], '無効回路');
+  assert.ok(requireValue(ds[1]).symbols.some((s) => s.kind === 'fb'));
+  assert.ok(requireValue(ds[1]).wires.length > 0);
   assert.ok(
     ds.flatMap((d) => d.symbols).every((s) => !s.instruction.opcode.includes('DISABLED_RUNG')),
   );
   for (const mode of ['wrap', 'scroll'] as const) {
-    const view = keyenceViewDrawing(ds[1], mode);
+    const view = keyenceViewDrawing(requireValue(ds[1]), mode);
     assert.equal(view.network.disabled, true);
     assert.equal(view.statementLines[0], '無効回路');
   }
@@ -104,8 +101,8 @@ test('disabled ranges retain their circuit symbols while boundary markers never 
 
 test('function comments are visible below the block and hidden comments reserve no comment text', () => {
   const commands = ['LD MR1', 'FUN MOVE DummyInput DummyOutput;Dummy annotation', 'OUT MR2'];
-  const visible = drawing(commands, true)[0],
-    hidden = drawing(commands, false)[0];
+  const visible = requireValue(drawing(commands, true)[0]),
+    hidden = requireValue(drawing(commands, false)[0]);
   const block = visible.symbols.find((s) => s.kind === 'fb')!,
     shape = keyenceBlockGeometry(block.instruction.fb!);
   const note = render(block).find((n) => n.type === 'text' && text(n) === 'Dummy annotation')!;
@@ -121,9 +118,9 @@ test('function comments are visible below the block and hidden comments reserve 
 });
 
 test('constant inout pins appear on the input side without inventing an output connection', () => {
-  const s = drawing(['LD MR1', 'FUN DummyFunction DummyConstant DummyMutable'])[0].symbols.find(
-    (s) => s.kind === 'fb',
-  )!;
+  const s = requireValue(
+    drawing(['LD MR1', 'FUN DummyFunction DummyConstant DummyMutable'])[0],
+  ).symbols.find((s) => s.kind === 'fb')!;
   const fb = s.instruction.fb!;
   fb.knownSignature = true;
   fb.powerInput = 'EN';

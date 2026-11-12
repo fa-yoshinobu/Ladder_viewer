@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { Action, Instruction, Logic, Network, Program } from './model';
 import { isFunctionCall, pinDefinition } from './gxFormat';
 import { isComparisonCondition } from './instructions';
@@ -28,7 +29,7 @@ const width = (logic: Logic | null): number =>
 export function assembleFunctionBlocks(program: Program): void {
   const merged: Network[] = [];
   for (let index = 0; index < program.networks.length;) {
-    const first = program.networks[index],
+    const first = requireValue(program.networks[index]),
       block = first.instructions[0]?.block;
     if (!block?.closed) {
       merged.push(first);
@@ -38,15 +39,15 @@ export function assembleFunctionBlocks(program: Program): void {
     const networks: Network[] = [];
     while (
       index < program.networks.length &&
-      program.networks[index].instructions[0]?.block?.id === block.id
+      requireValue(program.networks[index]).instructions[0]?.block?.id === block.id
     )
-      networks.push(program.networks[index++]);
+      networks.push(requireValue(program.networks[index++]));
     const instructions = networks.flatMap((n) => n.instructions),
       calls = instructions.filter((i) => isFunctionCall(i.op));
     const call = calls[0],
       match = call && /^(FBCALL|FUNCALL)\s+(.+?)(?:\s*\(([^()]*)\))?$/.exec(call.op);
     const fallback = () => {
-      networks[0].warnings.push(
+      requireValue(networks[0]).warnings.push(
         'FB/FUNの端子と回路の対応を確認できないため、元の回路を表示します。',
       );
       merged.push(...networks);
@@ -62,15 +63,15 @@ export function assembleFunctionBlocks(program: Program): void {
     }
     const fb: FunctionBlock = {
       call,
-      name: match[2],
-      instance: match[3] ?? match[2],
+      name: requireValue(match[2]),
+      instance: requireValue(match[3] ?? match[2]),
       kind: block.kind,
       inputs: [],
       outputs: [],
     };
     for (const definition of call.pins) {
       const pin = pinDefinition(definition.op)!;
-      const port = { definition, name: pin[1], type: pin[3] };
+      const port = { definition, name: requireValue(pin[1]), type: requireValue(pin[3]) };
       if (pin[2] !== 'OUT') fb.inputs.push({ ...port });
       if (pin[2] !== 'IN') fb.outputs.push({ ...port });
     }

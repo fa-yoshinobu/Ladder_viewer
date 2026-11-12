@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceInstruction, KeyenceProgram } from './model';
 import type { KeyenceExpression, KeyenceNetwork, KeyenceAction } from './logic';
 import { keyenceDeviceComment } from './comments';
@@ -371,7 +372,7 @@ export function layoutKeyenceNetwork(
           )
       : Math.max(
           minimum(entry.term),
-          entry.node.entries.length ? entryMinimum(entry.node.entries[0]) : 0,
+          entry.node.entries.length ? entryMinimum(requireValue(entry.node.entries[0])) : 0,
         );
   const x = (column: number) => KEYENCE_LEFT + column * KEYENCE_CELL,
     y = (row: number) => top + row * rowHeight;
@@ -404,7 +405,7 @@ export function layoutKeyenceNetwork(
       showComments,
       commentLines:
         commentLines.length > 2
-          ? [commentLines[0], commentLines[1].slice(0, -1) + '…']
+          ? [requireValue(commentLines[0]), requireValue(commentLines[1]).slice(0, -1) + '…']
           : commentLines,
     };
     if (instruction.fb)
@@ -514,7 +515,7 @@ export function layoutKeyenceNetwork(
       if (entry.kind === 'output') {
         const { action } = entry,
           positions = outputPositions(action),
-          outputColumn = positions[0].column;
+          outputColumn = requireValue(positions[0]).column;
         wire(x(column), y(cursor), x(outputColumn), y(cursor));
         if (entry.port) {
           let keep = inputPorts.get(action);
@@ -525,7 +526,7 @@ export function layoutKeyenceNetwork(
                 action.instruction,
                 outputColumn,
                 cursor,
-                positions[0].span,
+                requireValue(positions[0]).span,
                 action.inputConditions ? 'multi-input' : 'keep',
                 commandLabel(action.instruction),
               ),
@@ -539,7 +540,7 @@ export function layoutKeyenceNetwork(
             contact: false,
           });
           if (keep.ports.length === 1) {
-            let previous = outputColumn + positions[0].span;
+            let previous = outputColumn + requireValue(positions[0]).span;
             for (const { instruction, column: output, span } of positions.slice(1)) {
               wire(x(previous), y(cursor), x(output), y(cursor));
               const style = keyenceOutputStyle(instruction);
@@ -722,11 +723,14 @@ export function keyenceViewDrawing(base: KeyenceDrawing, mode: 'wrap' | 'scroll'
     base.headerHeight,
     statementLines.length * 18 + base.network.warnings.length * 22,
   );
-  const offset = (index: number) => headerHeight - base.headerHeight + pages[index].top;
+  const offset = (index: number) =>
+    headerHeight - base.headerHeight + requireValue(pages[index]).top;
   const shiftX = (index: number) =>
     base.left -
-    pages[index].start +
-    (index === pages.length - 1 ? canvasGrid - (pages[index].end - pages[index].start) : 0);
+    requireValue(pages[index]).start +
+    (index === pages.length - 1
+      ? canvasGrid - (requireValue(pages[index]).end - requireValue(pages[index]).start)
+      : 0);
   const symbols: KeyenceSymbol[] = [],
     wires: KeyenceWire[] = [],
     rails: NonNullable<KeyenceDrawing['rails']> = [];
@@ -779,7 +783,7 @@ export function keyenceViewDrawing(base: KeyenceDrawing, mode: 'wrap' | 'scroll'
     });
   }
   for (let index = 0; index < pages.length - 1; index++) {
-    const cut = pages[index].end,
+    const cut = requireValue(pages[index]).end,
       inputX = cut + shiftX(index + 1);
     if (inputX === base.left) continue;
     const left = new Set<number>(),

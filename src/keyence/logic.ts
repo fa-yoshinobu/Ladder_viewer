@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceInstruction, KeyenceProgram, KeyenceScriptDisplay } from './model';
 
 export type KeyenceExpression =
@@ -81,7 +82,7 @@ function contactSpec(opcode: string): ContactSpec | null {
   if (op === 'STG') return { join: 'load', negated: false, pulse: null, comparison: 'STG' };
   const bit = /^(BLD|BLDB|BAND|BANB|BOR|BORB)\.D$/.exec(op);
   if (bit) {
-    const [join, negated, pulse] = contactOps[bit[1]];
+    const [join, negated, pulse] = requireValue(contactOps[requireValue(bit[1])]);
     return { join, negated, pulse, comparison: 'B.D' };
   }
   const special = /^(LD|AND|OR)(WK|CAL)(B?)$/.exec(op);
@@ -90,7 +91,7 @@ function contactSpec(opcode: string): ContactSpec | null {
       join: special[1] === 'LD' ? 'load' : special[1] === 'AND' ? 'and' : 'or',
       negated: !!special[3],
       pulse: null,
-      comparison: special[2],
+      comparison: requireValue(special[2]),
     };
   const compare = /^(LD|AND|OR)([<>=]+)(\.[A-Z]+)?$/.exec(op);
   return compare
@@ -140,7 +141,7 @@ export function keyenceSymbolDifferenceKind(
 ): NonNullable<KeyenceInstruction['difference']>['kind'] | undefined {
   const difference = i.difference;
   if (difference?.kind === 'changed' && difference.opChanged) {
-    const otherOp = difference.otherText.split(' ')[0],
+    const otherOp = requireValue(difference.otherText.split(' ')[0]),
       own = contactSpec(i.opcode),
       other = contactSpec(otherOp);
     if (
@@ -187,7 +188,7 @@ export function buildKeyenceNetworks(program: KeyenceProgram): KeyenceNetwork[] 
     );
     if (!actions.length && !annotationOnly && !functionResult) warn('出力命令がありません。');
     networks.push({
-      id: instructions[0].id,
+      id: requireValue(instructions[0]).id,
       statement: statements.join('\n'),
       instructions,
       actions,
@@ -294,7 +295,7 @@ export function buildKeyenceNetworks(program: KeyenceProgram): KeyenceNetwork[] 
         condition: first,
         inputConditions: inputNames[op].map((name, index) => ({
           name,
-          condition: conditions[index],
+          condition: conditions[index] ?? null,
         })),
       });
       current = first;

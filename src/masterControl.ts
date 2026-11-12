@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { Instruction, Network } from './model';
 
 export interface MasterControlRange {
@@ -22,7 +23,7 @@ export function assignMasterControlRanges(networks: Network[]): void {
         continue;
       }
       if (instruction.op === 'MC') {
-        if (active.length && level <= active[active.length - 1].level) {
+        if (active.length && level <= requireValue(active[active.length - 1]).level) {
           network.warnings.push(
             `${label}: 同時に有効なMCのN番号より大きくないため、未対応のネスト順として範囲を作成しません。`,
           );

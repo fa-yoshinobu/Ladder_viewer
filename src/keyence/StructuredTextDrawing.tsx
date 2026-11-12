@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import { blockRangeMenu, blockRangeText } from '../blockRangeCopy';
 import { LEFT_GUTTER } from '../ladderMetrics';
 import type { KeyenceDrawing } from './layout';
@@ -90,7 +91,7 @@ export function KeyenceStructuredText({
               y={ST_HEADER_HEIGHT + index * ST_ROW_HEIGHT + 13}
               xmlSpace="preserve"
             >
-              {colored[index].map((part, n) => (
+              {requireValue(colored[index]).map((part, n) => (
                 <tspan key={n} class={`st-${part.kind}`}>
                   {part.text}
                 </tspan>

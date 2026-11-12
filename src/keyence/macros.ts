@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import type { KeyenceProgram } from './model';
 import { keyenceDeviceComment } from './comments';
 
@@ -25,7 +26,7 @@ function parameterNames(program: KeyenceProgram): Map<number, string> {
   return new Map(
     [...candidates]
       .filter(([, names]) => names.size === 1)
-      .map(([number, names]) => [number, [...names][0]]),
+      .map(([number, names]) => [number, requireValue([...names][0])]),
   );
 }
 
@@ -42,7 +43,7 @@ export function linkKeyenceMacros(programs: KeyenceProgram[]): void {
       if (!/^@?MCALL$/i.test(instruction.opcode) || instruction.operands.length < 2) continue;
       const args = instruction.operands.slice(1),
         comments = operandComments(instruction.comment, args.length);
-      const names = definitions.get(instruction.operands[0].toUpperCase());
+      const names = definitions.get(requireValue(instruction.operands[0]).toUpperCase());
       instruction.macro = {
         parameters: args.map((operand, index) => ({
           name: names?.get(index) ?? 'P' + index,

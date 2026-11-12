@@ -13,6 +13,7 @@ import type { useViewerWorkspace } from './useViewerWorkspace';
 import { ViewerHeader } from './ViewerHeader';
 import { ViewerToolbar } from './ViewerToolbar';
 import { VirtualNetworkList } from './VirtualNetworkList';
+import { MessageBanner } from './MessageBanner';
 export function MitsubishiWorkspace({
   commentList,
   load,
@@ -49,9 +50,13 @@ export function MitsubishiWorkspace({
   zoomIn,
   setZoom,
   error,
+  warning,
+  dismissError,
+  dismissWarning,
   showComparison,
   comparisonWidth,
   comparisonNavigation,
+  rememberComparisonPosition,
   rowHeight,
   setSelected,
   setSelectedSide,
@@ -157,11 +162,8 @@ export function MitsubishiWorkspace({
             />
           </div>
         </div>
-        {error && (
-          <div class="error" role="alert">
-            {error}
-          </div>
-        )}
+        <MessageBanner text={error} dismiss={dismissError} />
+        <MessageBanner text={warning} warning dismiss={dismissWarning} />
         <div class={`workspace ${showComparison ? 'comparison-workspace' : ''}`}>
           <div ref={comparisonWidth} class="comparison-host" hidden={!showComparison}>
             {showComparison && program && (
@@ -169,6 +171,7 @@ export function MitsubishiWorkspace({
                 key={program.name}
                 program={program}
                 navigationTarget={comparisonNavigation}
+                onPosition={rememberComparisonPosition}
                 viewMode={viewMode}
                 zoom={zoom}
                 rowHeight={rowHeight}

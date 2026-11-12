@@ -1,3 +1,4 @@
+import { requireValue } from '../requireValue';
 import { diffArrays } from 'diff';
 import { LADDER_WIDTH, LEFT_GUTTER } from '../ladderMetrics';
 import type { KeyenceInstruction } from './model';
@@ -62,7 +63,8 @@ export function keyenceStChangedLines(instruction: KeyenceInstruction): Set<numb
     difference.otherText.split('\n'),
   )) {
     if (part.added) continue;
-    if (part.removed) for (let n = 0; n < part.count; n++) changed.add(lines[index + n].sourceLine);
+    if (part.removed)
+      for (let n = 0; n < part.count; n++) changed.add(requireValue(lines[index + n]).sourceLine);
     index += part.count;
   }
   return changed;

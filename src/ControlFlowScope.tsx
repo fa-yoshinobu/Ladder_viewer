@@ -1,3 +1,4 @@
+import { requireValue } from './requireValue';
 import type { Instruction, Network } from './model';
 import type { ControlRange } from './controlFlow';
 import { drawingMetrics, COLUMNS, drawingPages, displayGrid, type LadderViewMode } from './layout';
@@ -35,7 +36,7 @@ export function ControlFlowScope({
     const page = scrolling ? 0 : Math.floor(symbol.col / COLUMNS);
     return (
       prefix +
-      (drawingPages(grid, rowHeight, viewMode)[page].top +
+      (requireValue(drawingPages(grid, rowHeight, viewMode)[page]).top +
         symbol.row * rowHeight +
         metrics.baseline +
         12) *
