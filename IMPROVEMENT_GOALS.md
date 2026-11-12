@@ -22,7 +22,7 @@ dotnet run --project tests/desktop/Check.csproj
 | # | ゴール | 優先度 | 状態 |
 | --- | --- | --- | --- |
 | G1 | push/PRでテストと型検査が走る | 高 | ローカル検証済み |
-| G2 | コード書式を統一しCIで検査する | 高 | 未着手 |
+| G2 | コード書式を統一しCIで検査する | 高 | ローカル検証済み |
 | G3 | 3画面の重複処理を共通化する | 高 | 未着手 |
 | G4 | 入力サイズに上限を設ける | 高 | 未着手 |
 | G5 | 文書を実態に合わせる | 中 | 未着手 |
@@ -68,13 +68,15 @@ dotnet run --project tests/desktop/Check.csproj
 **対象**: `src/`、`tests/`、`package.json`、設定ファイル（新規）、`ci.yml`
 
 **完了条件**
-- [ ] Prettierを開発用依存に追加し、設定ファイルと `npm run format` / `npm run format:check` がある。
-- [ ] `src/` と `tests/` 全体を整形した結果が、整形だけの単独コミットになっている（ロジック変更を含まない）。
-- [ ] そのコミットを `.git-blame-ignore-revs` に登録している。
-- [ ] CI（G1）で `npm run format:check` を実行する。
-- [ ] `tsconfig.json` で `noUnusedLocals`・`noUnusedParameters` を有効にし、エラーを解消している。
+- [x] Prettierを開発用依存に追加し、設定ファイルと `npm run format` / `npm run format:check` がある。
+- [x] `src/` と `tests/` 全体を整形した結果が、整形だけの単独コミットになっている（ロジック変更を含まない）。
+- [x] そのコミットを `.git-blame-ignore-revs` に登録している。
+- [x] CI（G1）で `npm run format:check` を実行する。
+- [x] `tsconfig.json` で `noUnusedLocals`・`noUnusedParameters` を有効にし、エラーを解消している。
 
 **検証**: `npm run format:check` が成功。整形前後で `npm test` の結果と `artifacts/build/web` の動作が変わらない。
+
+**確認結果**: Prettier検査・AST検査・型検査・共通検証成功。TypeScript 363件、C# 58件成功（reparse関連1グループは環境理由でスキップ）。整形コミットを独立させ、blame除外に登録。
 
 **対象外**: ESLintルールの本格導入、`noUncheckedIndexedAccess`（G12）。
 
