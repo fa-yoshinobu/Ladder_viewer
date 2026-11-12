@@ -27,13 +27,7 @@ import { isComparisonCondition } from './instructions';
 import { isControlMarker, isMemoryControl } from './controlFlow';
 import { layoutBranches, type BranchRow, type BranchRowHints } from './branchAlignment';
 export const isCoil = (i: Instruction) => /^(OUT|OUTH)$/.test(i.op) && i.operands.length === 1;
-export function fitLadderZoom(viewportWidth: number, comparison: boolean): number {
-  const availableWidth = comparison ? (viewportWidth - 170) / 2 : viewportWidth;
-  return Math.max(
-    comparison ? 0.25 : 0.5,
-    Math.min(1.5, Math.floor(((availableWidth - 24) / LADDER_WIDTH) * 100) / 100),
-  );
-}
+export { fitZoom as fitLadderZoom } from './zoom';
 export type LadderViewMode = 'wrap' | 'scroll';
 export interface GridSymbol {
   instruction: Instruction;

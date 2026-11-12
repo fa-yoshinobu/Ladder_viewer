@@ -1,5 +1,6 @@
+import { DetailPanel } from './DetailPanel';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { openCommentList } from './CommentList';
+import { openCommentList, showInstructionMenu, closeInstructionMenu } from './CommentList';
 import { keyenceCommentList, mitsubishiCommentList, commentListRequest } from './commentListData';
 import type { BatchResult, CsvInput } from './batch';
 import { nativeCsvBridge, decodeNativeCsvFiles, type NativeCsvSelection } from './nativeCsv';
@@ -19,8 +20,10 @@ import { droppedInputs } from './dropInputs';
 import { ViewerHeader } from './ViewerHeader';
 import { differenceLabels } from './model';
 import { SearchBar } from './SearchBar';
-import { LADDER_WIDTH } from './ladderMetrics';
 import { StColorToggle } from './StColorToggle';
+import { ViewerToolbar } from './ViewerToolbar';
+import { useZoom } from './useZoom';
+import { fitZoom } from './zoom';
 import { keyenceScriptRegions } from './keyence/scriptDisplay';
 interface Props {
   dark: boolean;
@@ -61,14 +64,13 @@ export function DirectComparisonWorkspace({
     [compareError, setCompareError] = useState('');
   const [display, setDisplay] = useState<'both' | 'source' | 'target'>('both'),
     [comments, setComments] = useState(true),
-    [zoom, setZoom] = useState(0.5),
     [viewMode, setViewMode] = useState<'wrap' | 'scroll'>('wrap');
+  const { zoom, setZoom, zoomIn, zoomOut } = useZoom(0.5, display === 'both');
   const [query, setQuery] = useState(''),
     [searchMode, setSearchMode] = useState<'partial' | 'exact'>('partial'),
     [current, setCurrent] = useState(-1);
   const [selected, setSelected] = useState<DirectSelection | null>(null),
-    [navigation, setNavigation] = useState<DirectNavigation | null>(null),
-    [menu, setMenu] = useState<{ x: number; y: number; selection: DirectSelection } | null>(null);
+    [navigation, setNavigation] = useState<DirectNavigation | null>(null);
   const [scriptExpansion, setScriptExpansion] = useState<{
     result: DirectResult | null;
     ids: Set<string>;
@@ -240,14 +242,7 @@ export function DirectComparisonWorkspace({
   }, [matches]);
   const fit = () => {
     if (!width.current) return;
-    const count = displayRef.current === 'both' ? 2 : 1;
-    const available = (width.current.clientWidth - 170) / count;
-    setZoom(
-      Math.max(
-        count === 2 ? 0.25 : 0.5,
-        Math.min(1.5, Math.floor(((available - 24) / LADDER_WIDTH) * 100) / 100),
-      ),
-    );
+    setZoom(fitZoom(width.current.clientWidth, displayRef.current === 'both', 170));
   };
   useLayoutEffect(fit, [display, result]);
   useEffect(() => {
@@ -385,12 +380,8 @@ export function DirectComparisonWorkspace({
       }
     }
     const find = (event: KeyboardEvent) => {
-      if (event.ctrlKey && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        document.querySelector<HTMLInputElement>('.search-query')?.focus();
-      }
       if (event.key === 'Escape') {
-        setMenu(null);
+        closeInstructionMenu();
         setDragSide(null);
       }
     };
@@ -412,7 +403,7 @@ export function DirectComparisonWorkspace({
     setResult(null);
     setSelected(null);
     setNavigation(null);
-    setMenu(null);
+    closeInstructionMenu();
     setCompareError('');
     if (!source.batch || !target.batch || !inputs.source.length || !inputs.target.length || !pair) {
       lastCompared.current = null;
@@ -505,27 +496,16 @@ export function DirectComparisonWorkspace({
     event.preventDefault();
     event.stopPropagation();
     setSelected(selection);
-    if (bridge) {
-      bridge.postMessage({
-        type: 'instruction-menu',
-        text: selection.instruction.copyText,
-        commentList: commentListRequest(
-          commentLists?.[selection.side],
-          selection.instruction.operands,
-          dark,
-        ),
-      });
-      return;
-    }
-    setMenu({
-      x: Math.min(event.clientX, window.innerWidth - 150),
-      y: Math.min(event.clientY, window.innerHeight - 70),
-      selection,
-    });
+    showInstructionMenu(
+      event,
+      selection.instruction.copyText,
+      commentListRequest(commentLists?.[selection.side], selection.instruction.operands, dark),
+      () => setCompareError('コピーできませんでした。'),
+    );
   };
   const choose = (selection: DirectSelection) => {
     setSelected(selection);
-    setMenu(null);
+    closeInstructionMenu();
   };
   const navigateTo = (id: string, side: CompareSide) => {
     revealScript(id, side);
@@ -543,7 +523,7 @@ export function DirectComparisonWorkspace({
       data-target-status={status(target)}
       class="app direct-comparison-app"
       onPointerDown={() => {
-        if (menu) setMenu(null);
+        closeInstructionMenu();
       }}
     >
       <ViewerHeader
@@ -634,69 +614,29 @@ export function DirectComparisonWorkspace({
               <option value="target">比較先のみ</option>
             </select>
           </label>
-          <label class="comment-toggle">
-            <input
-              type="checkbox"
-              checked={comments}
-              onChange={(e) => setComments(e.currentTarget.checked)}
-            />
-            コメント
-          </label>
-          {result?.format === 'keyence' &&
-            ([result.comparison.source, result.comparison.target].some(
-              (p) => keyenceScriptRegions(p).length > 0,
-            ) ||
-              [
-                ...result.comparison.source.instructions,
-                ...result.comparison.target.instructions,
-              ].some((i) => i.st)) && <StColorToggle />}
-          <label class="ladder-palette">
-            ラダー配色
-            <select
-              aria-label="ラダー配色"
-              value={palette}
-              onChange={(e) => changePalette(e.currentTarget.value)}
-            >
-              {[
-                { value: 'standard', label: '標準' },
-                { value: 'contrast', label: '高コントラスト' },
-                { value: 'soft', label: '目にやさしい' },
-                { value: 'cud', label: '色覚配慮（CUD）' },
-                { value: 'blue', label: 'ブルー' },
-              ].map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label class="view-mode">
-            長い回路
-            <select
-              aria-label="長い回路の表示"
-              value={viewMode}
-              onChange={(e) => setViewMode(e.currentTarget.value as typeof viewMode)}
-            >
-              <option value="wrap">折り返し</option>
-              <option value="scroll">横スクロール</option>
-            </select>
-          </label>
-          <button onClick={fit}>幅に合わせる</button>
-          <button
-            aria-label="縮小"
-            onClick={() =>
-              setZoom((z) => Math.max(display === 'both' ? 0.25 : 0.5, +(z - 0.1).toFixed(2)))
-            }
+          <ViewerToolbar
+            comments={comments}
+            onComments={setComments}
+            dark={dark}
+            palette={palette}
+            onPalette={changePalette}
+            viewMode={viewMode}
+            onViewMode={setViewMode}
+            zoom={zoom}
+            onFit={fit}
+            onZoomOut={zoomOut}
+            onZoomIn={zoomIn}
+            onResetZoom={() => setZoom(1)}
           >
-            −
-          </button>
-          <button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-          <button
-            aria-label="拡大"
-            onClick={() => setZoom((z) => Math.min(1.5, +(z + 0.1).toFixed(2)))}
-          >
-            ＋
-          </button>
+            {result?.format === 'keyence' &&
+              ([result.comparison.source, result.comparison.target].some(
+                (p) => keyenceScriptRegions(p).length > 0,
+              ) ||
+                [
+                  ...result.comparison.source.instructions,
+                  ...result.comparison.target.instructions,
+                ].some((i) => i.st)) && <StColorToggle />}
+          </ViewerToolbar>
         </div>
       </div>
       <div class="direct-inputs">
@@ -810,8 +750,7 @@ export function DirectComparisonWorkspace({
             </div>
           )}
         </div>
-        <aside class="details">
-          <div class="panel-title">命令の詳細</div>
+        <DetailPanel>
           {instruction && selected ? (
             <div class="detail-content">
               <div class="eyebrow">
@@ -876,7 +815,7 @@ export function DirectComparisonWorkspace({
           ) : (
             <div class="detail-placeholder">命令を選択してください。</div>
           )}
-        </aside>
+        </DetailPanel>
       </div>
       <footer>
         <span class="status-dot" />
@@ -892,40 +831,6 @@ export function DirectComparisonWorkspace({
                   ? `比較元 ${inputs.source.length} / 比較先 ${inputs.target.length}プログラム · 相違 ${count}行`
                   : '比較元と比較先を読み込んでください。'}
       </footer>
-      {menu && (
-        <div
-          class="kv-context-menu"
-          role="menu"
-          style={{ left: menu.x, top: menu.y }}
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <button
-            role="menuitem"
-            onClick={() => {
-              void navigator.clipboard
-                .writeText(menu.selection.instruction.copyText)
-                .catch(() => setCompareError('コピーできませんでした。'));
-              setMenu(null);
-            }}
-          >
-            コピー
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              const request = commentListRequest(
-                commentLists?.[menu.selection.side],
-                menu.selection.instruction.operands,
-                dark,
-              );
-              if (request) openCommentList(request);
-              setMenu(null);
-            }}
-          >
-            コメントリスト
-          </button>
-        </div>
-      )}
     </div>
   );
 }

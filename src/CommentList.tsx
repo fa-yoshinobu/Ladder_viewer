@@ -3,17 +3,24 @@ import { nativeCsvBridge } from './nativeCsv';
 import { commentListTsv, type CommentListData, type CommentListRequest } from './commentListData';
 
 export const CommentListContext = createContext<CommentListData | undefined>(undefined);
+let closeActiveMenu: (() => void) | undefined;
+export function closeInstructionMenu() {
+  closeActiveMenu?.();
+}
 export function showInstructionMenu(
   event: MouseEvent,
   text: string,
   commentList?: CommentListRequest,
+  onCopyError?: () => void,
 ) {
+  closeInstructionMenu();
   const bridge = nativeCsvBridge();
   if (bridge) {
     bridge.postMessage({ type: 'instruction-menu', text, commentList });
     return;
   }
   const menu = document.createElement('div');
+  menu.setAttribute('role', 'menu');
   menu.className = 'kv-context-menu';
   menu.style.left = Math.min(event.clientX, innerWidth - 180) + 'px';
   menu.style.top = Math.min(event.clientY, innerHeight - 90) + 'px';
@@ -23,7 +30,10 @@ export function showInstructionMenu(
     menu.remove();
     document.removeEventListener('pointerdown', outside);
     document.removeEventListener('keydown', escape);
+    window.removeEventListener('resize', close);
+    if (closeActiveMenu === close) closeActiveMenu = undefined;
   };
+  closeActiveMenu = close;
   const outside = (e: Event) => {
       if (!menu.contains(e.target as Node)) close();
     },
@@ -32,13 +42,17 @@ export function showInstructionMenu(
     };
   document.addEventListener('pointerdown', outside);
   document.addEventListener('keydown', escape);
+  window.addEventListener('resize', close);
   render(
     <>
       <button
         role="menuitem"
         onClick={() => {
           void navigator.clipboard.writeText(text).then(close, () => {
-            menu.textContent = 'コピーできませんでした。';
+            if (onCopyError) {
+              close();
+              onCopyError();
+            } else menu.textContent = 'コピーできませんでした。';
           });
         }}
       >

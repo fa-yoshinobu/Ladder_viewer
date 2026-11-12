@@ -1,5 +1,6 @@
+import { DetailPanel } from '../DetailPanel';
 import { blockRangeMenu, blockRangeText } from '../blockRangeCopy';
-import { openCommentList } from '../CommentList';
+import { openCommentList, showInstructionMenu, closeInstructionMenu } from '../CommentList';
 import { keyenceCommentList, commentListRequest } from '../commentListData';
 import { normalizeSearchText as normalize, searchTextMatches } from '../searchText';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
@@ -25,6 +26,9 @@ import { keyenceInstructionCopyText } from './instructionCopy';
 import { keyenceDeviceComment } from './comments';
 import { ST_HEADER_HEIGHT, ST_ROW_HEIGHT } from './structuredText';
 import { StColorToggle } from '../StColorToggle';
+import { ViewerToolbar } from '../ViewerToolbar';
+import { useZoom } from '../useZoom';
+import { fitZoom } from '../zoom';
 
 interface Props {
   program: KeyenceProgram;
@@ -42,7 +46,6 @@ interface Props {
   toggleTheme: () => void;
   drop: (files: File[]) => void;
 }
-const clampZoom = (value: number) => Math.min(1.5, Math.max(0.5, value));
 const noExpandedScripts = new Set<string>();
 export function KeyenceViewer({
   program,
@@ -62,8 +65,8 @@ export function KeyenceViewer({
 }: Props) {
   const viewport = useRef<HTMLDivElement>(null),
     viewAnchor = useRef<number | null>(null);
-  const [showComments, setShowComments] = useState(true),
-    [zoom, setZoom] = useState(1);
+  const [showComments, setShowComments] = useState(true);
+  const { zoom, setZoom, zoomIn, zoomOut } = useZoom();
   const [size, setSize] = useState({ width: 1000, height: 800 }),
     [scrollTop, setScrollTop] = useState(0);
   const [selected, setSelected] = useState(''),
@@ -85,12 +88,7 @@ export function KeyenceViewer({
       program,
       ids: update(old.program === program ? old.ids : noExpandedScripts),
     }));
-  const [menu, setMenu] = useState<{
-      x: number;
-      y: number;
-      instruction: KeyenceInstruction;
-    } | null>(null),
-    [copyError, setCopyError] = useState('');
+  const [copyError, setCopyError] = useState('');
   const commentList = useMemo(() => keyenceCommentList(program), [program]);
   const networks = useMemo(
     () => keyenceScriptNetworks(program, expandedScripts),
@@ -201,14 +199,14 @@ export function KeyenceViewer({
   );
   const fit = () => {
     const width = viewport.current?.clientWidth ?? size.width;
-    setZoom(clampZoom(Math.floor(((width - 24) / LADDER_WIDTH) * 100) / 100));
+    setZoom(fitZoom(width));
   };
   useEffect(() => {
     setScriptTarget(null);
     setSelected(program.instructions[0]?.id ?? '');
     setSelectedNetwork(networks[0]?.id ?? '');
     setScrollTop(0);
-    setMenu(null);
+    closeInstructionMenu();
     setPendingTarget(null);
     if (viewport.current) viewport.current.scrollTop = 0;
   }, [program]);
@@ -219,38 +217,13 @@ export function KeyenceViewer({
     const observer = new ResizeObserver(() => {
       setSize({ width: element.clientWidth, height: element.clientHeight });
       if (element.offsetWidth !== lastWidth) {
-        setZoom(clampZoom(Math.floor(((element.clientWidth - 24) / LADDER_WIDTH) * 100) / 100));
+        setZoom(fitZoom(element.clientWidth));
         lastWidth = element.offsetWidth;
       }
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, [program]);
-  useEffect(() => {
-    const keydown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        const field = viewport.current
-          ?.closest('.app')
-          ?.querySelector<HTMLInputElement>('.search-query');
-        field?.focus();
-        field?.select();
-      }
-      if (event.key === 'Escape') setMenu(null);
-    };
-    window.addEventListener('keydown', keydown);
-    return () => window.removeEventListener('keydown', keydown);
-  }, []);
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    window.addEventListener('pointerdown', close);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('resize', close);
-    };
-  }, [menu]);
   useEffect(() => {
     if (!pendingTarget || !viewport.current) return;
     const element = viewport.current;
@@ -413,28 +386,12 @@ export function KeyenceViewer({
     event.stopPropagation();
     select(item);
     setCopyError('');
-    const bridge = nativeCsvBridge();
-    if (bridge) {
-      bridge.postMessage({
-        type: 'instruction-menu',
-        text: copyText(item),
-        commentList: commentListRequest(commentList, item.operands, dark),
-      });
-      return;
-    }
-    setMenu({
-      x: Math.min(event.clientX, window.innerWidth - 150),
-      y: Math.min(event.clientY, window.innerHeight - 60),
-      instruction: item,
-    });
-  };
-  const copy = async (item: KeyenceInstruction) => {
-    setMenu(null);
-    try {
-      await navigator.clipboard.writeText(copyText(item));
-    } catch {
-      setCopyError('コピーできませんでした。');
-    }
+    showInstructionMenu(
+      event,
+      copyText(item),
+      commentListRequest(commentList, item.operands, dark),
+      () => setCopyError('コピーできませんでした。'),
+    );
   };
   return (
     <div
@@ -474,65 +431,24 @@ export function KeyenceViewer({
           placeholder="デバイス・命令・コメント・元ファイル行"
         />
         <div>
-          {hasComments && (
-            <label class="comment-toggle">
-              <input
-                type="checkbox"
-                checked={showComments}
-                onChange={(event) => setShowComments(event.currentTarget.checked)}
-              />
-              コメント
-            </label>
-          )}
-          {(program.instructions.some((i) => i.st) || keyenceScriptRegions(program).length > 0) && (
-            <StColorToggle />
-          )}
-          <label class="ladder-palette">
-            ラダー配色
-            <select
-              aria-label={`ラダー配色（${dark ? 'ダーク' : 'ライト'}モード）`}
-              title={`${dark ? 'ダーク' : 'ライト'}モード用の配色`}
-              value={palette}
-              onChange={(event) => changePalette(event.currentTarget.value)}
-            >
-              {[
-                { value: 'standard', label: '標準' },
-                { value: 'contrast', label: '高コントラスト' },
-                { value: 'soft', label: '目にやさしい' },
-                { value: 'cud', label: '色覚配慮（CUD）' },
-                { value: 'blue', label: 'ブルー' },
-              ].map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label class="view-mode">
-            長い回路
-            <select
-              aria-label="長い回路の表示"
-              value={viewMode}
-              onChange={(event) => changeViewMode(event.currentTarget.value as typeof viewMode)}
-            >
-              <option value="wrap">折り返し</option>
-              <option value="scroll">横スクロール</option>
-            </select>
-          </label>
-          <button onClick={fit}>幅に合わせる</button>
-          <button
-            aria-label="縮小"
-            onClick={() => setZoom((value) => clampZoom(+(value - 0.1).toFixed(2)))}
+          <ViewerToolbar
+            hasComments={hasComments}
+            comments={showComments}
+            onComments={setShowComments}
+            dark={dark}
+            palette={palette}
+            onPalette={changePalette}
+            viewMode={viewMode}
+            onViewMode={changeViewMode}
+            zoom={zoom}
+            onFit={fit}
+            onZoomOut={zoomOut}
+            onZoomIn={zoomIn}
+            onResetZoom={() => setZoom(1)}
           >
-            −
-          </button>
-          <button onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-          <button
-            aria-label="拡大"
-            onClick={() => setZoom((value) => clampZoom(+(value + 0.1).toFixed(1)))}
-          >
-            ＋
-          </button>
+            {(program.instructions.some((i) => i.st) ||
+              keyenceScriptRegions(program).length > 0) && <StColorToggle />}
+          </ViewerToolbar>
         </div>
       </div>
       {(error || copyError) && (
@@ -576,7 +492,7 @@ export function KeyenceViewer({
           class="kv-diagram"
           onScroll={(event) => {
             setScrollTop(event.currentTarget.scrollTop);
-            setMenu(null);
+            closeInstructionMenu();
           }}
         >
           {busy && (
@@ -615,8 +531,7 @@ export function KeyenceViewer({
             ))}
           </div>
         </div>
-        <aside class="details">
-          <div class="panel-title">命令の詳細</div>
+        <DetailPanel>
           {instruction && (
             <div class="detail-content">
               <div class="eyebrow">元ファイル {instruction.sourceLine}行</div>
@@ -646,7 +561,7 @@ export function KeyenceViewer({
               </dl>
             </div>
           )}
-        </aside>
+        </DetailPanel>
       </div>
       <footer>
         <span class="status-dot" />
@@ -655,27 +570,6 @@ export function KeyenceViewer({
         {Object.keys(program.deviceComments).length > 0 &&
           ` · コメント ${Object.keys(program.deviceComments).length}件`}
       </footer>
-      {menu && (
-        <div
-          class="kv-context-menu"
-          role="menu"
-          style={{ left: menu.x, top: menu.y }}
-          onPointerDown={(event) => event.stopPropagation()}
-        >
-          <button role="menuitem" onClick={() => void copy(menu.instruction)}>
-            コピー
-          </button>
-          <button
-            role="menuitem"
-            onClick={() => {
-              openCommentList(commentListRequest(commentList, menu.instruction.operands, dark)!);
-              setMenu(null);
-            }}
-          >
-            コメントリスト
-          </button>
-        </div>
-      )}
     </div>
   );
 }
