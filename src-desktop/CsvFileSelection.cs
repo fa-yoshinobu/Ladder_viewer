@@ -8,6 +8,72 @@ internal sealed record CsvSelectionResult(IReadOnlyList<CsvFilePayload> Files, I
 
 internal static class CsvFileSelection
 {
+    public const int MaximumFileCount = 1000;
+    public const long MaximumFileBytes = 16 * 1024 * 1024;
+    public const long MaximumTotalBytes = 64 * 1024 * 1024;
+
+    private sealed class InputLimitException(string message) : IOException(message) { }
+
+    private sealed class InputBudget
+    {
+        private readonly HashSet<string> paths = new(StringComparer.OrdinalIgnoreCase);
+        private long plannedBytes;
+        private long readBytes;
+
+        public void Add(string path)
+        {
+            if (paths.Contains(path)) return;
+            if (paths.Count + 1 > MaximumFileCount)
+                throw new InputLimitException($"ファイル件数が上限を超えました: {paths.Count + 1:N0}件（上限 {MaximumFileCount:N0}件）。フォルダーを分けて選択してください。");
+            var size = new FileInfo(path).Length;
+            CheckFileSize(path, size);
+            if (plannedBytes + size > MaximumTotalBytes)
+                throw new InputLimitException($"ファイルの合計サイズが上限を超えました: {(plannedBytes + size) / 1048576d:N1} MB（上限 {MaximumTotalBytes / 1048576:N0} MB）。");
+            paths.Add(path);
+            plannedBytes += size;
+        }
+
+        public byte[] Read(string path)
+        {
+            using var input = File.OpenRead(path);
+            CheckFileSize(path, input.Length);
+            using var output = new MemoryStream((int)input.Length);
+            var buffer = new byte[81920];
+            int length;
+            while ((length = input.Read(buffer)) > 0)
+            {
+                CheckFileSize(path, output.Length + length);
+                if (readBytes + length > MaximumTotalBytes)
+                    throw new InputLimitException($"読込み中に合計サイズが上限を超えました: {(readBytes + length) / 1048576d:N1} MB（上限 {MaximumTotalBytes / 1048576:N0} MB）。");
+                output.Write(buffer, 0, length);
+                readBytes += length;
+            }
+            return output.ToArray();
+        }
+    }
+
+    private static void CheckFileSize(string path, long size)
+    {
+        if (size > MaximumFileBytes)
+            throw new InputLimitException($"{Path.GetFileName(path)} のサイズが上限を超えました: {size / 1048576d:N1} MB（1ファイルの上限 {MaximumFileBytes / 1048576:N0} MB）。");
+    }
+
+    private static string[] CollectPaths(IEnumerable<string> paths, InputBudget? budget = null)
+    {
+        budget ??= new InputBudget();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var selected = new List<string>();
+        foreach (var input in paths)
+        {
+            var path = Path.GetFullPath(input);
+            if (!seen.Add(path)) continue;
+            if (!IsProgramFile(path)) throw new IOException($"CSVまたはMNMファイルを選択してください: {Path.GetFileName(path)}");
+            budget.Add(path);
+            selected.Add(path);
+        }
+        return selected.ToArray();
+    }
+
     private enum CommentFormat { Mitsubishi, Keyence }
 
     static CsvFileSelection() => Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
@@ -17,7 +83,7 @@ internal static class CsvFileSelection
     public static CsvSelectionResult ReadFolders(IEnumerable<string> folderPaths)
     {
         var roots = folderPaths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-        var files = roots.SelectMany(FolderFiles).ToArray();
+        var files = CollectPaths(roots.SelectMany(FolderFiles));
         if (files.Length == 0) throw new IOException("選択したフォルダー内にCSV/MNMファイルがありません。");
         return ReadSelected(files, roots);
     }
@@ -41,14 +107,15 @@ internal static class CsvFileSelection
             IgnoreInaccessible = false,
             ReturnSpecialDirectories = false
         };
-        return Directory.EnumerateFiles(folder, "*", options).Where(IsProgramFile)
+        return CollectPaths(Directory.EnumerateFiles(folder, "*", options).Where(IsProgramFile))
             .OrderBy(path => Path.GetRelativePath(folder, path), StringComparer.OrdinalIgnoreCase)
             .ThenBy(path => path, StringComparer.Ordinal);
     }
 
     public static CsvSelectionResult ReadSelected(IEnumerable<string> selectedPaths, string[]? roots = null)
     {
-        var selected = selectedPaths.Select(Path.GetFullPath).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        var budget = new InputBudget();
+        var selected = CollectPaths(selectedPaths, budget);
         if (selected.Length == 0) throw new IOException("CSV/MNMファイルが選択されていません。");
         var loaded = new Dictionary<string, byte[]>(StringComparer.OrdinalIgnoreCase);
         var explicitComments = new Dictionary<string, List<CommentFormat>>(StringComparer.OrdinalIgnoreCase);
@@ -60,7 +127,7 @@ internal static class CsvFileSelection
             if (!IsProgramFile(path)) throw new IOException($"CSVまたはMNMファイルを選択してください: {Path.GetFileName(path)}");
             try
             {
-                var bytes = File.ReadAllBytes(path);
+                var bytes = budget.Read(path);
                 loaded.Add(path, bytes);
                 CommentFormat? commentFormat = null;
                 try
@@ -124,9 +191,10 @@ internal static class CsvFileSelection
                 try
                 {
                     if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0) continue;
+                    budget.Add(path);
                     var format = DetectCommentFormat(() => File.OpenRead(path));
                     if (format is null || !automaticFormats.Contains(format.Value)) continue;
-                    loaded.Add(path, File.ReadAllBytes(path));
+                    loaded.Add(path, budget.Read(path));
                 }
                 catch (Exception error) when (IsReadError(error))
                 {
@@ -156,7 +224,8 @@ internal static class CsvFileSelection
 
     private static bool IsProgramFile(string path) => IsCsv(path) || string.Equals(Path.GetExtension(path), ".mnm", StringComparison.OrdinalIgnoreCase);
     private static bool IsCsv(string path) => string.Equals(Path.GetExtension(path), ".csv", StringComparison.OrdinalIgnoreCase);
-    private static bool IsReadError(Exception error) => error is IOException or UnauthorizedAccessException or DecoderFallbackException or System.Security.SecurityException;
+    private static bool IsReadError(Exception error) => error is not InputLimitException &&
+        error is IOException or UnauthorizedAccessException or DecoderFallbackException or System.Security.SecurityException;
 
     private static CommentFormat? DetectCommentFormat(Func<Stream> open)
     {

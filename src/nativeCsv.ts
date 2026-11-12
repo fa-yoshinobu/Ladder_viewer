@@ -58,8 +58,16 @@ export function decodeNativeCsvFiles(files: NativeCsvSelection['files']): CsvInp
     }
     let binary: string;
     try {
+      const encoded = file.base64;
+      if (encoded.length % 4 !== 0 || /[^A-Za-z0-9+/=]/.test(encoded)) throw new Error();
+      const padding = encoded.endsWith('==') ? 2 : encoded.endsWith('=') ? 1 : 0;
+      const contentLength = encoded.length - padding;
+      if (encoded.slice(0, contentLength).includes('=')) throw new Error();
+      const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+      const tail = alphabet.indexOf(encoded.charAt(contentLength - 1));
+      if ((padding === 2 && (tail & 15) !== 0) || (padding === 1 && (tail & 3) !== 0))
+        throw new Error();
       binary = atob(file.base64);
-      if (btoa(binary) !== file.base64) throw new Error();
     } catch {
       throw new Error(file.name + ': ファイルのBase64データが不正です。');
     }

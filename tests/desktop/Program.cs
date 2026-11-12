@@ -318,4 +318,49 @@ if (OperatingSystem.IsWindows())
     Check(CsvFileSelection.ReadSelected(new[] { csv }).Warnings.Count == 0, "Mitsubishi CSV ignores the locked HTML too");
     Check(!JsonSerializer.Serialize(one).Contains("referenceHtml", StringComparison.OrdinalIgnoreCase), "native payload contains no reference HTML");
 }
+{
+    var limitsRoot = Folder("input-limits");
+    string LimitFolder(string name) { var path = Path.Combine(limitsRoot, name); Directory.CreateDirectory(path); return path; }
+    string SizedFile(string folder, string name, long length)
+    {
+        var path = Path.Combine(folder, name);
+        using var stream = File.Create(path);
+        stream.SetLength(length);
+        return path;
+    }
+    void RejectLimit(Action read, string name, params string[] expected)
+    {
+        try { read(); throw new Exception("Input limit was not enforced: " + name); }
+        catch (IOException error) { Check(error.Message.Contains("上限") && expected.All(error.Message.Contains), name); }
+    }
+    try
+    {
+        var countFolder = LimitFolder("count");
+        for (var i = 0; i <= CsvFileSelection.MaximumFileCount; i++) Write(countFolder, $"synthetic-{i:D4}.csv", "");
+        RejectLimit(() => CsvFileSelection.ReadFolder(countFolder), "file count is bounded during folder enumeration", "件", "1,001");
+
+        var fileFolder = LimitFolder("one-file");
+        var lockedPath = Write(fileFolder, "first.csv", ProgramCsv);
+        var oversized = SizedFile(fileFolder, "oversized.csv", CsvFileSelection.MaximumFileBytes + 1024 * 1024);
+        using (var locked = File.Open(lockedPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            RejectLimit(() => CsvFileSelection.ReadSelected(new[] { lockedPath, oversized }), "all selected sizes checked before opening any content", "oversized.csv", "17.0", "16");
+
+        var totalA = LimitFolder("total-a");
+        var totalB = LimitFolder("total-b");
+        var each = CsvFileSelection.MaximumTotalBytes / 5 + 1;
+        for (var i = 0; i < 5; i++) SizedFile(i < 3 ? totalA : totalB, $"synthetic-{i}.csv", each);
+        RejectLimit(() => CsvFileSelection.ReadPaths(new[] { totalA, totalB }), "total byte budget covers multiple selected folders", "MB", "64");
+
+        var autoFolder = LimitFolder("automatic");
+        var main = Write(autoFolder, "main.csv", ProgramCsv);
+        SizedFile(autoFolder, "comment.csv", CsvFileSelection.MaximumFileBytes + 1024 * 1024);
+        RejectLimit(() => CsvFileSelection.ReadSelected(new[] { main }), "automatic comment limits are errors rather than warnings", "comment.csv", "16");
+
+        var duplicateFolder = LimitFolder("duplicates");
+        var duplicate = Write(duplicateFolder, "same.csv", ProgramCsv);
+        Check(CsvFileSelection.ReadSelected(Enumerable.Repeat(duplicate, CsvFileSelection.MaximumFileCount + 1)).Files.Count == 1,
+            "duplicate selected paths count only once");
+    }
+    finally { Directory.Delete(limitsRoot, recursive: true); }
+}
 Console.WriteLine($"TOTAL {passed} checks passed; {skipped} reparse fixture group(s) skipped. All fixtures are synthetic.");

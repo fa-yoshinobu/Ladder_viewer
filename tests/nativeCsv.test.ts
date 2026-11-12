@@ -117,6 +117,21 @@ test('native CSV rejects malformed or noncanonical Base64 instead of accepting c
   );
 });
 
+test('native CSV validates canonical padding without re-encoding the decoded bytes', () => {
+  const bytes = Uint8Array.from({ length: 256 }, (_, index) => index);
+  const file = encodedFile('synthetic.csv', bytes);
+  const original = globalThis.btoa;
+  try {
+    globalThis.btoa = () => {
+      throw new Error('Re-encoding is forbidden in this check');
+    };
+    const [decoded] = decodeNativeCsvFiles([file]);
+    assert.deepEqual(new Uint8Array(decoded.bytes), bytes);
+  } finally {
+    globalThis.btoa = original;
+  }
+});
+
 test('native CSV retains empty CSV errors without discarding valid files and rejects malformed records', () => {
   const malformed: unknown[] = [
     undefined,
