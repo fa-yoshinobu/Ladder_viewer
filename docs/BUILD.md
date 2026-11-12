@@ -70,9 +70,12 @@ git push origin v0.6.0
 ```powershell
 npm test
 dotnet run --project tests/desktop/Check.csproj
+npx playwright install chromium
+npm run test:e2e
 ```
 
 テストは架空データを使用します。シンボリックリンクの作成権限がない環境では、C#チェックのリンク用fixtureがスキップされます。
+UIテストは開発サーバーとブラウザーを自動起動・終了します。Playwrightのブラウザー取得は初回とPlaywright更新時に必要です。結果・失敗時の画像とトレースは`artifacts/e2e/`に出力します。
 残件は [TODO](../TODO.md) にまとめています。
 
 ## 構成と管理対象

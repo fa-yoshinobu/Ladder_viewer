@@ -1,3 +1,7 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig({ publicDir: false, build: { outDir: 'artifacts/build/web' } });
+export default defineConfig({
+  publicDir: false,
+  optimizeDeps: { entries: ['index.html'] },
+  build: { outDir: 'artifacts/build/web' },
+});
