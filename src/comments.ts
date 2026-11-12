@@ -5,7 +5,10 @@ export function deviceComment(operand: string | undefined, comments: DeviceComme
   const key = operand.trim().toUpperCase();
   if (Object.hasOwn(comments, key)) return comments[key];
   if (/^#P\d+$/i.test(key) && Object.hasOwn(comments, key.slice(1))) return comments[key.slice(1)];
-  const base = addressParts(key).filter(part => !part.index).map(part => part.text).join('');
+  const base = addressParts(key)
+    .filter((part) => !part.index)
+    .map((part) => part.text)
+    .join('');
   return Object.hasOwn(comments, base) ? comments[base] : '';
 }
-export {commentLines} from './textLayout';
+export { commentLines } from './textLayout';

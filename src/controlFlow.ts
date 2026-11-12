@@ -16,20 +16,50 @@ export interface ControlRange {
 }
 
 const markers = new Set([
-  'IF', 'THEN', 'ELSIF', 'ELSE', 'ENDIF',
-  'CASE', 'CASEOF', 'CASEIF', 'CASETHEN', 'CASEELSE', 'ENDCASE',
-  'STFOR', 'FORBY', 'FORTO', 'FORDO', 'ENDFOR',
-  'WHILE', 'WHILEDO', 'ENDWHILE', 'REPEAT', 'UNTIL', 'ENDREPEAT',
-  'EXIT', 'FBRET', 'STPUSH', 'STPOP', '_TMALLOC', '_TMFREE', 'JMPO'
+  'IF',
+  'THEN',
+  'ELSIF',
+  'ELSE',
+  'ENDIF',
+  'CASE',
+  'CASEOF',
+  'CASEIF',
+  'CASETHEN',
+  'CASEELSE',
+  'ENDCASE',
+  'STFOR',
+  'FORBY',
+  'FORTO',
+  'FORDO',
+  'ENDFOR',
+  'WHILE',
+  'WHILEDO',
+  'ENDWHILE',
+  'REPEAT',
+  'UNTIL',
+  'ENDREPEAT',
+  'EXIT',
+  'FBRET',
+  'STPUSH',
+  'STPOP',
+  '_TMALLOC',
+  '_TMFREE',
+  'JMPO',
 ]);
 const conditions = new Set(['THEN', 'CASETHEN', 'WHILEDO', 'FORDO', 'ENDREPEAT']);
 const starts = new Set(['IF', 'CASE', 'STFOR', 'WHILE', 'REPEAT']);
 const endings: Record<string, ControlRange['kind']> = {
-  ENDIF: 'IF', ENDCASE: 'CASE', ENDFOR: 'STFOR', ENDWHILE: 'WHILE', ENDREPEAT: 'REPEAT'
+  ENDIF: 'IF',
+  ENDCASE: 'CASE',
+  ENDFOR: 'STFOR',
+  ENDWHILE: 'WHILE',
+  ENDREPEAT: 'REPEAT',
 };
 const systemLabels: Record<string, string> = {
-  STPUSH: '生成スタック保存', STPOP: '生成スタック復元',
-  _TMALLOC: '一時領域確保', _TMFREE: '一時領域解放'
+  STPUSH: '生成スタック保存',
+  STPOP: '生成スタック復元',
+  _TMALLOC: '一時領域確保',
+  _TMFREE: '一時領域解放',
 };
 
 export const isControlMarker = (op: string): boolean => markers.has(op);
@@ -46,7 +76,8 @@ interface Frame {
   exits: { instruction: Instruction; network: Network }[];
 }
 
-const isLoop = (kind: ControlRange['kind']) => kind === 'STFOR' || kind === 'WHILE' || kind === 'REPEAT';
+const isLoop = (kind: ControlRange['kind']) =>
+  kind === 'STFOR' || kind === 'WHILE' || kind === 'REPEAT';
 function pointerKey(value: string): string | undefined {
   const match = /^(GLP|#?P)(\d+)$/i.exec(value);
   if (!match) return undefined;
@@ -84,7 +115,11 @@ export function assignControlFlow(networks: Network[]): void {
       instruction.controlFlow.targetStep = target.step;
     }
   };
-  const expect = (kind: ControlRange['kind'], network: Network, instruction: Instruction): Frame | undefined => {
+  const expect = (
+    kind: ControlRange['kind'],
+    network: Network,
+    instruction: Instruction,
+  ): Frame | undefined => {
     const frame = active.at(-1);
     if (frame?.range.kind === kind) return frame;
     invalid(network, instruction, kind + 'の内側ではないか、別の制御範囲が閉じていません。');
@@ -100,7 +135,7 @@ export function assignControlFlow(networks: Network[]): void {
   };
 
   for (const network of networks) {
-    const touched = new Set(active.map(frame => frame.range));
+    const touched = new Set(active.map((frame) => frame.range));
     for (const instruction of network.instructions) {
       const op = instruction.op;
       if (starts.has(op)) {
@@ -108,8 +143,12 @@ export function assignControlFlow(networks: Network[]): void {
         const range: ControlRange = { kind, start: instruction, lane: active.length, branches: [] };
         instruction.controlFlow = { kind: isLoop(kind) ? 'loop' : 'boundary', label: op + '開始' };
         active.push({
-          range, network, phase: op === 'CASE' ? 'selector' : op === 'REPEAT' ? 'body' : 'condition',
-          markers: new Set(), finish: [], exits: []
+          range,
+          network,
+          phase: op === 'CASE' ? 'selector' : op === 'REPEAT' ? 'body' : 'condition',
+          markers: new Set(),
+          finish: [],
+          exits: [],
         });
         touched.add(range);
         continue;
@@ -120,7 +159,10 @@ export function assignControlFlow(networks: Network[]): void {
         if (!frame) continue;
         if (frame.range.kind === 'IF' && frame.phase === 'condition') {
           warn(network, instruction, '対応する条件にTHENがありません。');
-        } else if (frame.range.kind === 'CASE' && (frame.phase === 'selector' || frame.phase === 'case-condition')) {
+        } else if (
+          frame.range.kind === 'CASE' &&
+          (frame.phase === 'selector' || frame.phase === 'case-condition')
+        ) {
           warn(network, instruction, 'CASEOFまたはCASETHENが不足しています。');
         } else if (frame.range.kind === 'STFOR' && frame.phase === 'condition') {
           warn(network, instruction, 'FORDOがありません。');
@@ -131,7 +173,8 @@ export function assignControlFlow(networks: Network[]): void {
         }
         instruction.controlFlow = {
           kind: isLoop(ending) ? 'loop' : 'boundary',
-          label: ending === 'REPEAT' ? '不成立で反復' : isLoop(ending) ? '次の反復' : ending + '終了'
+          label:
+            ending === 'REPEAT' ? '不成立で反復' : isLoop(ending) ? '次の反復' : ending + '終了',
         };
         frame.range.end = instruction;
         active.pop();
@@ -171,9 +214,12 @@ export function assignControlFlow(networks: Network[]): void {
       if (op === 'CASEOF' || op === 'CASEIF' || op === 'CASETHEN' || op === 'CASEELSE') {
         const frame = expect('CASE', network, instruction);
         if (!frame) continue;
-        const valid = op === 'CASEOF' ? frame.phase === 'selector'
-          : op === 'CASEIF' || op === 'CASEELSE' ? frame.phase === 'case-ready' || frame.phase === 'body'
-          : frame.phase === 'case-condition';
+        const valid =
+          op === 'CASEOF'
+            ? frame.phase === 'selector'
+            : op === 'CASEIF' || op === 'CASEELSE'
+              ? frame.phase === 'case-ready' || frame.phase === 'body'
+              : frame.phase === 'case-condition';
         if (!valid) {
           invalid(network, instruction, 'CASEの分岐標識の順序が不正です。');
           continue;
@@ -194,7 +240,13 @@ export function assignControlFlow(networks: Network[]): void {
         }
         continue;
       }
-      if (op === 'FORBY' || op === 'FORTO' || op === 'FORDO' || op === 'WHILEDO' || op === 'UNTIL') {
+      if (
+        op === 'FORBY' ||
+        op === 'FORTO' ||
+        op === 'FORDO' ||
+        op === 'WHILEDO' ||
+        op === 'UNTIL'
+      ) {
         const kind = op === 'WHILEDO' ? 'WHILE' : op === 'UNTIL' ? 'REPEAT' : 'STFOR';
         const frame = expect(kind, network, instruction);
         if (!frame) continue;
@@ -215,7 +267,7 @@ export function assignControlFlow(networks: Network[]): void {
       }
       if (op === 'EXIT') {
         instruction.controlFlow = { kind: 'exit', label: 'ループ脱出' };
-        const frame = [...active].reverse().find(frame => isLoop(frame.range.kind));
+        const frame = [...active].reverse().find((frame) => isLoop(frame.range.kind));
         if (frame) frame.exits.push({ instruction, network });
         else warn(network, instruction, '脱出対象のループがありません。');
         continue;
@@ -228,13 +280,17 @@ export function assignControlFlow(networks: Network[]): void {
         instruction.controlFlow = { kind: 'system', label: systemLabels[op] };
         continue;
       }
-      if (op === 'JMPO' && !(instruction.operands.length === 1 && pointerKey(instruction.operands[0]))) {
+      if (
+        op === 'JMPO' &&
+        !(instruction.operands.length === 1 && pointerKey(instruction.operands[0]))
+      ) {
         instruction.controlFlow = { kind: 'jump', label: '生成ジャンプ' };
         continue;
       }
       if (op === 'JMP' || op === 'CJ' || op === 'SCJ' || op === 'JMPO') {
         instruction.controlFlow = { kind: 'jump', label: 'ポインターへ移動' };
-        const key = instruction.operands.length === 1 ? pointerKey(instruction.operands[0]) : undefined;
+        const key =
+          instruction.operands.length === 1 ? pointerKey(instruction.operands[0]) : undefined;
         const definitions = key ? pointers.get(key) : undefined;
         if (definitions?.length === 1) link(instruction, definitions[0]);
         else warn(network, instruction, '一意のポインターへ解決できないため行先を表示しません。');
@@ -244,6 +300,7 @@ export function assignControlFlow(networks: Network[]): void {
   }
   for (const frame of active) {
     warn(frame.network, frame.range.start, '対応する終端がありません。');
-    for (const exit of frame.exits) warn(exit.network, exit.instruction, 'ループが閉じていないため脱出先を判定しません。');
+    for (const exit of frame.exits)
+      warn(exit.network, exit.instruction, 'ループが閉じていないため脱出先を判定しません。');
   }
 }
