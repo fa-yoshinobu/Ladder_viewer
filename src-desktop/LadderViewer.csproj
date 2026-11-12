@@ -9,7 +9,7 @@
     <AssemblyName>LadderViewer</AssemblyName>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <Product>Ladder Viewer</Product>
-    <Version>0.6.6</Version>
+    <Version>0.6.7</Version>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
