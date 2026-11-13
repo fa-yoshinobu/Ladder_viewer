@@ -66,3 +66,10 @@ KEYENCEのラダー比較：
 ## ライセンス
 
 [MITライセンス](LICENSE)です。本体と使用ライブラリのライセンス全文は、アプリの「バージョン情報」でも確認できます。
+
+
+## Release maintenance
+
+Local distribution files are created in `artifacts/release/`. Before a new release, update `.github/release-notes.md` Changes from the Unreleased changelog. Published ZIPs are never rebuilt for rescans; use the `Scan release with VirusTotal` workflow and `release_tag`. The `VT_API_KEY` secret is required. VirusTotal submissions are public.
+
+SemVerの互換性は対応する入力形式と設定保存形式を基準にします。製品バージョンは `package.json` の既存値を維持しています。
