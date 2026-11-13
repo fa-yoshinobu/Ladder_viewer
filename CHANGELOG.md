@@ -1,5 +1,14 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+- ローカルビルドで配布ZIPのUTF-8・LF形式SHA-256を `artifacts/release/` に作成します。
+
+### Fixed
+- VirusTotal APIのSHA-256欠落・不正・不一致を未完了として扱います。
+
+
 ## v0.6.8 — 2026-11-13
 
 - 回路一覧を仮想スクロールにし、描画範囲の二分探索を共通化しました。5,000回路の架空データで操作を検証しています。

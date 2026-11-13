@@ -18,6 +18,7 @@
 | --- | --- |
 | `artifacts/release/LadderViewer.exe` | 起動用EXE（完成品） |
 | `artifacts/release/LadderViewer-win-x64.zip` | EXEだけを格納した配布ZIP |
+| `artifacts/release/LadderViewer-win-x64.zip.sha256` | ZIPのSHA-256（UTF-8・LF） |
 
 完成品は `artifacts/release/` にあります。`artifacts/build/` はビルド中に使うファイルです。
 
@@ -89,7 +90,7 @@ UIテストは開発サーバーとブラウザーを自動起動・終了しま
 | `src-desktop/` | WinForms・WebView2によるWindowsホストのソース |
 | `tests/` | 架空データによる検証 |
 | `docs/` | 説明書・画面例 |
-| `artifacts/release/` | 完成したEXE・配布ZIP |
+| `artifacts/release/` | 完成したEXE・配布ZIP・SHA-256 |
 | `artifacts/build/web/` | 内部画面。`npm run build`で再生成 |
 | `artifacts/build/LadderViewer/`・`artifacts/build/Check/` | .NETの中間ファイル。ビルド・C#チェックで再生成 |
 | `artifacts/manual/` | 手作業の検証資料・参考画像。Git管理外、ビルドでは再生成されない |

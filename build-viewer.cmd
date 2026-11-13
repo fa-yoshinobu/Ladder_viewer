@@ -36,7 +36,7 @@ call npm run windows:build
 if errorlevel 1 goto failed
 
 echo 配布ZIPを作成しています...
-powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath 'artifacts\release\LadderViewer.exe' -DestinationPath 'artifacts\release\LadderViewer-win-x64.zip' -Force"
+powershell.exe -NoProfile -NonInteractive -Command "$ErrorActionPreference='Stop'; Compress-Archive -LiteralPath 'artifacts\release\LadderViewer.exe' -DestinationPath 'artifacts\release\LadderViewer-win-x64.zip' -Force; $zip='artifacts\release\LadderViewer-win-x64.zip'; $line=([BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes($zip)))).Replace('-', '').ToLowerInvariant()+'  '+[IO.Path]::GetFileName($zip)+[char]10; [IO.File]::WriteAllText($zip+'.sha256',$line,[Text.UTF8Encoding]::new($false))"
 if errorlevel 1 goto failed
 
 echo.

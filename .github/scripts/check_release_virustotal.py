@@ -233,6 +233,8 @@ def release_markdown(entries: list, errors: list) -> str:
     lines = ["## Security scan"]
     if not complete:
         lines.append("VirusTotal scan incomplete.")
+    if any(entry.get("obsolete") for entry in entries):
+        lines.append("Release assets changed; a rescan is required.")
     for entry in entries:
         if entry.get("obsolete"):
             continue

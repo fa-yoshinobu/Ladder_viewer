@@ -223,6 +223,7 @@ class ReleaseVirusTotalTests(unittest.TestCase):
         self.assertIn("scan incomplete", github.updates[-1])
         self.assertNotIn("scan completed", github.updates[-1])
         self.assertNotIn("/detection", github.updates[-1])
+        self.assertIn("Release assets changed; a rescan is required.", github.updates[-1])
         details = (self.output / "reports/release-virustotal.md").read_text(encoding="utf-8")
         self.assertIn("Rescan the changed release assets", details)
         self.assertIn("obsolete results", details)
