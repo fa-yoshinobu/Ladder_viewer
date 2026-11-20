@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "diff": "^9.0.0",
-    "papaparse": "^5.7.0",
+    "papaparse": "^5.7.1",
     "preact": "^11.2.0"
   },
   "devDependencies": {
