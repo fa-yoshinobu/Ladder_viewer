@@ -2,12 +2,14 @@
 
 ## [Unreleased]
 
+## v0.6.9 — 2026-11-23
+
 ### Changed
+- CSV解析ライブラリのPapaParseを5.7.1に更新しました。
 - ローカルビルドで配布ZIPのUTF-8・LF形式SHA-256を `artifacts/release/` に作成します。
 
 ### Fixed
 - VirusTotal APIのSHA-256欠落・不正・不一致を未完了として扱います。
-
 
 ## v0.6.8 — 2026-11-13
 

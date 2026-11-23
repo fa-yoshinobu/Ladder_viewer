@@ -9,6 +9,7 @@ Requirements: Windows x64, .NET 10 Desktop Runtime and Microsoft Edge WebView2 R
 
 ## Changes
 ### Changed
+- Update the PapaParse CSV parser to 5.7.1.
 - Create the local ZIP checksum together with the Windows distribution in `artifacts/release/`.
 
 ### Fixed
