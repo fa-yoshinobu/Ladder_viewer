@@ -3,6 +3,8 @@ import { blockRangeMenu, blockRangeText, comparisonRangeText } from './blockRang
 import { Fragment } from 'preact';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adjacentDifferenceBlock, type CompareSide } from './compareCore';
+import { ComparisonNetworkList } from './ComparisonNetworkList';
+import { visibleRange } from './visibleRange';
 import { DifferenceToolbar } from './DifferenceToolbar';
 import { LADDER_WIDTH } from './ladderMetrics';
 import type {
@@ -52,7 +54,7 @@ export function DirectComparisonView({
   const scrollRef = (side: CompareSide) => (side === 'source' ? sourceScroll : targetScroll);
   const blocks = useMemo(() => {
     let top = 8;
-    return input.map((block) => {
+    return input.map((block, index) => {
       const heights = {
         source: block.source.reduce((h, c) => h + c.height, 0),
         target: block.target.reduce((h, c) => h + c.height, 0),
@@ -61,19 +63,24 @@ export function DirectComparisonView({
         56 * zoom,
         ...(display === 'both' ? [heights.source, heights.target] : [heights[display]]),
       );
-      const result = { ...block, top, height };
+      const result = { ...block, top, height, index };
       top += height;
       return result;
     });
   }, [input, display, zoom]);
   const previousBlocks = useRef(blocks);
-  const visible = blocks.flatMap((block, index) =>
-      block.top + block.height > viewport.top - 400 &&
-      block.top < viewport.top + viewport.height + 400
-        ? [{ ...block, index }]
-        : [],
-    ),
+  const [first, end] = visibleRange(
+    blocks.length,
+    (index) => requireValue(blocks[index]),
+    viewport.top - 400,
+    viewport.top + viewport.height + 400,
+  );
+  const visible = blocks.slice(first, end),
     total = blocks.at(-1);
+  const differenceBlocks = useMemo(
+    () => blocks.flatMap((block, index) => (block.changes.length ? [index] : [])),
+    [blocks],
+  );
   const width = LADDER_WIDTH * zoom,
     element = () => scrollRef(display === 'target' ? 'target' : 'source').current;
   const select = (instruction: DirectInstruction, side: CompareSide) => {
@@ -123,6 +130,7 @@ export function DirectComparisonView({
       viewport.top,
       direction,
       end && last && last.top > viewport.top + 1 ? lastJump.current : -1,
+      differenceBlocks,
     );
   };
   useLayoutEffect(() => {
@@ -203,21 +211,22 @@ export function DirectComparisonView({
     }
     pending.current = null;
   }, [visible]);
-  const options = blocks.flatMap((block, index) =>
-    block.changes.length
-      ? [
-          {
-            index,
-            label:
-              String(index + 1).padStart(3, '0') +
-              ' ' +
-              (block.source[0] ?? block.target[0])?.title.split('\n')[0] +
-              ' · 相違 ' +
-              block.changes.length +
-              '行',
-          },
-        ]
-      : [],
+  const options = useMemo(
+    () =>
+      differenceBlocks.map((index) => {
+        const block = requireValue(blocks[index]);
+        return {
+          index,
+          label:
+            String(index + 1).padStart(3, '0') +
+            ' ' +
+            (block.source[0] ?? block.target[0])?.title.split('\n')[0] +
+            ' · 相違 ' +
+            block.changes.length +
+            '行',
+        };
+      }),
+    [blocks, differenceBlocks],
   );
   const preview = blocks[current]?.changes ?? [];
   return (
@@ -226,8 +235,9 @@ export function DirectComparisonView({
         <div class="panel-title">
           回路一覧<span>{blocks.length}</span>
         </div>
-        <div class="nav-list">
-          {blocks.map((block, index) => (
+        <ComparisonNetworkList
+          items={blocks}
+          renderItem={(block, index) => (
             <button
               key={index}
               class={`nav-item ${active === index ? 'active' : ''} ${block.changes.length ? 'has-differences' : ''}`}
@@ -251,8 +261,8 @@ export function DirectComparisonView({
                 )}
               </div>
             </button>
-          ))}
-        </div>
+          )}
+        />
       </aside>
       <div class="compare-area">
         <DifferenceToolbar

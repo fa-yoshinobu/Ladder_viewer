@@ -17,6 +17,7 @@ import {
   COMMENT_ROW,
   BASELINE,
   PAGE_GAP,
+  LADDER_WIDTH,
 } from '../ladderMetrics';
 import { continuationText } from '../continuation';
 import { placeSymbolColumn } from '../ladderGeometry';
@@ -81,10 +82,32 @@ export interface KeyenceDrawing {
   st?: KeyenceInstruction;
   stRows?: KeyenceStRow[];
 }
+export type KeyencePaintDrawing = Omit<KeyenceDrawing, 'network'> & {
+  network: Pick<
+    KeyenceNetwork,
+    'instructions' | 'warnings' | 'disabled' | 'script' | 'scriptRange'
+  >;
+};
 const drawingSources = new WeakMap<
   KeyenceDrawing,
   { program: KeyenceProgram; showComments: boolean }
 >();
+// The parser links macros before publishing a program to either viewer.
+const commentPresence = new WeakMap<KeyenceProgram, boolean>();
+function hasLayoutComments(program: KeyenceProgram): boolean {
+  const cached = commentPresence.get(program);
+  if (cached !== undefined) return cached;
+  const found =
+    Object.keys(program.deviceComments).length > 0 ||
+    program.instructions.some(
+      (instruction) =>
+        !!instruction.comment ||
+        !!instruction.macro?.comment ||
+        instruction.macro?.parameters.some((parameter) => !!parameter.comment),
+    );
+  commentPresence.set(program, found);
+  return found;
+}
 type Marker = { kind: 'marker'; expression: Extract<KeyenceExpression, { kind: 'unary' }> };
 type Component = KeyenceExpression | Marker;
 type TrieEntry =
@@ -117,7 +140,7 @@ export function wrapKeyenceText(text: string, width: number): string[] {
 }
 export function keyenceInstructionComment(
   instruction: KeyenceInstruction,
-  program: KeyenceProgram,
+  program: Pick<KeyenceProgram, 'deviceComments'>,
 ): string {
   if (instruction.comment) return instruction.comment;
   const comments = [
@@ -233,6 +256,35 @@ export function mergeKeyenceWires(wires: KeyenceWire[]): KeyenceWire[] {
   return result;
 }
 
+// A single ordinary contact and a single coil always fit on one standard row.
+// All other circuits obtain their exact dimensions from the full layout.
+export function singleRowSize(
+  network: KeyenceNetwork,
+  program: KeyenceProgram,
+  showComments: boolean,
+) {
+  const action = network.actions[0];
+  if (
+    network.actions.length !== 1 ||
+    network.instructions.length !== 2 ||
+    network.statement ||
+    network.disabled ||
+    network.warnings.length ||
+    action?.condition?.kind !== 'contact' ||
+    action.condition.comparison ||
+    action.inputConditions ||
+    action.resetCondition !== undefined ||
+    action.continuations ||
+    network.instructions.some((i) => i.fb || i.macro || i.st) ||
+    keyenceOutputStyle(action.instruction).kind !== 'coil'
+  )
+    return undefined;
+  return {
+    width: LADDER_WIDTH,
+    height: showComments && hasLayoutComments(program) ? COMMENT_ROW : ROW,
+  };
+}
+
 export function layoutKeyenceNetwork(
   network: KeyenceNetwork,
   program: KeyenceProgram,
@@ -325,13 +377,6 @@ export function layoutKeyenceNetwork(
       : []),
   ];
   const headerHeight = statementLines.length * 18 + network.warnings.length * 22;
-  const hasComments =
-    program.instructions.some(
-      (instruction) =>
-        !!instruction.comment ||
-        !!instruction.macro?.comment ||
-        instruction.macro?.parameters.some((parameter) => !!parameter.comment),
-    ) || Object.keys(program.deviceComments).length > 0;
   const baseline = Math.max(
     BASELINE,
     ...network.instructions
@@ -341,7 +386,8 @@ export function layoutKeyenceNetwork(
       .filter((instruction) => instruction.macro)
       .map((instruction) => 4 - keyenceMacroGeometry(instruction, showComments).top),
   );
-  const rowHeight = (showComments && hasComments ? COMMENT_ROW : ROW) + baseline - BASELINE,
+  const rowHeight =
+      (showComments && hasLayoutComments(program) ? COMMENT_ROW : ROW) + baseline - BASELINE,
     top = headerHeight + baseline;
   const symbols: KeyenceSymbol[] = [],
     wires: KeyenceWire[] = [];

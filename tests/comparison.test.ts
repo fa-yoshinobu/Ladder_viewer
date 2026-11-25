@@ -17,6 +17,19 @@ const fixture = (rows: string[][]) =>
     .map((row) => row.map((value) => '"' + value.replaceAll('"', '""') + '"').join('\t'))
     .join('\n');
 
+test('matching damaged command text remains explicitly unparsed in a comparison CSV', () => {
+  const commands = ['LD X0', "MOV 'broken", 'LD X1', 'OUT Y1'];
+  const program = parseComparison(
+    fixture(commands.map((s, i) => [String(i + 1), String(i), s, String(i), s, '一致'])),
+    'damaged.csv',
+  );
+  assert.deepEqual(
+    program.comparison!.changes.map((c) => c.kind),
+    ['unparsed'],
+  );
+  assert.match(program.networks[0]!.warnings.join(' '), /引用符/);
+  assert.equal(program.networks[1]!.actions[0]!.instruction.op, 'OUT');
+});
 test('comparison retains metadata, original CSV rows, quoted operands and statements', () => {
   const p = parseComparison(
     fixture([

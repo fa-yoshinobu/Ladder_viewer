@@ -5,7 +5,6 @@ import {
   gridLayout,
   displayGrid,
   networkSize,
-  SCROLLBAR_HEIGHT,
   COLUMNS,
   drawingPages,
   drawingMetrics,
@@ -15,11 +14,11 @@ import { Ladder } from './Ladder';
 import { HorizontalScroll } from './HorizontalScroll';
 import { MasterControlScope } from './MasterControlScope';
 import { ControlFlowScope } from './ControlFlowScope';
+import { horizontalScrollbarHeight, titleHeight } from './networkDimensions';
 
 // Statements and warnings precede the ladder; notes are positioned inside their own instruction rows.
-const textRows = (network: Network) => (network.title ? network.title.split('\n').length : 0);
 export const networkPrefix = (network: Network, zoom: number) =>
-  textRows(network) * 18 * zoom + network.warnings.length * 25;
+  titleHeight(network) * zoom + network.warnings.length * 25;
 
 export function NetworkDrawing({
   network,
@@ -132,11 +131,9 @@ export const drawingHeight = (
   scrollContainer = true,
 ) =>
   networkSize(network, rowHeight, viewMode).height * zoom +
-  textRows(network) * 18 * zoom +
+  titleHeight(network) * zoom +
   network.warnings.length * 25 +
-  (scrollContainer && viewMode === 'scroll' && gridLayout(network).pages > 1
-    ? SCROLLBAR_HEIGHT
-    : 0);
+  (scrollContainer ? horizontalScrollbarHeight(network, viewMode) : 0);
 
 export function instructionDrawingOffset(
   network: Network,

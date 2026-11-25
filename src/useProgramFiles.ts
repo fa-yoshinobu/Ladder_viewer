@@ -1,36 +1,57 @@
 import { requireValue } from './requireValue';
-import { useEffect, useRef, useState } from 'preact/hooks';
+import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { BatchResult, CsvInput } from './batch';
 import { type DeviceComments } from './comments';
-import type { KeyenceProgram } from './keyence/model';
-import { type Program } from './model';
+import type { KeyenceViewerProgram } from './keyence/viewerLayout';
+import { isRemoteMitsubishi, type MitsubishiDocument } from './mitsubishiViewer';
+import { fitLadderZoom } from './layout';
+import { readSetting } from './settings';
 import { decodeNativeCsvFiles, nativeCsvBridge, type NativeCsvSelection } from './nativeCsv';
 import { programFormat } from './programFormat';
-const worker = new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' });
+type ViewerBatch = Omit<BatchResult, 'keyencePrograms' | 'programs'> & {
+  keyencePrograms: KeyenceViewerProgram[];
+  programs: MitsubishiDocument[];
+};
+function batchDocuments(batch: ViewerBatch) {
+  return [...batch.keyencePrograms, ...batch.programs.filter(isRemoteMitsubishi)];
+}
+function closeDocuments(programs: { port: MessagePort }[]) {
+  for (const program of programs) {
+    program.port.postMessage({ action: 'close' });
+    program.port.close();
+  }
+}
 export function useProgramFiles({
   showProgram,
   showKeyenceProgram,
   onComparison,
 }: {
-  showProgram: (program: Program) => void;
-  showKeyenceProgram: (program: KeyenceProgram) => void;
+  showProgram: (program: MitsubishiDocument) => void;
+  showKeyenceProgram: (program: KeyenceViewerProgram) => void;
   onComparison: (selection: NonNullable<NativeCsvSelection['comparison']>) => void;
 }) {
-  const [programs, setPrograms] = useState<Program[]>([]);
-  const [keyencePrograms, setKeyencePrograms] = useState<KeyenceProgram[]>([]);
+  const [programs, setPrograms] = useState<MitsubishiDocument[]>([]);
+  const [keyencePrograms, setKeyencePrograms] = useState<KeyenceViewerProgram[]>([]);
+  const documents = useRef<{ port: MessagePort }[]>([]);
   const [commentsByProgram, setCommentsByProgram] = useState<Record<string, DeviceComments>>({});
   const [progress, setProgress] = useState('');
   const [error, setError] = useState('');
   const [warning, setWarning] = useState('');
   const [busy, setBusy] = useState(false);
   const token = useRef(0);
+  const parser = useRef<Worker | null>(null);
   const inputWarnings = useRef<string[]>([]);
   const nativeCsv = nativeCsvBridge();
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const worker = new Worker(new URL('./parser.worker.ts', import.meta.url), { type: 'module' });
+    parser.current = worker;
     worker.onmessage = (
-      e: MessageEvent<{ token: number; result?: BatchResult; progress?: string; error?: string }>,
+      e: MessageEvent<{ token: number; result?: ViewerBatch; progress?: string; error?: string }>,
     ) => {
-      if (e.data.token !== token.current) return;
+      if (e.data.token !== token.current) {
+        if (e.data.result) closeDocuments(batchDocuments(e.data.result));
+        return;
+      }
       if (e.data.progress) {
         setProgress(e.data.progress);
         return;
@@ -54,6 +75,8 @@ export function useProgramFiles({
         return;
       }
       setPrograms(result.programs);
+      closeDocuments(documents.current);
+      documents.current = batchDocuments(result);
       setKeyencePrograms(result.keyencePrograms);
       setCommentsByProgram(result.commentsByProgram);
       setError('');
@@ -115,6 +138,10 @@ export function useProgramFiles({
       setError(error instanceof Error ? error.message : String(error));
     }
     return () => {
+      closeDocuments(documents.current);
+      documents.current = [];
+      worker.terminate();
+      parser.current = null;
       nativeCsv?.removeEventListener('message', onNativeCsv);
     };
   }, []);
@@ -129,8 +156,15 @@ export function useProgramFiles({
   }
   function submitFiles(inputs: CsvInput[], request: number) {
     if (request !== token.current) return;
-    worker.postMessage(
-      { files: inputs, token: request },
+    const pane = document.querySelector<HTMLElement>('main.diagram');
+    const area = {
+      height: pane?.clientHeight || window.innerHeight,
+      zoom: fitLadderZoom(pane?.clientWidth || window.innerWidth, false),
+      mode: readSetting('viewMode'),
+      comments: readSetting('showComments'),
+    };
+    parser.current?.postMessage(
+      { files: inputs, token: request, viewer: true, area },
       inputs.map((input) => input.bytes),
     );
   }

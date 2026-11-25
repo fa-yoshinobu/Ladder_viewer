@@ -74,17 +74,20 @@ export function showInstructionMenu(
   );
 }
 // The Windows host uses a modeless native grid; ordinary browsers get a separate table window.
-export function openCommentList(request: CommentListRequest) {
+export function openCommentWindow() {
+  return window.open(
+    '',
+    'LadderViewerComments',
+    'width=820,height=640,resizable=yes,scrollbars=yes',
+  );
+}
+export function openCommentList(request: CommentListRequest, opened?: Window | null) {
   const bridge = nativeCsvBridge();
   if (bridge) {
     bridge.postMessage({ type: 'show-comment-list', commentList: request });
     return;
   }
-  const popup = window.open(
-    '',
-    'LadderViewerComments',
-    'width=820,height=640,resizable=yes,scrollbars=yes',
-  );
+  const popup = opened === undefined ? openCommentWindow() : opened;
   if (!popup) return;
   popup.document.title = 'コメントリスト — ' + request.title;
   const style = popup.document.createElement('style');

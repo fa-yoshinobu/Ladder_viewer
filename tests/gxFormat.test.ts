@@ -132,8 +132,41 @@ test('malformed or ambiguous inline ST bodies fail clearly instead of disappeari
     [['0', '', 'STB1', ''], ['<STB1>'], ['D1:=2;']],
     [['0', '', 'END', ''], ['<STB2>'], ['D1:=2;'], ['</STB2>']],
     [['0', '', 'STB1', ''], ['<STB1>'], ['</STB2>']],
-  ])
-    assert.throws(() => parseProgram(csv(rows), 'invalid.csv'), /STB|インラインST/);
+  ]) {
+    const p = parseProgram(
+      csv([['0', '', 'LD', 'X0'], ['1', '', 'OUT', 'Y0'], ['2', '', 'LD', 'X1'], ...rows]),
+      'invalid.csv',
+    );
+    assert.ok(p.instructions.some((i) => i.diagnostic && i.operands.join(' ').includes('<STB')));
+    assert.match(p.networks.flatMap((n) => n.warnings).join('\n'), /STB|インラインST/);
+    assert.ok(p.networks.some((n) => n.actions.some((a) => a.instruction.op === 'OUT')));
+  }
+});
+test('ambiguous ST bodies retain every source record and never attach an arbitrary body', () => {
+  const p = parseProgram(
+    csv([
+      ['0', '', 'STB1', ''],
+      ['1', '', 'END', ''],
+      ['<STB1>'],
+      ['one'],
+      ['</STB1>'],
+      ['<STB1>'],
+      ['two'],
+      ['</STB1>'],
+    ]),
+    'ambiguous.csv',
+  );
+  assert.match(p.instructions[0]!.diagnostic!, /特定/);
+  assert.ok(p.instructions[0]!.inlineST?.missing);
+  assert.deepEqual(
+    p.instructions.slice(2).map((i) => i.operands[0]),
+    ['<STB1>\none\n</STB1>', '<STB1>\ntwo\n</STB1>'],
+  );
+  const unclosed = parseProgram(
+    csv([['0', '', 'STB1', ''], ['<STB1>'], ['2', '', 'OUT', 'Y23']]),
+    'unclosed.csv',
+  );
+  assert.match(unclosed.instructions.at(-1)!.operands[0]!, /OUT\tY23/);
 });
 const fbRows = (kind: 'FB' | 'FUN' = 'FB'): string[][] => {
   const instance = kind === 'FB' ? 'Unit1.' : '',

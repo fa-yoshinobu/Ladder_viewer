@@ -1,7 +1,7 @@
 import { requireValue } from './requireValue';
 import { diffArrays } from 'diff';
 export type CompareSide = 'source' | 'target';
-export type ChangeKind = 'changed' | 'added' | 'removed';
+export type ChangeKind = 'changed' | 'added' | 'removed' | 'unparsed';
 export interface CompareInstruction {
   id: string;
   opcode: string;
@@ -191,21 +191,22 @@ export function adjacentDifferenceBlock(
   scrollTop: number,
   direction: 1 | -1,
   anchor = -1,
+  differences = blocks.flatMap((block, index) => (block.changes.length ? [index] : [])),
 ): number {
-  const differences = blocks.flatMap((block, index) => (block.changes.length ? [index] : []));
-  if (!differences.length) return -1;
-  if (direction > 0) {
-    let current = anchor;
-    blocks.forEach((block, index) => {
-      if (block.top <= scrollTop + 1) current = Math.max(current, index);
-    });
-    return differences.find((index) => index > current) ?? -1;
+  let low = 0,
+    high = differences.length;
+  while (low < high) {
+    const mid = (low + high) >>> 1;
+    const index = requireValue(differences[mid]);
+    const top = requireValue(blocks[index]).top;
+    const belowCutoff =
+      direction > 0
+        ? index <= anchor || top <= scrollTop + 1
+        : anchor >= 0
+          ? index < anchor
+          : top < scrollTop - 1;
+    if (belowCutoff) low = mid + 1;
+    else high = mid;
   }
-  return (
-    differences
-      .filter((index) =>
-        anchor >= 0 ? index < anchor : requireValue(blocks[index]).top < scrollTop - 1,
-      )
-      .at(-1) ?? -1
-  );
+  return differences[direction > 0 ? low : low - 1] ?? -1;
 }

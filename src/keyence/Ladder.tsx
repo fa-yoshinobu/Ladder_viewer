@@ -7,7 +7,7 @@ import { CommentText } from '../CommentText';
 import { AddressText } from '../AddressText';
 import { KeyenceBlock, KeyenceStBox } from './blocks';
 import { keyenceSymbolOwns } from './layout';
-import type { KeyenceDrawing, KeyenceSymbol } from './layout';
+import type { KeyencePaintDrawing, KeyenceSymbol } from './layout';
 import type { KeyenceInstruction } from './model';
 import { keyenceOutputStyle } from './outputStyle';
 import { KeyenceNativeSymbol } from './nativeSymbols';
@@ -69,7 +69,7 @@ export function KeyenceLadder({
   onContextMenu,
   onToggleScript,
 }: {
-  drawing: KeyenceDrawing;
+  drawing: KeyencePaintDrawing;
   zoom: number;
   selected: string;
   onSelect: (instruction: KeyenceInstruction) => void;

@@ -91,40 +91,53 @@ function entries(
       (values.size ? [...values] : ['']).map((comment) => ({ address, comment })),
     );
 }
+function deferredList(
+  title: string,
+  manufacturer: CommentListData['manufacturer'],
+  collect: () => CommentListEntry[],
+): CommentListData {
+  let cached: CommentListEntry[] | undefined;
+  return {
+    title,
+    manufacturer,
+    get entries() {
+      return (cached ??= collect());
+    },
+  };
+}
 export function mitsubishiCommentList(
-  program: Program,
+  program: Pick<Program, 'name' | 'instructions'>,
   comments: DeviceComments,
   title = program.name,
 ): CommentListData {
-  return {
-    title,
-    manufacturer: 'mitsubishi',
-    entries: entries(
+  return deferredList(title, 'mitsubishi', () =>
+    entries(
       comments,
       program.instructions.map((i) => i.operands),
       'mitsubishi',
     ),
-  };
+  );
 }
-export function keyenceCommentList(program: KeyenceProgram, title = program.name): CommentListData {
-  const inline = program.instructions
-    .filter(
-      (i) =>
-        i.operands.length === 1 &&
-        i.comment &&
-        commentListAddress(requireValue(i.operands[0]), 'keyence'),
-    )
-    .map((i) => ({ address: requireValue(i.operands[0]), comment: i.comment }));
-  return {
-    title,
-    manufacturer: 'keyence',
-    entries: entries(
+export function keyenceCommentList(
+  program: Pick<KeyenceProgram, 'name' | 'instructions' | 'deviceComments'>,
+  title = program.name,
+): CommentListData {
+  return deferredList(title, 'keyence', () => {
+    const inline = program.instructions
+      .filter(
+        (i) =>
+          i.operands.length === 1 &&
+          i.comment &&
+          commentListAddress(requireValue(i.operands[0]), 'keyence'),
+      )
+      .map((i) => ({ address: requireValue(i.operands[0]), comment: i.comment }));
+    return entries(
       program.deviceComments,
       program.instructions.map((i) => i.operands),
       'keyence',
       inline,
-    ),
-  };
+    );
+  });
 }
 export function commentListRequest(
   data: CommentListData | undefined,

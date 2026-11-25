@@ -71,11 +71,13 @@ export function decodeNativeCsvFiles(files: NativeCsvSelection['files']): CsvInp
     } catch {
       throw new Error(file.name + ': ファイルのBase64データが不正です。');
     }
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return {
       name: file.name,
       folder: file.folder,
       ...(file.relativePath !== undefined ? { relativePath: file.relativePath } : {}),
-      bytes: Uint8Array.from(binary, (value) => value.charCodeAt(0)).buffer,
+      bytes: bytes.buffer,
     };
   });
 }

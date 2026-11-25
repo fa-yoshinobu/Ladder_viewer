@@ -1,3 +1,4 @@
+import { useMemo } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { differenceLabels } from './model';
 export function DifferenceToolbar({
@@ -19,6 +20,15 @@ export function DifferenceToolbar({
   onChoose: (index: number) => void;
   extra?: ComponentChildren;
 }) {
+  const entries = useMemo(
+    () =>
+      options.map((option, order) => (
+        <option key={option.index} value={option.index}>
+          {order + 1}/{options.length} · {option.label}
+        </option>
+      )),
+    [options],
+  );
   return (
     <div class="diff-toolbar">
       <div class="diff-legend">
@@ -47,11 +57,7 @@ export function DifferenceToolbar({
           <option value={-1} disabled>
             {options.length ? `差分のある回路 ${options.length}` : '差分なし'}
           </option>
-          {options.map((option, order) => (
-            <option key={option.index} value={option.index}>
-              {order + 1}/{options.length} · {option.label}
-            </option>
-          ))}
+          {entries}
         </select>
         <button disabled={!next} onClick={onNext}>
           次の差分

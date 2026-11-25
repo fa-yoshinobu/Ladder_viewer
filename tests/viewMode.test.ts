@@ -27,6 +27,7 @@ import { HorizontalScroll } from '../src/HorizontalScroll.tsx';
 import { comparisonDisplayProgram } from '../src/comparisonDisplay.ts';
 import { MasterControlScope } from '../src/MasterControlScope.tsx';
 import { ControlFlowScope } from '../src/ControlFlowScope.tsx';
+import { describeNetworkSize } from '../src/networkDimensions.ts';
 
 const normal = (commands: string[]) =>
   parseProgram(
@@ -91,6 +92,27 @@ const drawing = (
   return HorizontalScroll(vnode.props as Parameters<typeof HorizontalScroll>[0]);
 };
 
+test('viewport dimensions equal the actual drawing in both modes, including notes and aligned rows', () => {
+  const plain = normal(['LD X0', 'OUT Y0'])!;
+  const noted = normal(['LD X0', 'OUTH Y0'])!;
+  noted.instructions[0]!.note = 'note\nsecond line';
+  const aligned = normal(['LD X0', 'OUT Y0'])!;
+  aligned.branchRowAlignment = { [aligned.instructions[0]!.id]: 3 };
+  const titled = { ...plain, title: 'title\ntwo', warnings: ['warning'] };
+  for (const n of [plain, titled, noted, aligned, normal(longCommands)!]) {
+    for (const mode of ['wrap', 'scroll'] as const)
+      for (const rowHeight of [56, 72]) {
+        const size = describeNetworkSize(n, rowHeight, mode);
+        assert.equal(size.width, networkSize(n, rowHeight).width);
+        assert.equal(size.height, networkSize(n, rowHeight, mode).height);
+        for (const zoom of [0.5, 1, 1.25])
+          assert.equal(
+            (size.height + size.title) * zoom + size.warnings + size.scrollbar,
+            drawingHeight(n, rowHeight, zoom, mode),
+          );
+      }
+  }
+});
 test('short circuits keep exactly the same dimensions and unwrapped container in either mode', () => {
   const n = normal(['LD X0', 'OUT Y0']);
   assert.equal(gridLayout(requireValue(n)).pages, 1);

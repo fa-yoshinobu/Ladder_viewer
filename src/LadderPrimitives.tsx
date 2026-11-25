@@ -1,4 +1,5 @@
 import type { StrokeCoordinates } from './drawing';
+import type { DifferenceKind } from './model';
 
 export type LadderGlyphKind =
   | 'contact'
@@ -172,7 +173,7 @@ export function SelectionRect({
   height: number;
   selected?: boolean;
   hovered?: boolean;
-  difference?: 'added' | 'removed' | 'changed' | 'step';
+  difference?: DifferenceKind;
   className?: string;
 }) {
   const classes = [

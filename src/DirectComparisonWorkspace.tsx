@@ -193,8 +193,21 @@ export function DirectComparisonWorkspace({
             },
     [result],
   );
+  const hasSearchQuery = !!settledQuery.trim();
   const searchEntries = useMemo(() => {
-    if (!result) return [];
+    if (!result || !hasSearchQuery) return [];
+    const entry = (side: CompareSide, instruction: DirectSelection['instruction']) => ({
+      side,
+      instruction,
+      fields: [
+        instruction.op,
+        ...instruction.operands,
+        [instruction.op, ...instruction.operands].join(' '),
+        instruction.line,
+        instruction.comment,
+        instruction.statement,
+      ].map(normalizeSearchText),
+    });
     if (result.format === 'mitsubishi')
       return (
         [
@@ -202,7 +215,7 @@ export function DirectComparisonWorkspace({
           ['target', result.program.comparison!.target, result.targetComments],
         ] as const
       ).flatMap(([side, p, table]) =>
-        p.instructions.map((i) => ({ side, instruction: projectMitsubishiInstruction(i, table) })),
+        p.instructions.map((i) => entry(side, projectMitsubishiInstruction(i, table))),
       );
     return (
       [
@@ -210,26 +223,15 @@ export function DirectComparisonWorkspace({
         ['target', result.comparison.target],
       ] as const
     ).flatMap(([side, p]) =>
-      p.instructions.map((i) => ({ side, instruction: projectKeyenceInstruction(i, p) })),
+      p.instructions.map((i) => entry(side, projectKeyenceInstruction(i, p))),
     );
-  }, [result]);
+  }, [result, hasSearchQuery]);
   const matches = useMemo(() => {
     const needle = normalizeSearchText(settledQuery);
     return searchEntries.filter(
       (entry) =>
         (display === 'both' || entry.side === display) &&
-        searchTextMatches(
-          [
-            entry.instruction.op,
-            ...entry.instruction.operands,
-            [entry.instruction.op, ...entry.instruction.operands].join(' '),
-            entry.instruction.line,
-            entry.instruction.comment,
-            entry.instruction.statement,
-          ].map(normalizeSearchText),
-          needle,
-          searchMode,
-        ),
+        searchTextMatches(entry.fields, needle, searchMode),
     );
   }, [searchEntries, settledQuery, searchMode, display]);
   const headings = useMemo(

@@ -14,8 +14,86 @@ import {
 import { parseCsvBatch } from '../src/batch.ts';
 import { decodeNativeCsvFiles } from '../src/nativeCsv.ts';
 import { symbolDifferenceKind } from '../src/model.ts';
-import { keyenceSymbolDifferenceKind } from '../src/keyence/logic.ts';
+import { buildKeyenceNetworks, keyenceSymbolDifferenceKind } from '../src/keyence/logic.ts';
 const bytes = (text: string) => new TextEncoder().encode(text).buffer;
+test('one excessively deep circuit preserves both neighboring circuits and cannot compare equal', () => {
+  const commands = [
+    'LD X0',
+    'OUT Y0',
+    'LD X1',
+    ...Array.from({ length: 5000 }, (_, i) => (i % 2 ? 'AND ' : 'OR ') + 'X' + i),
+    'OUT Y1',
+    'LD X2',
+    'OUT Y2',
+  ];
+  for (const input of [
+    { format: 'mitsubishi' as const, name: 'deep.csv', program: gx(commands), comments: {} },
+    { format: 'keyence' as const, name: 'deep.mnm', program: kv(commands) },
+  ]) {
+    const networks =
+      input.format === 'mitsubishi' ? input.program.networks : buildKeyenceNetworks(input.program);
+    assert.deepEqual(
+      networks.map((n) => n.actions.length),
+      [1, 0, 1],
+    );
+    assert.equal(networks[1]!.instructions.length, 5002);
+    assert.match(networks[1]!.warnings.join(' '), /配置/);
+    const pair = { id: input.name, label: input.name, source: input, target: input };
+    assert.equal(unchangedDirectPair(pair), false);
+    const result = structuredClone(compareDirectPair(pair));
+    const changes =
+      result.format === 'mitsubishi'
+        ? result.program.comparison!.changes
+        : result.comparison.changes;
+    assert.deepEqual(
+      changes.map((c) => c.kind),
+      ['unparsed'],
+    );
+    if (result.format === 'keyence')
+      assert.equal(keyenceComparisonDrawings(result.comparison, true, 'wrap').length, 3);
+  }
+});
+test('damaged source records retain their text and cannot compare equal on either vendor', () => {
+  const damaged = "MOV 'broken";
+  const mitsubishi = parseProgram(
+    [
+      'ステップ番号\t命令\tI/O(デバイス)',
+      '0\tLD\tX0',
+      "1\tMOV\t'broken",
+      '2\tLD\tX1',
+      '3\tOUT\tY1',
+    ].join('\n'),
+    'broken.csv',
+  );
+  const keyence = parseKeyenceMnm(
+    bytes(['DEVICE:57', 'LD MR0', damaged, 'LD MR1', 'OUT MR2'].join('\n')),
+    'broken.mnm',
+  );
+  for (const input of [
+    { format: 'mitsubishi' as const, name: mitsubishi.name, program: mitsubishi, comments: {} },
+    { format: 'keyence' as const, name: keyence.name, program: keyence },
+  ]) {
+    const pair = { id: 'broken', label: 'broken', source: input, target: input };
+    assert.equal(unchangedDirectPair(pair), false);
+    const comparison = compareDirectPair(pair);
+    const changes =
+      comparison.format === 'keyence'
+        ? comparison.comparison.changes
+        : comparison.program.comparison!.changes;
+    assert.deepEqual(
+      changes.map((change) => change.kind),
+      ['unparsed'],
+    );
+    assert.match(input.program.instructions[1]!.diagnostic!, /引用符/);
+    assert.ok(input.program.instructions[1]!.operands.join(' ').includes(damaged));
+  }
+  for (const networks of [mitsubishi.networks, buildKeyenceNetworks(keyence)]) {
+    assert.equal(networks.length, 2);
+    assert.match(networks[0]!.warnings.join(' '), /引用符/);
+    assert.equal(networks[0]!.actions.length, 0);
+    assert.equal(networks[1]!.actions.length, 1);
+  }
+});
 const gx = (commands: string[], offset = 0) =>
   parseProgram(
     [

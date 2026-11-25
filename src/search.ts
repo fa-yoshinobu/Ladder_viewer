@@ -11,12 +11,12 @@ export interface SearchEntry {
 }
 
 export function buildSearchIndex(
-  program: Program,
+  program: Pick<Program, 'instructions' | 'comparison'>,
   comments: DeviceComments,
   display: 'both' | 'source' | 'target',
 ): SearchEntry[] {
   const index: SearchEntry[] = [];
-  const add = (current: Program, side: SearchEntry['side']) => {
+  const add = (current: Pick<Program, 'instructions'>, side: SearchEntry['side']) => {
     for (const instruction of current.instructions) {
       const step = normalize(instruction.step);
       const fields = [

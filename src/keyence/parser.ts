@@ -6,7 +6,11 @@ import { keyenceKvxFunction } from './kvxFunctions';
 import { linkKeyenceMacros } from './macros';
 
 // Quoted strings may contain semicolons; only an unquoted semicolon starts a comment.
-function instructionParts(line: string): { tokens: string[]; comment: string } {
+function instructionParts(line: string): {
+  tokens: string[];
+  comment: string;
+  diagnostic?: string;
+} {
   const tokens: string[] = [];
   let token = '',
     quote = '',
@@ -33,6 +37,12 @@ function instructionParts(line: string): { tokens: string[]; comment: string } {
       }
     } else token += char;
   }
+  if (quote)
+    return {
+      tokens: ['未解析', line],
+      comment: '',
+      diagnostic: '文字列定数の引用符が閉じていません。',
+    };
   if (token) tokens.push(token);
   return { tokens, comment };
 }
@@ -98,7 +108,7 @@ export function parseKeyenceMnm(
         annotation.instruction.sourceEndLine = index + 1;
       } else statements.push(comment.trim());
     } else {
-      const { tokens, comment } = instructionParts(line);
+      const { tokens, comment, diagnostic } = instructionParts(line);
       const [opcode = '', ...operands] = tokens;
       const op = opcode.toUpperCase();
       if (op === 'DISABLED_RUNG') disabledDepth++;
@@ -110,6 +120,7 @@ export function parseKeyenceMnm(
         raw,
         comment,
         statement: statements.join('\n'),
+        ...(diagnostic ? { diagnostic } : {}),
       };
       if (disabledDepth > 0) instruction.disabled = true;
       if (op === 'END_DISABLED_RUNG') disabledDepth = Math.max(0, disabledDepth - 1);

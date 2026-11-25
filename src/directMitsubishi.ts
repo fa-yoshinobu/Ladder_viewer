@@ -1,7 +1,12 @@
 import { alignInstructions, commandKey } from './compareCore';
 import { alignCircuitRows } from './comparison';
 import { compareConnections } from './connections';
-import type { Program, ComparisonChange } from './model';
+import {
+  incompleteGxInstruction,
+  networkContactIds,
+  type Program,
+  type ComparisonChange,
+} from './model';
 import { deviceComment, type DeviceComments } from './comments';
 import { contactKey } from './instructions';
 export function compareMitsubishiPrograms(
@@ -17,14 +22,7 @@ export function compareMitsubishiPrograms(
   const describe = (p: Program, comments: DeviceComments) =>
     p.networks.map((n) => {
       const actions = new Set(n.actions.map((a) => a.instruction.id)),
-        conditions = new Set<string>();
-      const visit = (logic: NonNullable<typeof n.evaluation> | null) => {
-        if (!logic) return;
-        if (logic.kind === 'contact') conditions.add(logic.instruction.id);
-        else logic.children.forEach(visit);
-      };
-      for (const action of n.actions) visit(action.condition);
-      visit(n.evaluation ?? null);
+        conditions = networkContactIds(n);
       return n.instructions.map((i) => ({
         id: i.id,
         opcode: i.op,
@@ -60,7 +58,9 @@ export function compareMitsubishiPrograms(
       b = pair.target && targets.get(pair.target.id);
     if (a) a.comparisonRow = row;
     if (b) b.comparisonRow = row;
+    const unreadable = (a && incompleteGxInstruction(a)) || (b && incompleteGxInstruction(b));
     const same =
+      !unreadable &&
       pair.source &&
       pair.target &&
       commandKey(pair.source) === commandKey(pair.target) &&
@@ -69,7 +69,7 @@ export function compareMitsubishiPrograms(
       if (a!.step !== b!.step) shiftedSteps++;
       return;
     }
-    const kind = !a ? 'added' : !b ? 'removed' : 'changed';
+    const kind = unreadable ? 'unparsed' : !a ? 'added' : !b ? 'removed' : 'changed';
     const text = (i: typeof a) => (i ? [i.op, ...i.operands].join(' ') : '');
     changes.push({
       sourceRow: a?.sourceRow ?? b!.sourceRow,

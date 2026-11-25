@@ -1,4 +1,6 @@
 import { requireValue } from '../requireValue';
+import { deepCircuitError, depthProbe } from '../deepCircuit';
+import { layoutKeyenceNetwork, keyenceViewDrawing } from './layout';
 import type { KeyenceInstruction, KeyenceProgram, KeyenceScriptDisplay } from './model';
 
 export type KeyenceExpression =
@@ -31,6 +33,7 @@ export interface KeyenceNetwork {
   actions: KeyenceAction[];
   condition: KeyenceExpression | null;
   warnings: string[];
+  layoutDiagnostic?: string;
   disabled?: boolean;
   script?: KeyenceScriptDisplay;
   scriptRange?: { id: string; start: boolean; end: boolean };
@@ -187,7 +190,14 @@ export function buildKeyenceNetworks(program: KeyenceProgram): KeyenceNetwork[] 
       (i) => i.fb?.knownSignature && /^(FUNLD|FBEAND)$/i.test(i.opcode),
     );
     if (!actions.length && !annotationOnly && !functionResult) warn('出力命令がありません。');
-    networks.push({
+    if (instructions.some((i) => i.diagnostic)) {
+      for (const i of instructions)
+        if (i.diagnostic) warn(`MNM ${i.sourceLine}行: ${i.diagnostic}`);
+      for (const i of instructions) statements.push(i.raw);
+      actions = [];
+      current = null;
+    }
+    const network: KeyenceNetwork = {
       id: requireValue(instructions[0]).id,
       statement: statements.join('\n'),
       instructions,
@@ -195,7 +205,30 @@ export function buildKeyenceNetworks(program: KeyenceProgram): KeyenceNetwork[] 
       condition: current,
       warnings,
       ...(instructions.some((i) => i.disabled) ? { disabled: true } : {}),
-    });
+    };
+    if (instructions.length >= depthProbe) {
+      const problem = deepCircuitError(
+        [
+          current,
+          ...actions.flatMap((a) => [
+            a.condition,
+            a.resetCondition,
+            ...(a.inputConditions ?? []).map((input) => input.condition),
+          ]),
+        ],
+        (e) => (e.kind === 'contact' ? [] : e.kind === 'unary' ? [e.input] : [e.left, e.right]),
+        network,
+        () => keyenceViewDrawing(layoutKeyenceNetwork(network, program), 'wrap'),
+      );
+      if (problem) {
+        network.layoutDiagnostic = problem;
+        network.warnings.push(problem);
+        network.actions = [];
+        network.condition = null;
+        network.statement = instructions.map((i) => i.raw).join('\n');
+      }
+    }
+    networks.push(network);
     current = null;
     blocks = [];
     saved = [];

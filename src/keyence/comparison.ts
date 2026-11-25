@@ -37,29 +37,29 @@ export function compareKeyencePrograms(
     target = structuredClone(targetInput);
   const a = buildKeyenceNetworks(source),
     b = buildKeyenceNetworks(target);
+  for (const network of [...a, ...b])
+    if (network.layoutDiagnostic) network.instructions[0]!.diagnostic = network.layoutDiagnostic;
   const describe = (networks: KeyenceNetwork[], p: KeyenceProgram) =>
     networks.map((n) => {
       const actions = new Set(
           n.actions.flatMap((a) => [a.instruction, ...(a.continuations ?? [])]).map((i) => i.id),
         ),
         conditions = new Set<string>();
-      const visit = (e: KeyenceNetwork['condition']) => {
-        if (!e) return;
-        if (e.kind === 'contact') conditions.add(e.instruction.id);
-        else if (e.kind === 'unary') {
-          conditions.add(e.instruction.id);
-          visit(e.input);
-        } else {
-          visit(e.left);
-          visit(e.right);
-        }
-      };
+      const pending = [n.condition],
+        seen = new Set<KeyenceNetwork['condition']>();
       for (const action of n.actions) {
-        visit(action.condition);
-        visit(action.resetCondition ?? null);
-        for (const input of action.inputConditions ?? []) visit(input.condition);
+        pending.push(action.condition, action.resetCondition ?? null);
+        for (const input of action.inputConditions ?? []) pending.push(input.condition);
       }
-      visit(n.condition);
+      while (pending.length) {
+        const e = pending.pop();
+        if (!e || seen.has(e)) continue;
+        seen.add(e);
+        if (e.kind === 'contact' || e.kind === 'unary') {
+          conditions.add(e.instruction.id);
+          if (e.kind === 'unary') pending.push(e.input);
+        } else pending.push(e.left, e.right);
+      }
       return n.instructions.map((i) => ({
         id: i.id,
         opcode: i.opcode,
@@ -91,13 +91,22 @@ export function compareKeyencePrograms(
     if (left) left.comparisonRow = row;
     if (right) right.comparisonRow = row;
     if (
+      !left?.diagnostic &&
+      !right?.diagnostic &&
       pair.source &&
       pair.target &&
       commandKey(pair.source) === commandKey(pair.target) &&
       pair.source.annotation === pair.target.annotation
     )
       return;
-    const kind = !left ? 'added' : !right ? 'removed' : 'changed';
+    const kind =
+      left?.diagnostic || right?.diagnostic
+        ? 'unparsed'
+        : !left
+          ? 'added'
+          : !right
+            ? 'removed'
+            : 'changed';
     changes.push({ row, kind, source: left, target: right });
     for (const [own, other] of [
       [left, right],

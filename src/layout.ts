@@ -148,6 +148,11 @@ export function mergeWires(wires: readonly GridWire[]): GridWire[] {
   return merged;
 }
 const cache = new WeakMap<Network, GridLayout>();
+// A viewer worker already laid out this circuit. Its condition graph stays in the worker.
+export function restoreViewerGrid(network: Network, grid: GridLayout) {
+  cache.set(network, grid);
+  return network;
+}
 const branchCache = new WeakMap<Network, { hints: BranchRowHints; grid: GridLayout }>();
 type OutputRoute = { symbol: GridSymbol; from: { col: number; row: number }; wires: GridWire[] };
 const outputRoutes = new WeakMap<
@@ -187,11 +192,13 @@ export function layoutGrid(n: Network, minimumRows?: BranchRowHints): GridLayout
     line(a.col, row, col, row);
   };
   const minimum = (e: Logic | null): number =>
-    !e || placed.has(e)
+    !minimumRows || !e || placed.has(e)
       ? 0
       : e.kind === 'contact'
         ? (minimumRows?.[e.instruction.id] ?? 0)
-        : Math.max(...(e.kind === 'or' ? e.children.slice(0, 1) : e.children).map(minimum));
+        : e.kind === 'or'
+          ? minimum(requireValue(e.children[0]))
+          : e.children.reduce((row, child) => Math.max(row, minimum(child)), 0);
   function place(e: Logic, x: number, y: number, group = branch(y)): End {
     const known = placed.get(e);
     if (known) return known;
@@ -207,21 +214,25 @@ export function layoutGrid(n: Network, minimumRows?: BranchRowHints): GridLayout
         contact: true,
       });
       end = { col: start + span, row: y, bottom: y };
-    } else if (e.kind === 'and') {
-      const a = place(requireValue(e.children[0]), x, y, group);
-      const b = place(requireValue(e.children[1]), a.col, y, group);
-      route(a, a.col, y);
-      end = { ...b, bottom: Math.max(a.bottom, b.bottom) };
     } else {
-      const a = place(requireValue(e.children[0]), x, y, group),
-        rightRow = Math.max(y + 1, a.bottom + 1, minimum(requireValue(e.children[1])));
-      const b = place(requireValue(e.children[1]), x, rightRow, branch(rightRow));
-      const col = Math.max(a.col, b.col);
-      line(x, y, x, b.row);
-      route(a, col, a.row);
-      route(b, col, b.row);
-      line(col, a.row, col, b.row);
-      end = { col, row: a.row, bottom: Math.max(a.bottom, b.bottom) };
+      end = place(requireValue(e.children[0]), x, y, group);
+      for (let index = 1; index < e.children.length; index++) {
+        const child = requireValue(e.children[index]);
+        if (e.kind === 'and') {
+          const b = place(child, end.col, y, group);
+          route(end, end.col, y);
+          end = { ...b, bottom: Math.max(end.bottom, b.bottom) };
+        } else {
+          const rightRow = Math.max(y + 1, end.bottom + 1, minimum(child));
+          const b = place(child, x, rightRow, branch(rightRow));
+          const col = Math.max(end.col, b.col);
+          line(x, y, x, b.row);
+          route(end, col, end.row);
+          route(b, col, b.row);
+          line(col, end.row, col, b.row);
+          end = { col, row: end.row, bottom: Math.max(end.bottom, b.bottom) };
+        }
+      }
     }
     placed.set(e, end);
     return end;
@@ -503,6 +514,7 @@ export interface GridNote {
   lines: string[];
 }
 export function noteLayout(network: Network, viewMode: LadderViewMode = 'wrap'): GridNote[] {
+  if (!network.instructions.some((i) => i.note)) return [];
   const grid = displayGrid(network, viewMode),
     notes = new Map<string, GridNote>(),
     owners = new Map<string, GridSymbol>();

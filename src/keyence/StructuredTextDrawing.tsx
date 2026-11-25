@@ -1,7 +1,7 @@
 import { requireValue } from '../requireValue';
 import { blockRangeMenu, blockRangeText } from '../blockRangeCopy';
 import { LEFT_GUTTER } from '../ladderMetrics';
-import type { KeyenceDrawing } from './layout';
+import type { KeyencePaintDrawing } from './layout';
 import type { KeyenceInstruction } from './model';
 import { keyenceStChangedLines, ST_ROW_HEIGHT, ST_HEADER_HEIGHT } from './structuredText';
 import { useMemo } from 'preact/hooks';
@@ -14,7 +14,7 @@ export function KeyenceStructuredText({
   onSelect,
   onContextMenu,
 }: {
-  drawing: KeyenceDrawing;
+  drawing: KeyencePaintDrawing;
   zoom: number;
   selected: string;
   onSelect: (instruction: KeyenceInstruction) => void;

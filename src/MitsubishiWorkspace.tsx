@@ -50,6 +50,8 @@ export function MitsubishiWorkspace({
   zoomIn,
   setZoom,
   error,
+  drawingError,
+  dismissDrawingError,
   warning,
   dismissError,
   dismissWarning,
@@ -68,7 +70,7 @@ export function MitsubishiWorkspace({
   setViewport,
   progress,
   total,
-  layouts,
+  minWidth,
   visible,
   chooseDisplayedInstruction,
   navigateInstruction,
@@ -162,11 +164,14 @@ export function MitsubishiWorkspace({
             />
           </div>
         </div>
-        <MessageBanner text={error} dismiss={dismissError} />
+        <MessageBanner
+          text={error || drawingError}
+          dismiss={error ? dismissError : dismissDrawingError}
+        />
         <MessageBanner text={warning} warning dismiss={dismissWarning} />
         <div class={`workspace ${showComparison ? 'comparison-workspace' : ''}`}>
           <div ref={comparisonWidth} class="comparison-host" hidden={!showComparison}>
-            {showComparison && program && (
+            {showComparison && program?.comparison && (
               <ComparisonView
                 key={program.name}
                 program={program}
@@ -247,7 +252,7 @@ export function MitsubishiWorkspace({
                   <div
                     style={{
                       height: total ? total.top + total.height + 8 : 0,
-                      minWidth: Math.max(0, ...layouts.map((l) => l.width + 24)),
+                      minWidth,
                       position: 'relative',
                     }}
                   >

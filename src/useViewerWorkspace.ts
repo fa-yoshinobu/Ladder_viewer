@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'preact/hooks';
 import { mitsubishiCommentList } from './commentListData';
-import type { KeyenceProgram } from './keyence/model';
-import { type Program } from './model';
+import type { KeyenceViewerProgram } from './keyence/viewerLayout';
+import type { MitsubishiDocument } from './mitsubishiViewer';
 import { type NativeCsvSelection } from './nativeCsv';
 import { useFindShortcut } from './useFindShortcut';
 import { useMitsubishiNavigation } from './useMitsubishiNavigation';
@@ -24,8 +24,8 @@ document.documentElement.dataset.ladder = savedLadderPalette(
 export function useViewerWorkspace() {
   const [directComparison, setDirectComparison] = useState(false);
   const [initialComparison, setInitialComparison] = useState<NativeCsvSelection['comparison']>();
-  const [program, setProgram] = useState<Program | null>(null);
-  const [keyenceProgram, setKeyenceProgram] = useState<KeyenceProgram | null>(null);
+  const [program, setProgram] = useState<MitsubishiDocument | null>(null);
+  const [keyenceProgram, setKeyenceProgram] = useState<KeyenceViewerProgram | null>(null);
   const files = useProgramFiles({
     showProgram,
     showKeyenceProgram,
@@ -92,12 +92,12 @@ export function useViewerWorkspace() {
     if (mitsubishi) showProgram(mitsubishi);
   }
   useFindShortcut();
-  function showProgram(next: Program) {
+  function showProgram(next: MitsubishiDocument) {
     setKeyenceProgram(null);
     setProgram(next);
     view.resetProgram(next);
   }
-  function showKeyenceProgram(next: KeyenceProgram) {
+  function showKeyenceProgram(next: KeyenceViewerProgram) {
     setProgram(null);
     setKeyenceProgram(next);
     view.resetKeyence();

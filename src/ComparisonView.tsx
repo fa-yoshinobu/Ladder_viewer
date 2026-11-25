@@ -1,5 +1,7 @@
 import { requireValue } from './requireValue';
 import { blockRangeMenu, blockRangeText, comparisonRangeText } from './blockRangeCopy';
+import { ComparisonNetworkList } from './ComparisonNetworkList';
+import { visibleRange } from './visibleRange';
 import { DifferenceToolbar } from './DifferenceToolbar';
 import { Fragment } from 'preact';
 import { CommentListContext } from './CommentList';
@@ -191,14 +193,33 @@ export function ComparisonView({
   }, [program, zoom, rowHeight, viewMode]);
   const total = blocks.at(-1),
     width = LADDER_WIDTH * zoom;
-  const visible = blocks.filter(
-    (block) =>
-      block.top + block.height > viewport.top - 400 &&
-      block.top < viewport.top + viewport.height + 400,
+  const [first, end] = visibleRange(
+    blocks.length,
+    (index) => requireValue(blocks[index]),
+    viewport.top - 400,
+    viewport.top + viewport.height + 400,
   );
+  const visible = blocks.slice(first, end);
   const differenceBlocks = useMemo(
     () => blocks.flatMap((block, index) => (block.changes.length ? [index] : [])),
     [blocks],
+  );
+  const options = useMemo(
+    () =>
+      differenceBlocks.map((index) => {
+        const block = requireValue(blocks[index]),
+          n = requireValue(block.source[0] ?? block.target[0]);
+        return {
+          index,
+          label:
+            String(index + 1).padStart(3, '0') +
+            ' ' +
+            (n.title || n.pointer?.op || `STEP ${n.step}`).split('\n')[0] +
+            ' · ' +
+            differenceSummary(block.changes),
+        };
+      }),
+    [blocks, differenceBlocks],
   );
   const previewChanges = blocks[currentBlock]?.changes ?? [];
   const previousGeometry = useRef({ viewMode, blocks });
@@ -295,7 +316,9 @@ export function ComparisonView({
     if (other && Math.abs(other.scrollTop - element.scrollTop) > 1)
       other.scrollTop = element.scrollTop;
     setViewport({ top: element.scrollTop, height: element.clientHeight });
-    const block = blocks.find((item) => item.top + item.height > element.scrollTop + 2);
+    const top = element.scrollTop + 2;
+    const [index] = visibleRange(blocks.length, (i) => requireValue(blocks[i]), top, top);
+    const block = blocks[index];
     const instruction = block?.[side][0]?.instructions[0];
     if (instruction) onPosition?.(instruction, side);
   }
@@ -374,6 +397,7 @@ export function ComparisonView({
       element.scrollTop,
       direction,
       atEnd && last && last.top > element.scrollTop + 1 ? lastJump.current : -1,
+      differenceBlocks,
     );
   }
   function moveDifference(direction: 1 | -1) {
@@ -396,8 +420,9 @@ export function ComparisonView({
         <div class="panel-title">
           回路一覧 <span>{blocks.length}</span>
         </div>
-        <div class="nav-list">
-          {blocks.map((block, index) => {
+        <ComparisonNetworkList
+          items={blocks}
+          renderItem={(block, index) => {
             const n = requireValue(block.source[0] ?? block.target[0]);
             return (
               <button
@@ -423,8 +448,8 @@ export function ComparisonView({
                 </div>
               </button>
             );
-          })}
-        </div>
+          }}
+        />
       </aside>
       <div class="compare-area">
         <DifferenceToolbar
@@ -434,19 +459,7 @@ export function ComparisonView({
           onPrevious={() => moveDifference(-1)}
           onNext={() => moveDifference(1)}
           onChoose={goDifferenceBlock}
-          options={differenceBlocks.map((index) => {
-            const block = requireValue(blocks[index]),
-              n = requireValue(block.source[0] ?? block.target[0]);
-            return {
-              index,
-              label:
-                String(index + 1).padStart(3, '0') +
-                ' ' +
-                (n.title || n.pointer?.op || `STEP ${n.step}`).split('\n')[0] +
-                ' · ' +
-                differenceSummary(block.changes),
-            };
-          })}
+          options={options}
           extra={
             comparison.shiftedSteps > 0 && (
               <span class="shifted-steps">

@@ -3,18 +3,21 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/ho
 import { type DeviceComments } from './comments';
 import { comparisonDisplayProgram, type ComparisonDisplay } from './comparisonDisplay';
 import { type CompareSide } from './ComparisonView';
-import type { KeyenceProgram } from './keyence/model';
-import { ROW, fitLadderZoom, networkSize, type LadderViewMode } from './layout';
-import { type Instruction, type Program } from './model';
-import { drawingHeight, instructionDrawingOffset } from './NetworkDrawing';
+import type { KeyenceViewerProgram } from './keyence/viewerLayout';
+import { ROW, fitLadderZoom, type LadderViewMode } from './layout';
+import type { Instruction } from './model';
+import { isRemoteMitsubishi, storedNetworkSize, type MitsubishiDocument } from './mitsubishiViewer';
+import { useMitsubishiCircuits } from './useMitsubishiCircuits';
+import { instructionDrawingOffset } from './NetworkDrawing';
+import { describeNetworkSize } from './networkDimensions';
 import { buildSearchIndex, searchInstructions, type SearchMode } from './search';
 import { useZoom } from './useZoom';
 import { visibleRange } from './visibleRange';
 import { useSetting } from './settings';
 import { useDebouncedValue } from './useDebouncedValue';
 export function useMitsubishiNavigation(
-  program: Program | null,
-  keyenceProgram: KeyenceProgram | null,
+  program: MitsubishiDocument | null,
+  keyenceProgram: KeyenceViewerProgram | null,
   deviceComments: DeviceComments,
 ) {
   const [showComments, setShowComments] = useSetting('showComments');
@@ -26,7 +29,7 @@ export function useMitsubishiNavigation(
   const previousSearch = useRef<{
     query: string;
     mode: SearchMode;
-    program: Program | null;
+    program: MitsubishiDocument | null;
   } | null>(null);
   const comparisonPosition = useRef<{ step: string; id: string; side: CompareSide } | null>(null);
   const pendingDisplayPosition = useRef<{ step: string; id: string; side: CompareSide } | null>(
@@ -52,7 +55,14 @@ export function useMitsubishiNavigation(
   const viewAnchor = useRef<string | null>(null);
   const [viewport, setViewport] = useState({ top: 0, height: 800 });
   const scroll = useRef<HTMLDivElement>(null);
+  const [requestedJump, setRequestedJump] = useState<{
+    program: MitsubishiDocument;
+    index: number;
+    id: string;
+    side: CompareSide;
+  } | null>(null);
   function resetKeyence() {
+    setRequestedJump(null);
     comparisonPosition.current = null;
     pendingDisplayPosition.current = null;
     pendingFit.current = false;
@@ -61,7 +71,8 @@ export function useMitsubishiNavigation(
 
     setSelected(null);
   }
-  function resetProgram(next: Program) {
+  function resetProgram(next: MitsubishiDocument) {
+    setRequestedJump(null);
     comparisonPosition.current = null;
     pendingDisplayPosition.current = null;
     pendingFit.current = true;
@@ -83,30 +94,52 @@ export function useMitsubishiNavigation(
   const comparison = program?.comparison;
   const showComparison = !!comparison && comparisonDisplay === 'both';
   const displayedProgram = useMemo(
-    () => (program ? comparisonDisplayProgram(program, comparisonDisplay) : null),
+    () =>
+      program && !isRemoteMitsubishi(program)
+        ? comparisonDisplayProgram(program, comparisonDisplay)
+        : program,
     [program, comparisonDisplay],
   );
-  const layouts = useMemo(() => {
-    let top = 8;
-    return (showComparison ? [] : (displayedProgram?.networks ?? [])).map((n) => {
-      const dimensions = networkSize(n, rowHeight);
-      const item = {
+  const sizes = useMemo(() => {
+    if (!displayedProgram || showComparison) return [];
+    if (isRemoteMitsubishi(displayedProgram))
+      return displayedProgram.networks.map((n, index) => ({
         n,
+        local: null,
+        ...storedNetworkSize(displayedProgram, index, rowHeight, viewMode),
+      }));
+    return displayedProgram.networks.map((n) => ({
+      n,
+      local: n,
+      ...describeNetworkSize(n, rowHeight, viewMode),
+    }));
+  }, [displayedProgram, showComparison, rowHeight, viewMode]);
+  const { layouts, minWidth } = useMemo(() => {
+    let top = 8,
+      minWidth = 0;
+    const layouts = sizes.map((size) => {
+      const item = {
+        n: size.n,
+        local: size.local,
         top,
-        height: drawingHeight(n, rowHeight, zoom, viewMode),
-        width: dimensions.width * zoom,
+        height: size.height * zoom + size.title * zoom + size.warnings + size.scrollbar,
+        width: size.width * zoom,
       };
       top += item.height;
+      minWidth = Math.max(minWidth, item.width + 24);
       return item;
     });
-  }, [displayedProgram, showComparison, zoom, rowHeight, viewMode]);
-  const searchIndex = useMemo(
-    () => (program ? buildSearchIndex(program, deviceComments, comparisonDisplay) : []),
-    [program, deviceComments, comparisonDisplay],
-  );
+    return { layouts, minWidth };
+  }, [sizes, zoom]);
+  const getSearchIndex = useMemo(() => {
+    let index: ReturnType<typeof buildSearchIndex> | undefined;
+    return () =>
+      (index ??= program ? buildSearchIndex(program, deviceComments, comparisonDisplay) : []);
+  }, [program, deviceComments, comparisonDisplay]);
   const searchResults = useMemo(
-    () => searchInstructions(searchIndex, settledQuery, searchMode),
-    [searchIndex, settledQuery, searchMode],
+    () =>
+      settledQuery.trim() ? searchInstructions(getSearchIndex(), settledQuery, searchMode) : [],
+    [getSearchIndex, settledQuery, searchMode],
   );
   const searchHeadings = useMemo(
     () =>
@@ -156,7 +189,29 @@ export function useMitsubishiNavigation(
     viewport.top - 400,
     viewport.top + viewport.height + 400,
   );
-  const visible = layouts.slice(firstVisible, endVisible);
+  const remote = program && isRemoteMitsubishi(program) ? program : null;
+  const {
+    cache,
+    error: drawingError,
+    dismissDrawingError,
+  } = useMitsubishiCircuits(
+    remote,
+    firstVisible,
+    endVisible,
+    requestedJump && requestedJump.program === program ? requestedJump.index : -1,
+  );
+  const visible = layouts.slice(firstVisible, endVisible).flatMap((item) => {
+    const network = item.local ?? cache.get(item.n.id);
+    return network ? [{ ...item, n: network }] : [];
+  });
+  useLayoutEffect(() => {
+    if (
+      requestedJump &&
+      requestedJump.program === program &&
+      cache.has(program.networks[requestedJump.index]!.id)
+    )
+      navigateInstruction(requestedJump.id, requestedJump.side);
+  });
   const previousGeometry = useRef({ program, layouts });
   useLayoutEffect(() => {
     const anchor = viewAnchor.current;
@@ -269,6 +324,7 @@ export function useMitsubishiNavigation(
     comparisonPosition.current = { id: instruction.id, step: instruction.step, side };
   }
   function chooseDisplayedInstruction(instruction: Instruction) {
+    setRequestedJump(null);
     setSelected(instruction);
     setSelectedSide(comparison && comparisonDisplay === 'target' ? 'target' : 'source');
   }
@@ -288,6 +344,7 @@ export function useMitsubishiNavigation(
     setViewMode(next);
   }
   function jump(id: string) {
+    setRequestedJump(null);
     const layout = layouts.find((item) => item.n.id === id),
       element = scroll.current;
     if (layout && element) {
@@ -304,20 +361,27 @@ export function useMitsubishiNavigation(
       setComparisonNavigation({ instructionId, side, request: ++jumpRequest.current });
       return;
     }
-    const layout = layouts.find(
+    const index = layouts.findIndex(
       (item) =>
         item.n.instructions.some((i) => i.id === instructionId) ||
         item.n.pointer?.id === instructionId,
     );
+    const layout = layouts[index];
     const element = scroll.current;
     if (!layout || !element) return;
-    const owner = layout.n.actions.find((action) =>
+    const network = layout.local ?? cache.get(layout.n.id);
+    if (!network && program) {
+      setRequestedJump({ program, index, id: instructionId, side });
+      return;
+    }
+    if (!network) return;
+    setRequestedJump(null);
+    const owner = network.actions.find((action) =>
       action.instruction.pins?.some((pin) => pin.id === instructionId),
     )?.instruction;
     pendingInstruction.current = { id: instructionId, ownerId: owner?.id ?? instructionId };
     element.scrollTo({
-      top:
-        layout.top + instructionDrawingOffset(layout.n, instructionId, rowHeight, zoom, viewMode),
+      top: layout.top + instructionDrawingOffset(network, instructionId, rowHeight, zoom, viewMode),
     });
     setViewport({ top: element.scrollTop, height: element.clientHeight });
     setActive(layout.n.id);
@@ -337,6 +401,8 @@ export function useMitsubishiNavigation(
     navigateInstruction(hit.instruction.id, hit.side);
   }
   return {
+    drawingError,
+    dismissDrawingError,
     showComments,
     setShowComments,
     selected,
@@ -365,7 +431,7 @@ export function useMitsubishiNavigation(
     comparison,
     showComparison,
     displayedProgram,
-    layouts,
+    minWidth,
     searchHeadings,
     selectedProgram,
     total,

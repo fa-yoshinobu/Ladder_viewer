@@ -8,6 +8,7 @@ import { alignBranches } from './branchAlignment';
 import { contactKey } from './instructions';
 import {
   buildProgram,
+  networkContactIds,
   type Instruction,
   type Network,
   type Program,
@@ -74,26 +75,29 @@ export function parseComparison(text: string, name: string): Program {
     throw new Error('照合行の列数または行番号が不正です。');
   const tokens = (text: string) => text.match(/"(?:[^"]|"")*"|\S+/g) ?? [];
   const records = (column: number) =>
-    rows.flatMap((row, index) =>
-      requireValue(row[column]).trim()
+    rows.flatMap((row, index) => {
+      const raw = requireValue(row[column]),
+        text = raw.trim();
+      return text
         ? [
             {
-              text: requireValue(row[column]).trim(),
-              raw: row[column],
+              text,
+              comment: comparisonComment(raw, legacy),
+              fields: instructionFields(text),
               step: requireValue(row[column - 1]).trim(),
               csvRow: header + index + 2,
             },
           ]
-        : [],
-    );
+        : [];
+    });
   const sourceRecords = records(sourceColumn),
     targetRecords = records(targetColumn);
   type RecordLine = (typeof sourceRecords)[number];
   const aligned: { source?: RecordLine; target?: RecordLine }[] = [];
   const describe = (records: RecordLine[]) => {
     const instructions: Instruction[] = records.flatMap((record, index) => {
-      if (comparisonComment(requireValue(record.raw), legacy)) return [];
-      const { op, operands } = instructionFields(record.text);
+      if (record.comment) return [];
+      const { op, operands, diagnostic } = record.fields;
       return [
         {
           id: String(index),
@@ -101,29 +105,28 @@ export function parseComparison(text: string, name: string): Program {
           step: record.step,
           op,
           operands,
+          diagnostic,
           note: '',
           statement: '',
         },
       ];
     });
     const networks = buildProgram(instructions, name).networks;
+    for (const instruction of instructions) {
+      if (instruction.diagnostic)
+        requireValue(records[Number(instruction.id)]).fields.diagnostic = instruction.diagnostic;
+    }
     const roles = new Map<number, 'condition' | 'action' | 'structure'>();
     for (const network of networks) {
-      const visit = (logic: NonNullable<typeof network.evaluation> | null) => {
-        if (!logic) return;
-        if (logic.kind === 'contact') roles.set(Number(logic.instruction.id), 'condition');
-        else logic.children.forEach(visit);
-      };
-      for (const action of network.actions) {
-        visit(action.condition);
-        roles.set(Number(action.instruction.id), 'action');
-      }
-      visit(network.evaluation ?? null);
+      for (const id of networkContactIds(network)) roles.set(Number(id), 'condition');
+      for (const action of network.actions) roles.set(Number(action.instruction.id), 'action');
     }
     const descriptors = new Map(
       records.map((record, index) => {
-        const comment = comparisonComment(requireValue(record.raw), legacy);
-        const { op, operands } = instructionFields(record.text);
+        const {
+          comment,
+          fields: { op, operands },
+        } = record;
         const role = comment ? comment.kind : (roles.get(index) ?? 'structure');
         const family = ['MPS', 'MRD', 'MPP'].includes(op)
           ? 'stack'
@@ -222,7 +225,11 @@ export function parseComparison(text: string, name: string): Program {
   aligned.forEach((pair, index) => {
     const sourceText = pair.source?.text ?? '',
       targetText = pair.target?.text ?? '';
+    const unreadable =
+      (!pair.source?.comment && pair.source?.fields.diagnostic) ||
+      (!pair.target?.comment && pair.target?.fields.diagnostic);
     if (
+      !unreadable &&
       pair.source &&
       pair.target &&
       JSON.stringify(tokens(sourceText)) === JSON.stringify(tokens(targetText))
@@ -239,7 +246,7 @@ export function parseComparison(text: string, name: string): Program {
       targetText,
       sourceStep: pair.source?.step ?? '',
       targetStep: pair.target?.step ?? '',
-      kind: !pair.source ? 'added' : !pair.target ? 'removed' : 'changed',
+      kind: unreadable ? 'unparsed' : !pair.source ? 'added' : !pair.target ? 'removed' : 'changed',
     });
   });
   const changesByAlignment = new Map(changes.map((change) => [change.alignmentRow, change]));
@@ -249,8 +256,7 @@ export function parseComparison(text: string, name: string): Program {
     aligned.forEach((pair, index) => {
       const record = pair[which];
       if (!record) return;
-      const value = record.text;
-      const comment = comparisonComment(requireValue(record.raw), legacy);
+      const comment = record.comment;
       if (comment) {
         const previous = instructions.at(-1);
         if (comment.kind === 'note' && previous) {
@@ -260,18 +266,18 @@ export function parseComparison(text: string, name: string): Program {
         } else statement = [statement, comment.text].filter(Boolean).join('\n');
         return;
       }
-      const { op, operands, note } = instructionFields(value);
+      const { op, operands, note, diagnostic } = record.fields;
       const other = pair[which === 'source' ? 'target' : 'source'];
-      const otherFields = instructionFields(other?.text ?? '');
+      const otherFields = other?.fields;
       const change = changesByAlignment.get(index + 1);
       const difference = change
         ? {
             kind: change.kind,
-            opChanged: change.kind === 'changed' && op !== otherFields.op,
+            opChanged: change.kind === 'changed' && op !== otherFields?.op,
             operandChanges:
               change.kind === 'changed'
                 ? operands.flatMap((token, index) =>
-                    token !== otherFields.operands[index] ? [index] : [],
+                    token !== otherFields?.operands[index] ? [index] : [],
                   )
                 : [],
             otherText: other?.text ?? '',
@@ -286,6 +292,7 @@ export function parseComparison(text: string, name: string): Program {
         op,
         operands,
         note,
+        diagnostic,
         statement,
         difference,
       });

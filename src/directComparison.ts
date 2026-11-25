@@ -1,6 +1,6 @@
 import { requireValue } from './requireValue';
 import type { BatchResult } from './batch';
-import type { Program } from './model';
+import { incompleteGxInstruction, type Program } from './model';
 import { deviceComment, type DeviceComments } from './comments';
 import type { KeyenceProgram } from './keyence/model';
 import { compareMitsubishiPrograms } from './directMitsubishi';
@@ -149,7 +149,8 @@ export function unchangedDirectPair(pair: DirectPair): boolean {
   if (!source || !target || source.format !== target.format) return false;
   const fingerprint = (input: DirectInput) => {
     if (input.format === 'mitsubishi') {
-      if (input.program.comparison) return null;
+      if (input.program.comparison || input.program.instructions.some(incompleteGxInstruction))
+        return null;
       return JSON.stringify(
         input.program.networks.map((n) =>
           n.instructions.map((i) => [
@@ -164,8 +165,11 @@ export function unchangedDirectPair(pair: DirectPair): boolean {
         ),
       );
     }
+    if (input.program.instructions.some((i) => i.diagnostic)) return null;
+    const networks = buildKeyenceNetworks(input.program);
+    if (networks.some((n) => n.layoutDiagnostic)) return null;
     return JSON.stringify(
-      buildKeyenceNetworks(input.program).map((n) =>
+      networks.map((n) =>
         n.instructions.map((i) => [
           i.opcode,
           i.operands,

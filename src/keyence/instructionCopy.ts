@@ -6,7 +6,7 @@ import { keyenceNumberedDevice } from './outputStyle';
 // MNM inline comments do not identify an operand when a command has several devices.
 export function keyenceInstructionCopyText(
   instruction: KeyenceInstruction,
-  program: KeyenceProgram,
+  program: Pick<KeyenceProgram, 'deviceComments'>,
 ): string {
   if (instruction.st) return instruction.st.lines.map((line) => line.text).join('\r\n');
   const labels = instruction.operands

@@ -33,6 +33,7 @@ export interface KeyenceInstruction {
   raw: string;
   comment: string;
   statement: string;
+  diagnostic?: string;
   comparisonRow?: number;
   disabled?: boolean;
   fb?: KeyenceFb;
@@ -40,7 +41,7 @@ export interface KeyenceInstruction {
   st?: { lines: { sourceLine: number; raw: string; text: string }[]; legacyScript?: boolean };
   script?: KeyenceScriptDisplay;
   difference?: {
-    kind: 'changed' | 'added' | 'removed';
+    kind: 'changed' | 'added' | 'removed' | 'unparsed';
     opChanged: boolean;
     operandChanges: number[];
     otherText: string;

@@ -53,6 +53,7 @@ export function assembleFunctionBlocks(program: Program): void {
       merged.push(...networks);
     };
     if (
+      instructions.some((i) => i.diagnostic) ||
       calls.length !== 1 ||
       !match ||
       !call.pins?.length ||

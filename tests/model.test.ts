@@ -38,6 +38,28 @@ function commandTree(logic: Logic | null): unknown {
       : [logic.kind, ...logic.children.map(commandTree)];
 }
 
+test('5,000 serial contacts survive worker cloning and keep the shared prefix after MPS', () => {
+  const count = 5000;
+  const program = commandProgram([
+    ['LD', 'X0'],
+    ...Array.from({ length: count }, (_, i): Command => ['AND', 'X' + (i + 1)]),
+    ['MPS'],
+    ['AND', 'X6001'],
+    ['OUT', 'Y1'],
+    ['MPP'],
+    ['AND', 'X6002'],
+    ['OUT', 'Y2'],
+  ]);
+  const network = structuredClone(program).networks[0]!;
+  const symbols = gridLayout(network).symbols;
+  assert.equal(symbols.length, count + 5);
+  assert.equal(symbols.filter((s) => s.instruction.operands[0] === 'X5000').length, 1);
+  assert.notEqual(
+    symbols.find((s) => s.instruction.operands[0] === 'X6001')!.row,
+    symbols.find((s) => s.instruction.operands[0] === 'X6002')!.row,
+  );
+});
+
 test('GX project-only markers are removed from statements and notes', () => {
   const p = parseProgram(
     csv([
@@ -350,7 +372,8 @@ test('EGP and EGF remain inline conditions before the output', () => {
   );
   assert.deepEqual(commandTree(requireValue(network.actions[0]).condition), [
     'and',
-    ['and', ['LD', 'X63'], ['EGP', 'V17']],
+    ['LD', 'X63'],
+    ['EGP', 'V17'],
     ['EGF', 'V18'],
   ]);
   for (const op of ['EGP', 'EGF']) assert.equal(isInlineLogic(op), true);

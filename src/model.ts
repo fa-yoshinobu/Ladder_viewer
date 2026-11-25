@@ -17,12 +17,15 @@ import {
 } from './controlFlow';
 import { contactKey, isInlineLogic, isPointerDefinition, logicOperation } from './instructions';
 import { assignMasterControlRanges, type MasterControlRange } from './masterControl';
-export type DifferenceKind = 'changed' | 'added' | 'removed' | 'step';
+import { depthProbe, deepCircuitError } from './deepCircuit';
+import { gridLayout } from './layout';
+export type DifferenceKind = 'changed' | 'added' | 'removed' | 'step' | 'unparsed';
 export const differenceLabels = {
   changed: '変更',
   added: '比較先のみ',
   removed: '比較元のみ',
   step: 'ステップのみ',
+  unparsed: '解析不能',
 };
 export interface ComparisonChange {
   sourceRow: number;
@@ -45,6 +48,7 @@ export interface Instruction {
   operands: string[];
   note: string;
   statement: string;
+  diagnostic?: string;
   comparisonRow?: number;
   controlFlow?: ControlFlow;
   pins?: Instruction[];
@@ -68,6 +72,8 @@ export function symbolDifferenceKind(i: Instruction): DifferenceKind | undefined
   }
   return difference?.kind;
 }
+export const incompleteGxInstruction = (i: Instruction) =>
+  !!i.diagnostic || !!i.inlineST?.missing || i.block?.closed === false;
 export type Logic =
   { kind: 'contact'; instruction: Instruction } | { kind: 'and' | 'or'; children: Logic[] };
 export interface Action {
@@ -121,6 +127,21 @@ export interface Program {
 }
 export const instructionKey = (i: Instruction) => JSON.stringify([i.op, i.operands]);
 
+export function networkContactIds(n: Network): Set<string> {
+  const ids = new Set<string>(),
+    seen = new Set<Logic>();
+  const pending = n.actions.map((action) => action.condition);
+  if (n.evaluation) pending.push(n.evaluation);
+  while (pending.length) {
+    const node = pending.pop();
+    if (!node || seen.has(node)) continue;
+    seen.add(node);
+    if (node.kind === 'contact') ids.add(node.instruction.id);
+    else for (const child of node.children) pending.push(child);
+  }
+  return ids;
+}
+
 export { decodePlcText as decodeCsv } from './textEncoding';
 export function parseProgram(text: string, name: string): Program {
   const parsed = csvRows(text);
@@ -173,8 +194,16 @@ export function buildProgram(instructions: Instruction[], name: string, cpu = ''
     logicStack = [];
     branchStack = [];
   };
-  const combine = (kind: 'and' | 'or', a: Logic | null, b: Logic): Logic =>
-    a ? { kind, children: [a, b] } : b;
+  // A condition observed by an output or a stack entry must keep its exact prefix.
+  let extendable: Logic | null = null;
+  const combine = (kind: 'and' | 'or', a: Logic | null, b: Logic): Logic => {
+    if (!a) return b;
+    if (a === extendable && a.kind === kind) {
+      a.children.push(b);
+      return a;
+    }
+    return (extendable = { kind, children: [a, b] });
+  };
   const joinsPrevious = (index: number) => {
     let depth = 1;
     for (let cursor = index + 1; cursor < instructions.length; cursor++) {
@@ -190,6 +219,8 @@ export function buildProgram(instructions: Instruction[], name: string, cpu = ''
   };
   let lastFb: Instruction | null = null;
   for (const [index, i] of instructions.entries()) {
+    const operation = logicOperation(i.op);
+    if (operation !== 'and' && operation !== 'or' && !isInlineLogic(i.op)) extendable = null;
     if (index && requireValue(instructions[index - 1]).block?.id !== i.block?.id) flush();
     if (i.block && isFunctionCall(i.op)) flush();
     if (pinDefinition(i.op) && lastFb) {
@@ -241,7 +272,6 @@ export function buildProgram(instructions: Instruction[], name: string, cpu = ''
       if (i.op === 'STPOP') compiledDepth = Math.max(0, compiledDepth - 1);
       continue;
     }
-    const operation = logicOperation(i.op);
     const load = operation === 'load',
       and = operation === 'and',
       or = operation === 'or';
@@ -286,6 +316,24 @@ export function buildProgram(instructions: Instruction[], name: string, cpu = ''
     }
   }
   flush();
+  for (const n of program.networks) {
+    if (n.instructions.length >= depthProbe) {
+      const problem = deepCircuitError(
+        [n.evaluation, ...n.actions.map((a) => a.condition)],
+        (logic) => (logic.kind === 'contact' ? [] : logic.children),
+        n,
+        () => gridLayout(n),
+      );
+      if (problem) n.instructions[0]!.diagnostic ??= problem;
+    }
+    for (const i of n.instructions) {
+      if (!i.diagnostic) continue;
+      n.warnings.push(`CSV ${i.sourceRow}行: ${i.diagnostic} ${i.operands.join(' ')}`);
+      // The connection through an unreadable instruction is unknown. Keep the original list.
+      n.actions.length = 0;
+      delete n.evaluation;
+    }
+  }
   assembleFunctionBlocks(program);
   for (const network of program.networks) {
     if (network.instructions.some((i) => i.inlineST?.missing))

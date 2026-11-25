@@ -4,12 +4,10 @@ export type CommentFormat = 'mitsubishi' | 'keyence';
 
 // Keep this rule in sync with docs/INPUT_FORMAT.md and the shared fixtures.
 export function detectCommentFormat(text: string): CommentFormat | undefined {
-  const lines = text
-    .replace(/^\uFEFF/, '')
-    .split(/\r\n?|\n/)
-    .filter((line) => line.trim())
-    .slice(0, 10);
-  for (const [index, line] of lines.entries()) {
+  let count = 0;
+  for (const [line] of text.replace(/^\uFEFF/, '').matchAll(/[^\r\n]+/g)) {
+    if (!line.trim()) continue;
+    const index = count++;
     for (const delimiter of ['\t', ',']) {
       const parsed = Papa.parse<string[]>(line, { delimiter });
       if (parsed.errors.length) continue;
@@ -24,6 +22,7 @@ export function detectCommentFormat(text: string): CommentFormat | undefined {
         return 'keyence';
       if (row.length > 1 && row[0] === 'デバイス名' && !row.includes('命令')) return 'mitsubishi';
     }
+    if (count === 10) break;
   }
   return undefined;
 }
